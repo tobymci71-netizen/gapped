@@ -40,14 +40,30 @@ Expo SDK 57 (React Native 0.86, TypeScript strict) · expo-router · Supabase (P
 - [x] Plausibility envelope preview (`src/drive/plausibility.ts`): mock provider, teleports,
       sustained >1.5 g, zero-jitter accuracy, device-vs-positional speed agreement — every
       failure carries a human-readable reason (never silently drop a run)
-- [x] 36 unit tests on fixture traces (clean cruise, 0-60 pull, lift-off pull, teleport spoof,
-      simulator signature, mock provider, glitch fix)
-- [ ] **Needs hardware:** background task wiring (`expo-task-manager` + `startLocationUpdatesAsync`
-      with `activityType: AutomotiveNavigation`), kill-mid-drive test, battery measurement,
-      Mapbox speed-limit badge (needs a Mapbox token + dev build — `@rnmapbox/maps` doesn't run
-      in Expo Go)
+- [x] 62 unit tests on fixture traces (clean cruise, 0-60 pull, lift-off pull, teleport spoof,
+      simulator signature, mock provider, glitch fix; SHA-256 FIPS vectors, Google polyline vector)
+- [x] Background recording task (`expo-task-manager` + `startLocationUpdatesAsync`, automotive
+      activity type, foreground-service notification) — unified fix stream with dedupe
+- [ ] **Needs hardware:** kill-mid-drive test, battery measurement, Mapbox speed-limit badge
+      (needs a Mapbox token + dev build — `@rnmapbox/maps` doesn't run in Expo Go)
 
-### Phases 3–8: not started (by design — one phase per session, gates in order)
+### Ahead-of-phase groundwork (code + tests done, needs deploy/device)
+- [x] **Phase 3:** `supabase/functions/verify-drive` Edge Function — server-side re-derivation
+      from raw fixes, plausibility envelope, verification state, leaderboard writes. Deno-checked.
+      Shared maths generated from `src/` via `npm run build:edge` (src stays source of truth).
+      Attestation (App Attest / Play Integrity) still to slot in — needs store credentials.
+- [x] **Phase 4:** vehicle-class bracket derivation (`src/vehicles/brackets.ts`, drivetrain ×
+      power-to-weight tier × stock/modified) + NHTSA vPIC catalogue client
+- [x] **Phase 6 (partial):** privacy layer — salted deterministic 1.0–1.7 mi route trimming,
+      privacy zones with 200–800 m centre offsets, polyline codec; GPX/CSV export + share from
+      the drive detail screen
+- [x] **Phase 7 (partial):** published free-vs-Pro matrix screen (`/plans`) — table stakes #13
+- [x] Supabase sync layer: anonymous-first upload of finalized drives, server verify invocation,
+      offline-tolerant retry on next launch
+- [x] `eas.json` build profiles (dev / preview / production)
+
+### Remaining phases: 3 (attestation + IMU cross-correlation), 4 (board UI/queries), 5 (share
+### cards), 6 (social), 7 (RevenueCat), 8 (polish) — gates in order
 
 ## Run it
 

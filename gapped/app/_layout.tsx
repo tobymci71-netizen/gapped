@@ -14,6 +14,7 @@ import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { initObservability } from '@/lib/observability';
 import { ensureSession } from '@/lib/supabase';
+import { syncFinalizedDrives } from '@/lib/sync';
 import { useDriveStore } from '@/drive/recorder';
 import { color } from '@/theme/tokens';
 
@@ -30,9 +31,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     initObservability();
-    ensureSession();
     // Cold-start WAL recovery: an interrupted drive is finalised, never lost.
     init();
+    // Anonymous-first session, then push any drives recorded offline.
+    ensureSession().then(() => syncFinalizedDrives().catch(() => undefined));
   }, [init]);
 
   if (!fontsLoaded) {

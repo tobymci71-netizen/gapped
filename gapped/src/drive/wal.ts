@@ -167,6 +167,23 @@ export function listDrives(): LocalDrive[] {
   }));
 }
 
+/** Finalized drives not yet uploaded. */
+export function listUnsynced(): LocalDrive[] {
+  return listDrives().filter((d) => d.status === 'finalized' && !isSynced(d.id));
+}
+
+function isSynced(id: string): boolean {
+  const row = getDb().getFirstSync<{ synced: number }>(
+    `SELECT synced FROM local_drives WHERE id = ?`,
+    [id],
+  );
+  return row?.synced === 1;
+}
+
+export function markSynced(id: string): void {
+  getDb().runSync(`UPDATE local_drives SET synced = 1 WHERE id = ?`, [id]);
+}
+
 /**
  * Cold-start recovery. Any drive still marked 'recording' was interrupted —
  * app killed, phone died, crash. Finalise it from the fixes on disk so the

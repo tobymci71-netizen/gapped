@@ -1,5 +1,6 @@
+import { useRouter } from 'expo-router';
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { Stat } from '@/components/Stat';
@@ -10,6 +11,7 @@ import { useProfile } from '@/state/profile';
 import { space } from '@/theme/tokens';
 
 export default function YouScreen() {
+  const router = useRouter();
   const { username, country, vehicleMake, vehicleModel, unitPref } = useProfile();
   const drives = listDrives().filter((d) => d.status === 'finalized' && d.summary);
 
@@ -43,6 +45,13 @@ export default function YouScreen() {
         <Stat label="Drives" value={String(drives.length)} />
       </View>
 
+      <Pressable onPress={() => router.push('/plans')}>
+        <Card style={styles.plansLink}>
+          <Text variant="bodyMedium">Free vs Pro — the whole matrix, published</Text>
+          <Text variant="caption">Recording and viewing your drives is free forever.</Text>
+        </Card>
+      </Pressable>
+
       <Text variant="cardTitle" style={styles.historyTitle}>
         History
       </Text>
@@ -55,15 +64,17 @@ export default function YouScreen() {
         </Card>
       ) : (
         drives.map((d) => (
-          <Card key={d.id} style={styles.historyCard}>
-            <Text variant="bodyMedium">{new Date(d.startedAt).toLocaleString()}</Text>
-            <Text variant="caption">
-              {distanceForDisplay(d.summary!.distanceM, unitPref).value.toFixed(1)}{' '}
-              {distanceForDisplay(d.summary!.distanceM, unitPref).unit} ·{' '}
-              {formatDuration(d.summary!.durationS)} · top{' '}
-              {formatSpeed(d.summary!.maxSpeedMs, unitPref)}
-            </Text>
-          </Card>
+          <Pressable key={d.id} onPress={() => router.push(`/drive/${d.id}`)}>
+            <Card style={styles.historyCard}>
+              <Text variant="bodyMedium">{new Date(d.startedAt).toLocaleString()}</Text>
+              <Text variant="caption">
+                {distanceForDisplay(d.summary!.distanceM, unitPref).value.toFixed(1)}{' '}
+                {distanceForDisplay(d.summary!.distanceM, unitPref).unit} ·{' '}
+                {formatDuration(d.summary!.durationS)} · top{' '}
+                {formatSpeed(d.summary!.maxSpeedMs, unitPref)}
+              </Text>
+            </Card>
+          </Pressable>
         ))
       )}
     </Screen>
@@ -73,6 +84,7 @@ export default function YouScreen() {
 const styles = StyleSheet.create({
   meta: { marginTop: space.xs },
   grid: { flexDirection: 'row', gap: space.md, marginTop: space.md },
+  plansLink: { marginTop: space.xl, gap: space.xs },
   historyTitle: { marginTop: space.xl },
   historyCard: { marginTop: space.md, gap: space.xs },
 });

@@ -12,7 +12,9 @@
       "bundleIdentifier": "app.gapped.drive",
       "supportsTablet": false,
       "infoPlist": {
-        "UIBackgroundModes": ["location"],
+        "UIBackgroundModes": [
+          "location"
+        ],
         "NSLocationWhenInUseUsageDescription": "Gapped uses your location to record your drives — speed, route, and distance.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Always access lets Gapped keep recording a drive when the app is in the background. Without it we can only track while the app is open.",
         "NSMotionUsageDescription": "Motion sensor data is recorded alongside GPS to verify that your runs are real."
@@ -50,7 +52,8 @@
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true
