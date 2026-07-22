@@ -5,14 +5,17 @@ import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { Stat } from '@/components/Stat';
 import { Text } from '@/components/Text';
+import { StreakGrid } from '@/components/StreakGrid';
 import { listDrives } from '@/drive/wal';
 import { distanceForDisplay, formatDuration, formatSpeed } from '@/drive/units';
 import { useProfile } from '@/state/profile';
+import { useRecords } from '@/state/records';
 import { space } from '@/theme/tokens';
 
 export default function YouScreen() {
   const router = useRouter();
   const { username, country, vehicleMake, vehicleModel, unitPref } = useProfile();
+  const { pbs, driveDays } = useRecords();
   const drives = listDrives().filter((d) => d.status === 'finalized' && d.summary);
 
   const totalDistanceM = drives.reduce((s, d) => s + (d.summary?.distanceM ?? 0), 0);
@@ -44,6 +47,17 @@ export default function YouScreen() {
         />
         <Stat label="Drives" value={String(drives.length)} />
       </View>
+
+      <Card style={styles.streakCard}>
+        <StreakGrid driveDays={driveDays} />
+      </Card>
+
+      {pbs.zeroTo60S != null ? (
+        <Card style={styles.pbCard}>
+          <Text variant="caption">PERSONAL BEST · 0–60</Text>
+          <Text variant="cardTitle">{pbs.zeroTo60S.toFixed(2)} s</Text>
+        </Card>
+      ) : null}
 
       <Pressable onPress={() => router.push('/plans')}>
         <Card style={styles.plansLink}>
@@ -84,6 +98,8 @@ export default function YouScreen() {
 const styles = StyleSheet.create({
   meta: { marginTop: space.xs },
   grid: { flexDirection: 'row', gap: space.md, marginTop: space.md },
+  streakCard: { marginTop: space.xl },
+  pbCard: { marginTop: space.md, gap: space.xs },
   plansLink: { marginTop: space.xl, gap: space.xs },
   historyTitle: { marginTop: space.xl },
   historyCard: { marginTop: space.md, gap: space.xs },

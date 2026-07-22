@@ -7,12 +7,16 @@
     "@expo-google-fonts/inter": "^0.4.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@sentry/react-native": "^8.19.0",
+    "@shopify/flash-list": "^2.0.2",
+    "@shopify/react-native-skia": "^2.6.2",
     "@supabase/supabase-js": "^2.110.8",
     "expo": "~57.0.7",
+    "expo-blur": "~57.0.2",
     "expo-constants": "~57.0.6",
     "expo-file-system": "~57.0.1",
     "expo-font": "^57.0.1",
     "expo-haptics": "~57.0.1",
+    "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.3",
     "expo-location": "~57.0.5",
     "expo-router": "~57.0.7",
@@ -22,12 +26,18 @@
     "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "expo-task-manager": "~57.0.5",
+    "lottie-react-native": "~7.3.8",
     "posthog-react-native": "^4.58.0",
     "react": "19.2.3",
     "react-native": "0.86.0",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-reanimated": "^4.5.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
+    "react-native-svg": "^15.15.4",
     "react-native-url-polyfill": "^4.0.0",
+    "react-native-view-shot": "^5.1.0",
+    "react-native-worklets": "^0.10.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -58,6 +68,9 @@
     ],
     "testMatch": [
       "**/__tests__/**/*.test.ts?(x)"
+    ],
+    "setupFiles": [
+      "<rootDir>/jest.setup.js"
     ]
   }
 }

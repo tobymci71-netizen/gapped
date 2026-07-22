@@ -1,6 +1,8 @@
 import React from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { PressableScale } from '@/components/PressableScale';
 import { Text } from '@/components/Text';
+import { haptic } from '@/lib/haptics';
 import { color, radius, space } from '@/theme/tokens';
 
 type Props = {
@@ -11,20 +13,20 @@ type Props = {
 
 export function ChoiceRow({ label, selected, onPress }: Props) {
   return (
-    <Pressable
-      onPress={onPress}
+    <PressableScale
+      onPress={() => {
+        haptic.selection();
+        onPress();
+      }}
+      silent
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
-      style={({ pressed }) => [
-        styles.row,
-        selected && styles.selected,
-        pressed && { backgroundColor: color.surface3 },
-      ]}
+      style={[styles.row, selected ? styles.selected : null]}
     >
       <Text variant="bodyMedium" style={selected ? { color: color.accent } : undefined}>
         {label}
       </Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 

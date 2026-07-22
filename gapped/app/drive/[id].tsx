@@ -2,9 +2,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import React, { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { RoutePath } from '@/components/RoutePath';
 import { Screen } from '@/components/Screen';
 import { Stat } from '@/components/Stat';
 import { Text } from '@/components/Text';
@@ -19,6 +20,7 @@ export default function DriveDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const unitPref = useProfile((s) => s.unitPref);
+  const { width } = useWindowDimensions();
 
   const drive = useMemo(() => listDrives().find((d) => d.id === id), [id]);
   const fixes = useMemo(() => (id ? readFixes(id) : []), [id]);
@@ -56,6 +58,12 @@ export default function DriveDetail() {
   return (
     <Screen footer={<Button label="Back" variant="secondary" onPress={() => router.back()} />}>
       <Text variant="headline">{new Date(drive.startedAt).toLocaleString()}</Text>
+
+      {fixes.length > 1 ? (
+        <Card style={styles.routeCard}>
+          <RoutePath fixes={fixes} width={width - 48 - 32} height={200} />
+        </Card>
+      ) : null}
 
       <View style={styles.grid}>
         <Stat label="Distance" value={dist.value.toFixed(1)} unit={dist.unit} />
@@ -126,6 +134,7 @@ export default function DriveDetail() {
 }
 
 const styles = StyleSheet.create({
+  routeCard: { marginTop: space.lg, alignItems: 'center' },
   grid: { flexDirection: 'row', gap: space.md, marginTop: space.md },
   note: { marginTop: space.sm },
   plausibility: { marginTop: space.xl, gap: space.sm },

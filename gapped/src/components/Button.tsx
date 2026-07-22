@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { StyleSheet, Text, ViewStyle } from 'react-native';
+import { PressableScale } from '@/components/PressableScale';
 import { button, color, font } from '@/theme/tokens';
 
 type Props = {
@@ -13,23 +14,22 @@ type Props = {
 /**
  * Primary: full-width pill, acid fill, black label (contrast requires it).
  * Secondary: transparent fill, hairline stroke, white label.
+ * Press: 0.97 scale spring + light haptic via PressableScale.
  */
 export function Button({ label, onPress, variant = 'primary', disabled, style }: Props) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       disabled={disabled}
+      silent={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
-      style={({ pressed }) => [
+      style={[
         styles.base,
         variant === 'primary' && {
-          backgroundColor: disabled ? color.disabled : pressed ? color.accentPress : color.accent,
+          backgroundColor: disabled ? color.disabled : color.accent,
         },
-        variant === 'secondary' && [
-          styles.secondary,
-          pressed && { backgroundColor: color.surface2 },
-        ],
+        variant === 'secondary' && styles.secondary,
         variant === 'danger' && {
           backgroundColor: disabled ? color.disabled : color.danger,
         },
@@ -40,13 +40,12 @@ export function Button({ label, onPress, variant = 'primary', disabled, style }:
         style={[
           styles.label,
           variant === 'primary' && { color: disabled ? color.text3 : color.onAccent },
-          variant === 'secondary' && { color: color.text1 },
-          variant === 'danger' && { color: color.text1 },
+          (variant === 'secondary' || variant === 'danger') && { color: color.text1 },
         ]}
       >
         {label}
       </Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 

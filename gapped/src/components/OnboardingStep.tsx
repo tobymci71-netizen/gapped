@@ -12,11 +12,13 @@ type Props = {
   subtitle?: string;
   children?: React.ReactNode;
   footer: React.ReactNode;
+  /** Pass false when the body hosts its own list (FlashList can't nest in a ScrollView). */
+  scroll?: boolean;
 };
 
-export function OnboardingStep({ step, title, subtitle, children, footer }: Props) {
+export function OnboardingStep({ step, title, subtitle, children, footer, scroll }: Props) {
   return (
-    <Screen footer={footer}>
+    <Screen footer={footer} scroll={scroll}>
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${(step / TOTAL_STEPS) * 100}%` }]} />
       </View>
@@ -47,5 +49,5 @@ const styles = StyleSheet.create({
   },
   title: { marginTop: space.xxl },
   subtitle: { marginTop: space.md },
-  body: { marginTop: space.xl, gap: space.md },
+  body: { flex: 1, marginTop: space.xl, gap: space.md },
 });
