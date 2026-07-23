@@ -1,22 +1,38 @@
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { Speedometer } from '@/components/Speedometer';
 import { Numeral, Text } from '@/components/Text';
 import { color, space } from '@/theme/tokens';
 
+/**
+ * Welcome hero — the live dial IS the pitch (TripRank leads with the same
+ * object; ours is the real component, not an illustration). The dial sweeps
+ * up to a demo speed on mount.
+ */
 export default function Welcome() {
   const router = useRouter();
+  const [demoSpeed, setDemoSpeed] = useState(0);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDemoSpeed(87), 600);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <Screen
       scroll={false}
       footer={<Button label="Get started" onPress={() => router.push('/onboarding/unit')} />}
     >
       <View style={styles.center}>
-        <Numeral size={64} color={color.accent}>
+        <Numeral size={44} color={color.accent}>
           GAPPED
         </Numeral>
+        <View style={styles.dial}>
+          <Speedometer value={demoSpeed} maxValue={160} unit="mph" size={280} active />
+        </View>
         <Text variant="headline" style={styles.headline}>
           The board you can believe.
         </Text>
@@ -30,7 +46,8 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', gap: space.lg },
-  headline: { marginTop: space.xl },
-  sub: {},
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  dial: { marginVertical: space.lg },
+  headline: { alignSelf: 'stretch' },
+  sub: { alignSelf: 'stretch', marginTop: space.md },
 });

@@ -1,5 +1,7 @@
+import { useRouter } from 'expo-router';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { color, space } from '@/theme/tokens';
@@ -17,10 +19,23 @@ type Props = {
 };
 
 export function OnboardingStep({ step, title, subtitle, children, footer, scroll }: Props) {
+  const router = useRouter();
   return (
     <Screen footer={footer} scroll={scroll}>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${(step / TOTAL_STEPS) * 100}%` }]} />
+      {/* Header row: back chevron left of the linear progress track. */}
+      <View style={styles.headerRow}>
+        <PressableScale
+          onPress={() => router.back()}
+          silent
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={styles.back}
+        >
+          <Text style={styles.backGlyph}>‹</Text>
+        </PressableScale>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${(step / TOTAL_STEPS) * 100}%` }]} />
+        </View>
       </View>
       <Text variant="headline" style={styles.title}>
         {title}
@@ -36,11 +51,24 @@ export function OnboardingStep({ step, title, subtitle, children, footer, scroll
 }
 
 const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginTop: space.sm,
+  },
+  back: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backGlyph: { color: color.text1, fontSize: 30, lineHeight: 32, marginTop: -4 },
   progressTrack: {
+    flex: 1,
     height: 6,
     borderRadius: 3,
     backgroundColor: color.surface2,
-    marginTop: space.sm,
   },
   progressFill: {
     height: 6,

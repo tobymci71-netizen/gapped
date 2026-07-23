@@ -1,24 +1,11 @@
 import { useRouter } from 'expo-router';
 import React from 'react';
+import { StyleSheet, View } from 'react-native';
 import { Button } from '@/components/Button';
-import { ChoiceRow } from '@/components/ChoiceRow';
+import { CountryPicker } from '@/components/CountryPicker';
 import { OnboardingStep } from '@/components/OnboardingStep';
 import { useProfile } from '@/state/profile';
-
-const COUNTRIES: { code: string; name: string }[] = [
-  { code: 'GB', name: '🇬🇧 United Kingdom' },
-  { code: 'US', name: '🇺🇸 United States' },
-  { code: 'DE', name: '🇩🇪 Germany' },
-  { code: 'FR', name: '🇫🇷 France' },
-  { code: 'NL', name: '🇳🇱 Netherlands' },
-  { code: 'ES', name: '🇪🇸 Spain' },
-  { code: 'IT', name: '🇮🇹 Italy' },
-  { code: 'PL', name: '🇵🇱 Poland' },
-  { code: 'SE', name: '🇸🇪 Sweden' },
-  { code: 'AU', name: '🇦🇺 Australia' },
-  { code: 'CA', name: '🇨🇦 Canada' },
-  { code: 'JP', name: '🇯🇵 Japan' },
-];
+import { space } from '@/theme/tokens';
 
 export default function CountryStep() {
   const router = useRouter();
@@ -29,6 +16,7 @@ export default function CountryStep() {
       step={2}
       title="Select your country"
       subtitle="This decides which leaderboards you appear on."
+      scroll={false}
       footer={
         <Button
           label="Continue"
@@ -37,14 +25,13 @@ export default function CountryStep() {
         />
       }
     >
-      {COUNTRIES.map((c) => (
-        <ChoiceRow
-          key={c.code}
-          label={c.name}
-          selected={country === c.code}
-          onPress={() => setCountry(c.code)}
-        />
-      ))}
+      <View style={styles.sheetWrap}>
+        <CountryPicker selected={country} onSelect={setCountry} />
+      </View>
     </OnboardingStep>
   );
 }
+
+const styles = StyleSheet.create({
+  sheetWrap: { flex: 1, marginHorizontal: -space.xl, marginBottom: -32 },
+});
