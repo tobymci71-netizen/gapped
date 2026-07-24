@@ -1,30 +1,49 @@
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
+import { Button } from '@/components/Button';
 import { OnboardingStep } from '@/components/OnboardingStep';
-import { VehiclePicker } from '@/components/VehiclePicker';
+import { VehicleChooser } from '@/components/VehicleChooser';
+import { haptic } from '@/lib/haptics';
 import { useProfile } from '@/state/profile';
 
 export default function VehicleStep() {
   const router = useRouter();
-  const { vehicleKind, setVehicle } = useProfile();
+  const { vehicleKind, vehicleMake, vehicleModel, setVehicle } = useProfile();
+  const kind = vehicleKind === 'motorbike' ? 'motorbike' : 'car';
+
+  const [make, setMake] = useState<string | null>(vehicleMake);
+  const [model, setModel] = useState<string | null>(vehicleModel);
 
   return (
     <OnboardingStep
       step={5}
-      title="Your main ride"
+      title="Choose your main ride"
       subtitle={
-        vehicleKind === 'motorbike'
-          ? 'Every marque, bikes first-class. Search or browse.'
-          : 'Search any make — typing “merc” finds Mercedes-Benz.'
+        kind === 'motorbike'
+          ? 'Select the bike you ride the most.'
+          : 'Select the car you drive the most.'
       }
-      footer={null}
       scroll={false}
+      footer={
+        <Button
+          label="Continue"
+          disabled={!make || !model}
+          onPress={() => {
+            if (!make || !model) return;
+            setVehicle(make, model);
+            router.push('/onboarding/username');
+          }}
+        />
+      }
     >
-      <VehiclePicker
-        kind={vehicleKind === 'motorbike' ? 'motorbike' : 'car'}
-        onSelect={(make, model) => {
-          setVehicle(make, model);
-          router.push('/onboarding/username');
+      <VehicleChooser
+        kind={kind}
+        make={make}
+        model={model}
+        onMakeChange={setMake}
+        onModelChange={(next) => {
+          setModel(next || null);
+          if (next) haptic.selection();
         }}
       />
     </OnboardingStep>
