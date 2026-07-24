@@ -8,11 +8,11 @@ import { Text } from '@/components/Text';
 import { useProfile } from '@/state/profile';
 import { color, radius, space } from '@/theme/tokens';
 
-const GUIDELINES = [
-  'Obey local traffic laws and speed limits. Never drive recklessly.',
-  'Start and stop recording only while safely parked.',
-  'Use a phone holder, just like with any navigation app.',
-  'Never touch your phone while driving. Eyes on the road.',
+const GUIDELINES: { glyph: string; text: string }[] = [
+  { glyph: '✋', text: 'Obey local traffic laws and speed limits. Never drive recklessly.' },
+  { glyph: '⛳', text: 'Start and stop recording only while safely parked.' },
+  { glyph: '📱', text: 'Use a phone holder, just like with any navigation app.' },
+  { glyph: '👀', text: 'Never touch your phone while driving. Eyes on the road.' },
 ];
 
 export default function SafetyStep() {
@@ -37,11 +37,20 @@ export default function SafetyStep() {
         />
       }
     >
+      <View style={styles.warnWrap}>
+        <Text style={styles.warnGlyph}>⚠️</Text>
+      </View>
+
       <Card style={styles.card}>
         {GUIDELINES.map((g) => (
-          <Text key={g} variant="body" style={styles.guideline}>
-            {'•'} {g}
-          </Text>
+          <View key={g.text} style={styles.row}>
+            <View style={styles.tile}>
+              <Text style={styles.tileGlyph}>{g.glyph}</Text>
+            </View>
+            <Text variant="body" style={styles.guideline}>
+              {g.text}
+            </Text>
+          </View>
         ))}
       </Card>
 
@@ -68,8 +77,20 @@ export default function SafetyStep() {
 }
 
 const styles = StyleSheet.create({
-  card: { gap: space.md },
-  guideline: { color: color.text1 },
+  warnWrap: { alignItems: 'center' },
+  warnGlyph: { fontSize: 34 },
+  card: { gap: space.lg },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  tile: {
+    width: 40,
+    height: 40,
+    borderRadius: 11,
+    backgroundColor: '#1E260A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileGlyph: { fontSize: 18 },
+  guideline: { flex: 1, color: color.text1 },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   checkbox: {
     width: 28,
