@@ -96,22 +96,24 @@ export function appendFix(driveId: string, fix: Fix): void {
   );
 }
 
-export function readFixes(driveId: string): Fix[] {
-  const rows = getDb().getAllSync<{
-    t: number;
-    lat: number;
-    lon: number;
-    speed_ms: number | null;
-    accuracy_m: number | null;
-    altitude_m: number | null;
-    heading: number | null;
-    accel_x: number | null;
-    accel_y: number | null;
-    accel_z: number | null;
-    pressure_hpa: number | null;
-    is_mock: number;
-  }>(`SELECT * FROM wal_fixes WHERE drive_id = ? ORDER BY seq`, [driveId]);
-  return rows.map((r) => ({
+type FixRow = {
+  seq: number;
+  t: number;
+  lat: number;
+  lon: number;
+  speed_ms: number | null;
+  accuracy_m: number | null;
+  altitude_m: number | null;
+  heading: number | null;
+  accel_x: number | null;
+  accel_y: number | null;
+  accel_z: number | null;
+  pressure_hpa: number | null;
+  is_mock: number;
+};
+
+function rowToFix(r: FixRow): Fix {
+  return {
     t: r.t,
     lat: r.lat,
     lon: r.lon,
@@ -124,7 +126,35 @@ export function readFixes(driveId: string): Fix[] {
     accelZ: r.accel_z,
     pressureHpa: r.pressure_hpa,
     isMock: r.is_mock === 1,
-  }));
+  };
+}
+
+export function readFixes(driveId: string): Fix[] {
+  const rows = getDb().getAllSync<FixRow>(
+    `SELECT * FROM wal_fixes WHERE drive_id = ? ORDER BY seq`,
+    [driveId],
+  );
+  return rows.map(rowToFix);
+}
+
+/**
+ * Incremental read for the live screen: only rows written after `sinceSeq`.
+ * Polling readFixes() during a drive costs O(drive length) per poll, which
+ * competes with appendFix on the same JS thread as the drive gets longer.
+ * Pass −1 to start from the beginning; feed `lastSeq` back on the next call.
+ */
+export function readFixesSince(
+  driveId: string,
+  sinceSeq: number,
+): { fixes: Fix[]; lastSeq: number } {
+  const rows = getDb().getAllSync<FixRow>(
+    `SELECT * FROM wal_fixes WHERE drive_id = ? AND seq > ? ORDER BY seq`,
+    [driveId, sinceSeq],
+  );
+  return {
+    fixes: rows.map(rowToFix),
+    lastSeq: rows.length > 0 ? rows[rows.length - 1].seq : sinceSeq,
+  };
 }
 
 /** Compute the summary from disk and mark the drive finalized. */
@@ -182,6 +212,19 @@ function isSynced(id: string): boolean {
 
 export function markSynced(id: string): void {
   getDb().runSync(`UPDATE local_drives SET synced = 1 WHERE id = ?`, [id]);
+}
+
+/**
+ * Drop every drive and every fix held on this device. Used by account
+ * deletion, which is the only caller allowed to destroy a recording — the WAL
+ * exists precisely so drives are never lost by accident.
+ *
+ * Local only: nothing already uploaded is touched, and callers must not claim
+ * otherwise.
+ */
+export function clearAll(): void {
+  getDb().execSync(`DELETE FROM wal_fixes; DELETE FROM local_drives;`);
+  seqCounters = {};
 }
 
 /**

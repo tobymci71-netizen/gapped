@@ -16,6 +16,7 @@ import {
   stopBackgroundUpdates,
 } from './backgroundTask';
 import { DriveEngine } from './engine';
+import { sanitiseHeading } from './heading';
 import { haversineM } from './stats';
 import { DriveSummary, Fix } from './types';
 import * as wal from './wal';
@@ -158,7 +159,7 @@ async function startWatching(set: Set, get: Get) {
           speedMs: loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : null,
           accuracyM: loc.coords.accuracy,
           altitudeM: loc.coords.altitude,
-          heading: loc.coords.heading,
+          heading: sanitiseHeading(loc.coords.heading),
           accelX: latestAccel?.x ?? null,
           accelY: latestAccel?.y ?? null,
           accelZ: latestAccel?.z ?? null,

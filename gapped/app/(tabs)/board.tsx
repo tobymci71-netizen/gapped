@@ -1,6 +1,8 @@
 import { FlashList } from '@shopify/flash-list';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import countries from '@/data/countries.json';
+import { BottomSheet } from '@/components/BottomSheet';
 import { Entrance } from '@/components/Entrance';
 import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
@@ -13,74 +15,188 @@ import { haptic } from '@/lib/haptics';
 import { useProfile } from '@/state/profile';
 import { color, radius, space } from '@/theme/tokens';
 
-const METRICS: { key: BoardMetric; label: string }[] = [
+/** `glyph` is the leading mark shown on the pill and beside the sheet row. */
+type Option<T extends string> = { key: T; label: string; glyph?: string };
+
+const METRICS: Option<BoardMetric>[] = [
   { key: 'top_speed', label: 'Top speed' },
   { key: 'distance', label: 'Distance' },
   { key: 'trip_count', label: 'Drives' },
   { key: 'zero_to_60', label: '0–60' },
 ];
-const SCOPES: { key: BoardScope; label: string }[] = [
-  { key: 'global', label: 'Global' },
-  { key: 'country', label: 'Country' },
-  { key: 'friends', label: 'Friends' },
-];
-const PERIODS: { key: BoardPeriod; label: string }[] = [
+const PERIODS: Option<BoardPeriod>[] = [
   { key: 'day', label: 'Today' },
   { key: 'week', label: 'Week' },
   { key: 'month', label: 'Month' },
   { key: 'all', label: 'All-time' },
 ];
 
-function Segments<T extends string>({
+/** Literal table, not toLocaleString: the subtitle must read identically on
+ *  every device, whatever ICU data the platform shipped with. */
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+const FLAGS = countries as { code: string; name: string; flag: string }[];
+
+/** Fallback glyph when the profile carries no country. */
+const NO_FLAG = '🏳️';
+
+function labelFor<T extends string>(options: Option<T>[], value: T): string {
+  return options.find((o) => o.key === value)?.label ?? '';
+}
+
+/** Compact dropdown trigger: glyph, current value, chevron. */
+function Pill({
+  glyph,
+  label,
+  onPress,
+  disabled,
+}: {
+  glyph: string;
+  label: string;
+  onPress: () => void;
+  /** Dimmed and inert — a filter we cannot honour must not look live. */
+  disabled?: boolean;
+}): React.JSX.Element {
+  return (
+    <PressableScale
+      silent
+      disabled={disabled}
+      onPress={() => {
+        haptic.selection();
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled === true }}
+      style={[styles.pill, disabled === true && styles.pillOff]}
+    >
+      <Text style={styles.pillGlyph}>{glyph}</Text>
+      <Text variant="caption" style={styles.pillLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={styles.pillChevron}>▾</Text>
+    </PressableScale>
+  );
+}
+
+function OptionSheet<T extends string>({
+  visible,
+  title,
   options,
   value,
-  onChange,
+  onSelect,
+  onClose,
 }: {
-  options: { key: T; label: string }[];
+  visible: boolean;
+  title: string;
+  options: Option<T>[];
   value: T;
-  onChange: (v: T) => void;
-}) {
+  onSelect: (v: T) => void;
+  onClose: () => void;
+}): React.JSX.Element {
   return (
-    <View style={styles.segments}>
-      {options.map((o) => (
-        <PressableScale
-          key={o.key}
-          silent
-          onPress={() => {
-            haptic.selection();
-            onChange(o.key);
-          }}
-          style={[styles.segment, value === o.key && styles.segmentActive]}
-        >
-          <Text
-            variant="caption"
-            style={{ color: value === o.key ? color.onAccent : color.text2 }}
+    <BottomSheet visible={visible} onClose={onClose} title={title} heightFraction={0.5}>
+      <View style={styles.sheetBody}>
+        {options.map((o) => (
+          <PressableScale
+            key={o.key}
+            silent
+            onPress={() => {
+              haptic.selection();
+              onSelect(o.key);
+              onClose();
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: o.key === value }}
+            style={styles.option}
           >
-            {o.label}
-          </Text>
-        </PressableScale>
-      ))}
-    </View>
+            <View style={styles.optionBody}>
+              {o.glyph ? <Text style={styles.optionGlyph}>{o.glyph}</Text> : null}
+              <Text
+                variant="bodyMedium"
+                style={{ color: o.key === value ? color.accent : color.text1 }}
+              >
+                {o.label}
+              </Text>
+            </View>
+            {o.key === value ? <Text style={styles.tick}>✓</Text> : null}
+          </PressableScale>
+        ))}
+      </View>
+    </BottomSheet>
   );
 }
 
 export default function BoardScreen() {
-  const { username, unitPref } = useProfile();
+  const { username, country, unitPref } = useProfile();
   const [metric, setMetric] = useState<BoardMetric>('top_speed');
   const [scope, setScope] = useState<BoardScope>('global');
   const [period, setPeriod] = useState<BoardPeriod>('week');
   const [verifiedOnly, setVerifiedOnly] = useState(true);
   const [result, setResult] = useState<BoardResult | null>(null);
+  const [sheet, setSheet] = useState<'scope' | 'metric' | 'period' | null>(null);
 
+  const monthLabel = useMemo(() => {
+    const d = new Date();
+    return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  }, []);
+
+  // The reference labels its scope options with flags; ours names the user's
+  // own country rather than a generic "Country".
+  const countryEntry = useMemo(
+    () => (country ? FLAGS.find((c) => c.code === country) : undefined),
+    [country],
+  );
+  const scopes: Option<BoardScope>[] = useMemo(
+    () => [
+      { key: 'global', label: 'World', glyph: '🌍' },
+      {
+        key: 'country',
+        label: countryEntry?.name ?? 'Country',
+        glyph: countryEntry?.flag ?? NO_FLAG,
+      },
+      { key: 'friends', label: 'Friends', glyph: '👥' },
+    ],
+    [countryEntry],
+  );
+  const scopeGlyph = scopes.find((o) => o.key === scope)?.glyph ?? '🌍';
+
+  // Only the newest request may commit. formatValue reads the *current*
+  // metric, so a late response would be rendered through the wrong formatter
+  // and labelled with the wrong unit.
+  const requestId = useRef(0);
+  // A local board holds only this device's drives: scope and verification are
+  // server concepts, so those controls are shown inert rather than lying. Held
+  // separately from `result` so they do not flicker during a reload.
+  const [filtersLive, setFiltersLive] = useState(false);
   const load = useCallback(async () => {
+    const seq = ++requestId.current;
     setResult(null);
     const r = await fetchBoard({ metric, scope, period, verifiedOnly }, username);
+    if (seq !== requestId.current) return;
     setResult(r);
+    setFiltersLive(r.source === 'server');
   }, [metric, scope, period, verifiedOnly, username]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // A lit chip over rows nothing has verified would assert the filter applied.
+  const verifiedShown = filtersLive && verifiedOnly;
 
   const formatValue = (row: BoardRow): string => {
     switch (metric) {
@@ -97,26 +213,45 @@ export default function BoardScreen() {
 
   return (
     <Screen scroll={false}>
-      <Text variant="headline">Board</Text>
+      <Text variant="headline">Ranks</Text>
+      {/* The display face is upright by house rule — the reference sets this
+          subtitle in italic; we set it in the caption face instead. */}
+      <Text variant="caption" style={styles.subtitle}>
+        {monthLabel}
+      </Text>
 
-      <Segments options={METRICS} value={metric} onChange={setMetric} />
-      <View style={styles.selectorRow}>
-        <Segments options={SCOPES} value={scope} onChange={setScope} />
+      <View style={styles.pills}>
+        <Pill
+          glyph={scopeGlyph}
+          label={labelFor(scopes, scope)}
+          onPress={() => setSheet('scope')}
+          disabled={!filtersLive}
+        />
+        <Pill glyph="⚡" label={labelFor(METRICS, metric)} onPress={() => setSheet('metric')} />
+        <Pill glyph="📅" label={labelFor(PERIODS, period)} onPress={() => setSheet('period')} />
       </View>
-      <View style={styles.selectorRow}>
-        <Segments options={PERIODS} value={period} onChange={setPeriod} />
+
+      <View style={styles.toggleRow}>
         <PressableScale
           silent
+          disabled={!filtersLive}
           onPress={() => {
             haptic.selection();
             setVerifiedOnly((v) => !v);
           }}
-          style={[styles.verifiedToggle, verifiedOnly && styles.verifiedToggleOn]}
+          accessibilityRole="button"
+          accessibilityState={{ selected: verifiedShown, disabled: !filtersLive }}
+          accessibilityLabel="Verified runs only"
+          style={[
+            styles.verifiedToggle,
+            verifiedShown && styles.verifiedToggleOn,
+            !filtersLive && styles.pillOff,
+          ]}
         >
           <Text
             variant="caption"
             style={{
-              color: verifiedOnly ? color.verified : color.text3,
+              color: verifiedShown ? color.verified : color.text3,
               letterSpacing: 0.8,
               fontSize: 11,
             }}
@@ -181,6 +316,16 @@ export default function BoardScreen() {
                       <Text style={[styles.chipText, { color: color.text3 }]}>SAMPLE</Text>
                     </View>
                   ) : null}
+                  {/* A run's verification state is per-row, so it is shown per
+                      row — the filter chip alone cannot say which is which. */}
+                  {(item.kind === 'you' || item.kind === 'user') &&
+                  item.verification === 'unverified' ? (
+                    <View style={[styles.chip, { borderColor: color.unverified }]}>
+                      <Text style={[styles.chipText, { color: color.unverified }]}>
+                        UNVERIFIED
+                      </Text>
+                    </View>
+                  ) : null}
                   <Text
                     variant="bodyMedium"
                     style={{
@@ -199,8 +344,11 @@ export default function BoardScreen() {
             )}
             ListEmptyComponent={
               <View style={styles.empty}>
-                <Text variant="cardTitle">Nothing here yet</Text>
-                <Text variant="body" style={{ textAlign: 'center' }}>
+                <View style={styles.emptyTile}>
+                  <Text style={styles.emptyGlyph}>🏆</Text>
+                </View>
+                <Text variant="cardTitle">No entries yet</Text>
+                <Text variant="body" style={styles.emptyCopy}>
                   No runs match this slice. Drive, and this board fills with real entries —
                   never invented ones.
                 </Text>
@@ -220,29 +368,56 @@ export default function BoardScreen() {
           />
         )}
       </View>
+
+      <OptionSheet
+        visible={sheet === 'scope'}
+        title="Scope"
+        options={scopes}
+        value={scope}
+        onSelect={setScope}
+        onClose={() => setSheet(null)}
+      />
+      <OptionSheet
+        visible={sheet === 'metric'}
+        title="Metric"
+        options={METRICS}
+        value={metric}
+        onSelect={setMetric}
+        onClose={() => setSheet(null)}
+      />
+      <OptionSheet
+        visible={sheet === 'period'}
+        title="Period"
+        options={PERIODS}
+        value={period}
+        onSelect={setPeriod}
+        onClose={() => setSheet(null)}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  segments: {
+  subtitle: { color: color.text3, marginTop: 2, letterSpacing: 0.4 },
+  pills: { flexDirection: 'row', gap: space.sm, marginTop: space.lg },
+  pill: {
+    flex: 1,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: space.xs,
-    marginTop: space.md,
-    flexWrap: 'wrap',
-  },
-  selectorRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  segment: {
-    borderRadius: 999,
+    borderRadius: radius.pill,
     paddingHorizontal: space.md,
-    paddingVertical: 7,
+    paddingVertical: 9,
     backgroundColor: color.surface1,
     borderWidth: 1,
     borderColor: color.hairline,
   },
-  segmentActive: { backgroundColor: color.accent, borderColor: color.accent },
+  pillGlyph: { fontSize: 13, lineHeight: 17 },
+  pillLabel: { flex: 1, color: color.text1 },
+  pillChevron: { fontSize: 11, lineHeight: 15, color: color.text3 },
+  pillOff: { opacity: 0.45 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', marginTop: space.md },
   verifiedToggle: {
-    marginTop: space.md,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: color.hairline,
@@ -250,6 +425,18 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   verifiedToggleOn: { borderColor: color.verified },
+  sheetBody: { paddingHorizontal: space.xl },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: space.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: color.hairline,
+  },
+  optionBody: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  optionGlyph: { fontSize: 17, lineHeight: 22 },
+  tick: { fontSize: 16, lineHeight: 20, color: color.accent },
   sampleBanner: {
     marginTop: space.md,
     backgroundColor: color.accent,
@@ -282,6 +469,18 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   chipText: { color: color.accentDim, fontSize: 9, letterSpacing: 1 },
-  empty: { alignItems: 'center', gap: space.sm, paddingTop: space.xxl },
+  empty: { alignItems: 'center', gap: space.md, paddingTop: space.xxl },
+  emptyTile: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(204, 255, 0, 0.10)', // color.accent, tinted
+    borderWidth: 1,
+    borderColor: color.hairline,
+  },
+  emptyGlyph: { fontSize: 32, lineHeight: 38 },
+  emptyCopy: { textAlign: 'center' },
   framing: { gap: space.xs, paddingVertical: space.lg },
 });

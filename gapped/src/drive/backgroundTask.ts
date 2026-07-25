@@ -12,6 +12,7 @@
 
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import { sanitiseHeading } from './heading';
 import { Fix } from './types';
 
 export const BACKGROUND_LOCATION_TASK = 'gapped-background-location';
@@ -34,7 +35,7 @@ TaskManager.defineTask<LocationTaskData>(BACKGROUND_LOCATION_TASK, async ({ data
     speedMs: loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : null,
     accuracyM: loc.coords.accuracy,
     altitudeM: loc.coords.altitude,
-    heading: loc.coords.heading,
+    heading: sanitiseHeading(loc.coords.heading),
     isMock: (loc as { mocked?: boolean }).mocked ?? false,
   }));
   fixSink?.(fixes);

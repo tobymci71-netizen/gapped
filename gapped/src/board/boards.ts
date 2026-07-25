@@ -68,7 +68,17 @@ export type BoardResult = {
   isSample: boolean;
   /** Honest aggregate framing lines (spec §C3) — all derived, all true. */
   framing: string[];
+  /**
+   * Where the rows came from. A local board holds only your own device's
+   * drives, so scope and verified-only cannot be applied to it — the screen
+   * disables those controls rather than leaving them inert.
+   */
+  source: 'local' | 'server';
 };
+
+/** Explains the controls the local board cannot honour. */
+const LOCAL_FILTER_NOTE =
+  'Scope and verified-only filters go live once your account syncs — this board is built from the drives on this device.';
 
 /** Local (offline) board construction. */
 export function buildLocalBoard(query: BoardQuery, username: string | null, now: number): BoardResult {
@@ -89,7 +99,8 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
           country: null,
           vehicle: s.vehicle,
           value: s.mph * MS_PER_MPH,
-          verification: 'verified',
+          // Not a measurement at all, so never coloured as a verified one.
+          verification: 'unverified',
           kind: 'sample',
           note: 'SAMPLE — replaced by real drivers after your first drive',
         }),
@@ -98,7 +109,11 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
     return {
       rows,
       isSample: true,
-      framing: ['This is a sample board. Record your first drive to start the real one.'],
+      framing: [
+        'This is a sample board. Record your first drive to start the real one.',
+        LOCAL_FILTER_NOTE,
+      ],
+      source: 'local',
     };
   }
 
@@ -127,7 +142,8 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
         country: null,
         vehicle: null,
         value: b.seconds,
-        verification: 'verified',
+        // A published manufacturer claim is not a verified measurement.
+        verification: 'unverified',
         kind: 'benchmark',
         note: 'manufacturer figure',
       });
@@ -145,7 +161,8 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
         country: null,
         vehicle: null,
         value: drives.length,
-        verification: 'verified',
+        // Your own device's record: measured, but not server-verified.
+        verification: 'unverified',
         kind: 'benchmark',
         note: 'your own record',
       });
@@ -157,7 +174,7 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
         country: null,
         vehicle: null,
         value: Math.max(...allValues),
-        verification: 'verified',
+        verification: 'unverified',
         kind: 'benchmark',
         note: 'your own record',
       });
@@ -190,8 +207,9 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
     }.`,
   );
   framing.push('Global boards go live once your account syncs — every entry a real drive.');
+  framing.push(LOCAL_FILTER_NOTE);
 
-  return { rows, isSample: false, framing };
+  return { rows, isSample: false, framing, source: 'local' };
 }
 
 /** Server board when Supabase is configured; falls back to local. */
@@ -235,5 +253,5 @@ export async function fetchBoard(
   }));
 
   if (rows.length === 0) return buildLocalBoard(query, username, now);
-  return { rows, isSample: false, framing: [] };
+  return { rows, isSample: false, framing: [], source: 'server' };
 }

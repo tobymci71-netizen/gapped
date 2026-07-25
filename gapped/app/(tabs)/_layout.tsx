@@ -1,17 +1,19 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Text } from 'react-native';
+import { TabIcon } from '@/components/TabIcon';
+import { haptic } from '@/lib/haptics';
 import { color, font } from '@/theme/tokens';
 
-function TabIcon({ glyph, focused }: { glyph: string; focused: boolean }) {
-  return (
-    <Text style={{ fontSize: 20, color: focused ? color.accent : color.text3 }}>{glyph}</Text>
-  );
-}
-
+/**
+ * Four tabs. The reference app puts a territory game in the third slot; we ship
+ * the Garage there instead — territory is unverified, non-parity work (spec
+ * §3.3) and a stub screen is worse than no screen.
+ */
 export default function TabsLayout() {
   return (
     <Tabs
+      // One listener for the whole navigator: every tab press is a selection.
+      screenListeners={{ tabPress: () => haptic.selection() }}
       screenOptions={{
         headerShown: false,
         sceneStyle: { backgroundColor: color.canvas },
@@ -27,29 +29,29 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="drive"
         options={{
-          title: 'Drive',
-          tabBarIcon: ({ focused }) => <TabIcon glyph="◉" focused={focused} />,
+          title: 'Driving',
+          tabBarIcon: ({ focused }) => <TabIcon name="driving" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="board"
         options={{
-          title: 'Board',
-          tabBarIcon: ({ focused }) => <TabIcon glyph="▲" focused={focused} />,
+          title: 'Ranks',
+          tabBarIcon: ({ focused }) => <TabIcon name="ranks" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="garage"
         options={{
           title: 'Garage',
-          tabBarIcon: ({ focused }) => <TabIcon glyph="⌂" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon name="garage" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="you"
         options={{
           title: 'You',
-          tabBarIcon: ({ focused }) => <TabIcon glyph="●" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon name="you" focused={focused} />,
         }}
       />
     </Tabs>
