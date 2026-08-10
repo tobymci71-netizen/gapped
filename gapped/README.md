@@ -103,6 +103,62 @@ off, with the reasoning written down there: they fire on Reanimated worklet assi
 the compiler cannot model) and on deliberate effect resets like seeding the elapsed clock. Real
 instances in new code still surface; an always-red lint is one nobody reads.
 
+## Native config (iOS)
+
+`ios/` and `android/` are **gitignored and regenerable** — this is Continuous Native Generation.
+`app.json` is the source of truth; the Xcode project is a build artifact. If you need to change
+the bundle id, a permission string or a capability, change it in `app.json`, not in Xcode, or the
+next prebuild silently discards your edit.
+
+```sh
+npx expo prebuild --platform ios --clean   # regenerate from app.json
+npx expo run:ios --device                  # build to a plugged-in iPhone
+```
+
+Deployment target is **iOS 16.4** (set by the SDK 57 template, not by us).
+
+### ⚠️ Do NOT rewrite NSLocalNetworkUsageDescription
+
+It sits in the generated `Info.plist` reading *"Expo Dev Launcher uses the local network to
+discover and connect to development servers running on your computer."* That looks exactly like
+sloppy boilerplate to tidy up before shipping. **Leaving it alone is what keeps it out of release
+builds. Rewriting it is what ships it.**
+
+`expo-dev-launcher`'s config plugin injects a build phase into the Xcode project called
+`[Expo Dev Launcher] Strip Local Network Keys for Release`. For any `CONFIGURATION != Debug` it
+deletes `NSLocalNetworkUsageDescription` and `_expo._tcp` from `NSBonjourServices` out of the
+built product — but the deletion is guarded:
+
+```sh
+DESC=$(/usr/libexec/PlistBuddy -c "Print :NSLocalNetworkUsageDescription" "$PLIST_PATH")
+if echo "$DESC" | grep -q "Expo Dev Launcher"; then   # ← only strips its OWN default text
+  /usr/libexec/PlistBuddy -c "Delete :NSLocalNetworkUsageDescription" "$PLIST_PATH"
+fi
+```
+
+Replace the string with your own copy and that `grep` stops matching, so the key survives into
+the App Store build — declaring a local-network permission the app never uses, which is the exact
+opposite of what "cleaning it up" was meant to achieve. The plugin also only sets the key
+`if (!config.modResults.NSLocalNetworkUsageDescription)`, so an `app.json` override *does* win —
+it just wins in the wrong direction.
+
+Verify the strip still works before a release: build with `-configuration Release` and check the
+key is absent from the built `.app`'s `Info.plist`.
+
+### Other deliberate Info.plist choices
+
+- **`NSLocationAlwaysUsageDescription` is overridden in `app.json`.** `expo-location`'s plugin adds
+  it with generic copy (*"Allow $(PRODUCT_NAME) to access your location"*). It is unreachable at
+  our iOS 16.4 target, but the plugin adds it regardless and overriding is the only way to control
+  the text, so it matches the other two location strings.
+- **`UIBackgroundModes` is `["location", "fetch"]`.** We declare `location`; `fetch` is added by
+  `expo-task-manager` and is correct — `src/drive/backgroundTask.ts` registers a background task.
+- **`RCTRootViewBackgroundColor` comes from `expo-system-ui`.** `ios.backgroundColor` in `app.json`
+  is inert without that package installed; prebuild warns if it is missing. `#0A0A0A` should
+  appear in the plist as the ARGB integer `4278848010`.
+- **No `NSFaceIDUsageDescription`.** It used to appear because `expo-secure-store` was installed
+  but never imported. Both are gone. Don't re-add the package without a real use.
+
 ## Backend
 
 The whole stack runs locally — no cloud account needed, just Docker.
