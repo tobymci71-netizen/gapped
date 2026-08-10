@@ -93,7 +93,12 @@ export default function GarageScreen() {
     if (!vehicleId || !specs) return;
     haptic.selection();
     setSpecs({ ...specs, isModified: next });
-    if (!(await setModified(vehicleId, next))) refresh();
+    if (!(await setModified(vehicleId, next))) {
+      // Reverting silently looked like the switch simply bounced back.
+      haptic.error();
+      setError('Could not save that change. Check your connection.');
+      refresh();
+    }
   };
 
   const name =

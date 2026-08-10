@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, StyleSheet, TextInput, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
+import { Skeleton } from '@/components/Skeleton';
 import { Text } from '@/components/Text';
 import { formatSpeed } from '@/drive/units';
 import { haptic } from '@/lib/haptics';
@@ -24,12 +25,21 @@ export default function FriendsScreen() {
   const router = useRouter();
   const unitPref = useProfile((s) => s.unitPref);
   const [friends, setFriends] = useState<Friend[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    setFriends(await listFriends());
+    const result = await listFriends();
+    if (result.ok) {
+      setFriends(result.friends);
+      setLoadError(null);
+    } else {
+      // Distinct from the empty state: "we could not ask" is not "you have none".
+      setFriends([]);
+      setLoadError(result.reason);
+    }
   }, []);
 
   useEffect(() => {
@@ -46,7 +56,7 @@ export default function FriendsScreen() {
       haptic.error();
       return;
     }
-    haptic.rankUp();
+    haptic.selection();
     setName('');
     refresh();
   };
@@ -117,7 +127,19 @@ export default function FriendsScreen() {
       </Card>
 
       {friends === null ? (
-        <ActivityIndicator color={color.accent} style={styles.loading} />
+        <View style={styles.loading}>
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} style={styles.loadingRow} />
+          ))}
+        </View>
+      ) : loadError ? (
+        <Card style={styles.note}>
+          <Text variant="cardTitle">Could not load friends</Text>
+          <Text variant="body" style={styles.noteBody}>
+            {loadError}
+          </Text>
+          <Button label="Try again" variant="secondary" onPress={refresh} style={styles.retry} />
+        </Card>
       ) : friends.length === 0 ? (
         <Card style={styles.note}>
           <Text variant="cardTitle">No friends yet</Text>
@@ -176,7 +198,9 @@ const styles = StyleSheet.create({
   },
   addBtn: { width: 96 },
   error: { marginTop: space.md, color: color.danger },
-  loading: { marginTop: space.xl },
+  loading: { marginTop: space.lg, gap: space.md },
+  loadingRow: { height: 72, borderRadius: radius.card },
+  retry: { marginTop: space.md },
   note: { marginTop: space.lg },
   noteBody: { marginTop: space.sm },
   friend: {

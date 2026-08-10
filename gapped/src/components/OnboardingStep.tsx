@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
+import { haptic } from '@/lib/haptics';
 import { color, space } from '@/theme/tokens';
 
 export const TOTAL_STEPS = 7;
@@ -25,7 +26,10 @@ export function OnboardingStep({ step, title, subtitle, children, footer, scroll
       {/* Header row: back chevron left of the linear progress track. */}
       <View style={styles.headerRow}>
         <PressableScale
-          onPress={() => router.back()}
+          onPress={() => {
+          haptic.press();
+          router.back();
+        }}
           silent
           accessibilityRole="button"
           accessibilityLabel="Back"

@@ -1,10 +1,12 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { OnboardingStep } from '@/components/OnboardingStep';
+import { PressableScale } from '@/components/PressableScale';
 import { Text } from '@/components/Text';
+import { haptic } from '@/lib/haptics';
 import { useProfile } from '@/state/profile';
 import { color, radius, space } from '@/theme/tokens';
 
@@ -54,8 +56,12 @@ export default function SafetyStep() {
         ))}
       </Card>
 
-      <Pressable
-        onPress={() => setChecked((c) => !c)}
+      <PressableScale
+        silent
+        onPress={() => {
+          haptic.selection();
+          setChecked((c) => !c);
+        }}
         style={styles.checkboxRow}
         accessibilityRole="checkbox"
         accessibilityState={{ checked }}
@@ -66,7 +72,7 @@ export default function SafetyStep() {
         <Text variant="body" style={styles.checkboxLabel}>
           I acknowledge these guidelines and agree to drive responsibly.
         </Text>
-      </Pressable>
+      </PressableScale>
 
       <Text variant="legal">
         You are solely responsible for your driving. Gapped is a tracking tool and does not

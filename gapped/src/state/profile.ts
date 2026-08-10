@@ -53,7 +53,15 @@ export const useProfile = create<ProfileState>()(
 
       setUnitPref: (unitPref) => set({ unitPref }),
       setCountry: (country) => set({ country }),
-      setVehicleKind: (vehicleKind) => set({ vehicleKind }),
+      // Changing kind clears the chosen vehicle. Keeping it left a car
+      // selected as the motorbike with Continue already enabled — an invalid
+      // vehicle is worse than losing one pick.
+      setVehicleKind: (vehicleKind) =>
+        set((s) =>
+          s.vehicleKind === vehicleKind
+            ? { vehicleKind }
+            : { vehicleKind, vehicleMake: null, vehicleModel: null, vehicleId: null },
+        ),
       // A new make/model is a different car, so it gets a new id — drives
       // already recorded keep pointing at the one that recorded them.
       setVehicle: (vehicleMake, vehicleModel) =>

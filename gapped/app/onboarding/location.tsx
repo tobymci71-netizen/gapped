@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { OnboardingStep } from '@/components/OnboardingStep';
 import { Text } from '@/components/Text';
 import { useDriveStore } from '@/drive/recorder';
+import { haptic } from '@/lib/haptics';
 import { color, space } from '@/theme/tokens';
 
 /**
@@ -22,6 +23,8 @@ export default function LocationStep() {
     if (granted) {
       router.push('/onboarding/vehicle-type');
     } else {
+      // Every other rejection path in the app fires this.
+      haptic.error();
       setDenied(true);
     }
   };
@@ -33,7 +36,22 @@ export default function LocationStep() {
       subtitle={
         'Gapped records your drives from GPS. "Always" access lets a drive keep recording with the screen off or the app in the background — without it we can only track while the app is open.'
       }
-      footer={<Button label="Enable location" onPress={ask} />}
+      /* Once denied, iOS will not re-present the dialog, so "Enable location"
+         is permanently inert. Swap the primary action for the one that can
+         actually resolve it; the skip path stays available in the body. */
+      footer={
+        denied ? (
+          <Button
+            label="Open Settings"
+            onPress={() => {
+              haptic.press();
+              Linking.openSettings().catch(() => undefined);
+            }}
+          />
+        ) : (
+          <Button label="Enable location" onPress={ask} />
+        )
+      }
     >
       {/* Icon tile priming beat (the video leads the ask with a big glyph). */}
       <View style={styles.tileWrap}>

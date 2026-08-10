@@ -337,10 +337,7 @@ export default function BoardScreen() {
           fill it belongs right here rather than buried in Settings. */}
       {scope === 'friends' ? (
         <PressableScale
-          onPress={() => {
-            haptic.press();
-            router.push('/friends');
-          }}
+          onPress={() => router.push('/friends')}
           accessibilityRole="button"
           accessibilityLabel="Manage friends"
           style={styles.manageFriends}

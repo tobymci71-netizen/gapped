@@ -124,7 +124,7 @@ export function SearchableListSheet({
             }}
             ListEmptyComponent={
               <Text variant="body" style={styles.empty}>
-                Nothing matches “{trimmed}”
+                {trimmed ? `Nothing matches “${trimmed}”` : 'Nothing to show yet.'}
               </Text>
             }
           />

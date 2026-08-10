@@ -112,16 +112,24 @@ export default function DriveDetail() {
   };
 
   const shareFile = async (kind: 'gpx' | 'csv') => {
-    const content =
-      kind === 'gpx' ? toGpx(fixes, `Gapped drive ${stamp}`) : toCsv(fixes);
-    const file = new File(Paths.cache, `gapped-${stamp}.${kind}`);
-    if (file.exists) file.delete();
-    file.create();
-    file.write(content);
-    if (await Sharing.isAvailableAsync()) {
+    // Was unguarded: a filesystem failure made the button appear to do nothing.
+    // Its sibling shareCard has always caught and reported.
+    try {
+      const content =
+        kind === 'gpx' ? toGpx(fixes, `Gapped drive ${stamp}`) : toCsv(fixes);
+      const file = new File(Paths.cache, `gapped-${stamp}.${kind}`);
+      if (file.exists) file.delete();
+      file.create();
+      file.write(content);
+      if (!(await Sharing.isAvailableAsync())) {
+        haptic.error();
+        return;
+      }
       await Sharing.shareAsync(file.uri, {
         mimeType: kind === 'gpx' ? 'application/gpx+xml' : 'text/csv',
       });
+    } catch {
+      haptic.error();
     }
   };
 

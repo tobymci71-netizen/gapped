@@ -24,11 +24,26 @@ export type AddFriendResult =
   | { ok: true; friendId: string }
   | { ok: false; reason: string };
 
-export async function listFriends(): Promise<Friend[]> {
-  if (!supabase) return [];
+export type FriendsResult =
+  | { ok: true; friends: Friend[] }
+  | { ok: false; reason: string };
+
+/**
+ * Never collapses a failure into an empty list.
+ *
+ * Returning [] on error made the screen state "you have no friends" — a
+ * factual claim about the user's account produced by a network problem. This
+ * is the same honesty the board already applies when it disables its scope
+ * pills rather than pretending a local board is a global one.
+ */
+export async function listFriends(): Promise<FriendsResult> {
+  if (!supabase) return { ok: true, friends: [] };
   const { data, error } = await supabase.rpc('list_friends');
-  if (error || !data) return [];
-  return (
+  if (error) {
+    return { ok: false, reason: 'Could not load your friends. Check your connection.' };
+  }
+  if (!data) return { ok: true, friends: [] };
+  const friends = (
     data as {
       friend_id: string;
       username: string | null;
@@ -43,6 +58,7 @@ export async function listFriends(): Promise<Friend[]> {
     bestSpeedMs: r.best_speed,
     addedAt: Date.parse(r.added_at),
   }));
+  return { ok: true, friends };
 }
 
 /**
