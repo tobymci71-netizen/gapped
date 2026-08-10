@@ -9,8 +9,23 @@
  *  - Privacy zones with centre offsets randomised 200–800 m at creation, so
  *    repeated shares can't be triangulated back to the true centre.
  *
- * The salt lives on device (SecureStore); the server holds route_full and
- * applies the same trim server-side before anything becomes public.
+ * Where the salt actually lives, and why that is the right place:
+ *
+ * The salt that matters is the server's — the `TRIM_SALT` secret read by the
+ * verify-drive Edge Function, which re-trims from the raw fixes and produces
+ * the only route that is ever published (drives.route / route_polyline). The
+ * untrimmed route never leaves the server at all; it sits in
+ * drive_routes_private, which has no grants to any client role.
+ *
+ * The client passes a fixed, non-secret constant ('gapped-share-card' in
+ * app/drive/[id].tsx) when it trims a route for the local share card. That is
+ * not a weakness: a salt shipped inside the binary can never be secret, and
+ * the client already holds the full untrimmed trace for its own drive, so
+ * there is nothing there to withhold from it. Secrecy only has to hold for
+ * what becomes public, which is the server's job.
+ *
+ * (An earlier version of this comment claimed the salt lived on device in
+ * SecureStore. It never did — nothing in the app imports expo-secure-store.)
  */
 
 import { sha256Hex } from '@/lib/sha256';
