@@ -106,8 +106,41 @@ of that — it needs real Postgres.
 
 Ports are 544xx rather than the CLI defaults, so this stack coexists with another project's.
 
-For a cloud project: `supabase link --project-ref <ref>`, `supabase db push`,
-`supabase functions deploy verify-drive`, and set the `TRIM_SALT` secret.
+### Cloud
+
+Live project: **`gapped`** — ref `esyffuzecjvgddidfeph`, region `eu-west-2` (London), org "BR Max".
+All 7 migrations applied, both Edge Functions deployed, `TRIM_SALT` set, anonymous sign-ins on.
+`npm run verify:roundtrip` passes all 46 assertions against it:
+
+```sh
+ANON=$(supabase projects api-keys --project-ref esyffuzecjvgddidfeph -o json | jq -r '.[]|select(.name=="anon").api_key')
+SUPABASE_URL=https://esyffuzecjvgddidfeph.supabase.co SUPABASE_ANON_KEY="$ANON" npm run verify:roundtrip
+```
+
+The database password is in `supabase/.db-password.txt` (gitignored) — **move it to a password
+manager and delete the file.** It is deliberately not in `.env`: `EXPO_PUBLIC_*` values are
+inlined into the app bundle, so nothing secret can live there. The anon key is a public client
+key; RLS is the security boundary, not its secrecy.
+
+Redeploying: `supabase db push`, `supabase functions deploy verify-drive attest-device`.
+
+### Why 0007 exists — "the default ACL" is not one thing
+
+Everything above passed locally and then failed once, on the real project: reading
+`drive_routes_private` returned an empty list instead of "permission denied". Empty means SELECT
+*was* granted and RLS filtered the rows; denied means there is no privilege path at all.
+
+This machine's CLI creates tables in `public` with almost nothing granted to anon/authenticated.
+The cloud project grants them full INSERT/SELECT/UPDATE/DELETE. So 0002 and 0005 were written
+against one default and deployed onto the other, and the two tables that were supposed to have no
+client privileges — the untrimmed routes and the attested device keys — arrived with every one.
+
+Nothing was exposed: both have RLS on with zero policies, and RLS is default-deny. But that is
+protection by accident, one stray policy away from world-writable. 0007 revokes everything from
+the client roles and grants back exactly the intended set, so the privilege state is identical on
+any project regardless of its defaults. The round-trip now asserts the strong form — *no
+privilege*, not merely *no rows* — because the weak form is what passed while the table was in
+fact fully granted.
 
 ### What the first real run against Postgres found
 

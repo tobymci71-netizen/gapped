@@ -191,8 +191,22 @@ check(
 
 // ── 4. privacy invariant ────────────────────────────────────────────────────
 section('4. route_full never leaves the server');
+// Strict on purpose: an empty result would also mean "cannot read", but it
+// would mean SELECT was granted and RLS filtered the rows. The guarantee we
+// want is that there is no privilege path at all, so this demands the error.
+// Deployed onto a project with permissive default ACLs, the weaker version of
+// this check passed while the table was in fact fully granted — see 0007.
 const { data: rf, error: rfErr } = await app.from('drive_routes_private').select('*').eq('drive_id', driveId);
-check('client cannot read the untrimmed route', !!rfErr && !rf?.length, rfErr?.message ?? rf);
+check(
+  'client has NO privilege on the untrimmed route (not merely no rows)',
+  !!rfErr && !rf?.length,
+  { error: rfErr?.message ?? null, rows: rf },
+);
+
+const { error: rfWriteErr } = await app
+  .from('drive_routes_private')
+  .insert({ drive_id: driveId, route_full: 'LINESTRING(0 0,1 1)' });
+check('client cannot write the untrimmed route', !!rfWriteErr, rfWriteErr?.message);
 
 // ── 5. boards ───────────────────────────────────────────────────────────────
 section('5. Board query');
