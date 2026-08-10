@@ -9,6 +9,7 @@ import { SettingsRow, SettingsSection } from '@/components/SettingsRow';
 import { Text } from '@/components/Text';
 import { clearAll } from '@/drive/wal';
 import { haptic } from '@/lib/haptics';
+import { supabase } from '@/lib/supabase';
 import { EMPTY_PBS, useRecords } from '@/state/records';
 import { useProfile } from '@/state/profile';
 import { color, space } from '@/theme/tokens';
@@ -31,14 +32,27 @@ function openURL(url: string): void {
 }
 
 /**
- * Local-only account wipe: profile, records and every drive held on this
- * device. Server-side deletion is NOT performed here and the confirmation copy
- * must never claim it was.
+ * Full account wipe: the server row first, then everything on this device.
  *
- * TODO: call the Supabase `delete_account` RPC (and await its success) before
- * clearing local state, once credentials exist.
+ * Order matters and is not an implementation detail. If the server call fails
+ * this throws before touching local state, so the user keeps a working account
+ * they can delete again later. Wiping locally first would leave their drives
+ * on our servers while the app told them the account was gone — the one
+ * outcome this flow must never produce.
+ *
+ * With no backend configured (anonymous, offline-only), there is nothing on a
+ * server to remove and the local wipe is the whole operation.
  */
 async function deleteAccount(): Promise<void> {
+  if (supabase) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      const { error } = await supabase.rpc('delete_account');
+      if (error) throw error;
+      await supabase.auth.signOut().catch(() => undefined);
+    }
+  }
+
   clearAll();
 
   // Reset in memory first, then drop the persisted copy — a pending persist
@@ -50,6 +64,7 @@ async function deleteAccount(): Promise<void> {
     vehicleKind: null,
     vehicleMake: null,
     vehicleModel: null,
+    vehicleId: null,
     username: null,
     safetyAccepted: false,
   });
@@ -80,7 +95,7 @@ export default function SettingsScreen() {
     // until the server delete_account RPC exists, so we do not claim it.
     Alert.alert(
       'Delete account?',
-      'This erases your profile, records, streaks and every drive recorded on this device. It cannot be undone. Anything already synced to our servers is removed when account sync ships.',
+      'This erases your profile, records, streaks and every drive — on this device and on our servers, including any leaderboard entries. It cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -89,7 +104,16 @@ export default function SettingsScreen() {
           onPress: () => {
             deleteAccount()
               .then(() => router.replace('/onboarding'))
-              .catch(() => haptic.error());
+              .catch(() => {
+                haptic.error();
+                // Say plainly that nothing was deleted. A silent failure here
+                // reads as success and is exactly how someone ends up
+                // believing their data is gone when it is not.
+                Alert.alert(
+                  'Account not deleted',
+                  'We could not reach the server, so nothing was deleted. Check your connection and try again.',
+                );
+              });
           },
         },
       ],
@@ -121,6 +145,15 @@ export default function SettingsScreen() {
           onPress={toggleUnits}
         />
         <SettingsRow glyph="🌍" tint={tint.neutral} label="Country" value={countryValue} />
+        <SettingsRow
+          glyph="👥"
+          tint={tint.neutral}
+          label="Friends"
+          onPress={() => {
+            haptic.press();
+            router.push('/friends');
+          }}
+        />
       </SettingsSection>
 
       <SettingsSection title="Privacy">

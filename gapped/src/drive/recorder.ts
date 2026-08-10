@@ -10,6 +10,8 @@
 import * as Location from 'expo-location';
 import { Accelerometer, Barometer } from 'expo-sensors';
 import { create } from 'zustand';
+import { uuid } from '@/lib/ids';
+import { useProfile } from '@/state/profile';
 import {
   setBackgroundFixSink,
   startBackgroundUpdates,
@@ -48,14 +50,7 @@ let accumulatedM = 0;
 let lastFix: Fix | null = null;
 let lastProcessedT = 0;
 
-function makeDriveId(): string {
-  // uuid-shaped, no external dep
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
+const makeDriveId = uuid;
 
 export const useDriveStore = create<LiveState & Actions>((set, get) => ({
   engineState: 'idle',
@@ -179,7 +174,11 @@ function handleEvents(events: ReturnType<DriveEngine['onFix']>, set: Set, get: G
       const id = makeDriveId();
       accumulatedM = 0;
       lastFix = null;
-      wal.openDrive(id, ev.at);
+      // Stamp the drive with the vehicle that recorded it, at the moment it
+      // starts. Attaching the user's *current* vehicle later, at sync time,
+      // would quietly credit this drive to whatever they happen to be driving
+      // then — a leaderboard that claims to be believable cannot do that.
+      wal.openDrive(id, ev.at, useProfile.getState().vehicleId);
       set({ driveId: id, startedAt: ev.at, distanceM: 0, engineState: engine.getState() });
       // Keep fixes flowing with the screen off. No-op without background permission.
       startBackgroundUpdates().catch(() => undefined);

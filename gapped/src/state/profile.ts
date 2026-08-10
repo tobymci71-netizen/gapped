@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { UnitPref } from '@/drive/units';
+import { uuid } from '@/lib/ids';
 
 export type VehicleKind = 'car' | 'motorbike';
 
@@ -18,6 +19,13 @@ type ProfileState = {
   vehicleKind: VehicleKind | null;
   vehicleMake: string | null;
   vehicleModel: string | null;
+  /**
+   * Stable local id for the chosen vehicle, minted when it is picked and
+   * reused as the `vehicles` row id on the server. Drives record it at the
+   * moment they start, so a drive stays attributed to the car that did it
+   * even after the user switches rides.
+   */
+  vehicleId: string | null;
   username: string | null;
   safetyAccepted: boolean;
 
@@ -39,13 +47,21 @@ export const useProfile = create<ProfileState>()(
       vehicleKind: null,
       vehicleMake: null,
       vehicleModel: null,
+      vehicleId: null,
       username: null,
       safetyAccepted: false,
 
       setUnitPref: (unitPref) => set({ unitPref }),
       setCountry: (country) => set({ country }),
       setVehicleKind: (vehicleKind) => set({ vehicleKind }),
-      setVehicle: (vehicleMake, vehicleModel) => set({ vehicleMake, vehicleModel }),
+      // A new make/model is a different car, so it gets a new id — drives
+      // already recorded keep pointing at the one that recorded them.
+      setVehicle: (vehicleMake, vehicleModel) =>
+        set((s) =>
+          s.vehicleMake === vehicleMake && s.vehicleModel === vehicleModel && s.vehicleId
+            ? s
+            : { vehicleMake, vehicleModel, vehicleId: uuid() },
+        ),
       setUsername: (username) => set({ username }),
       acceptSafety: () => set({ safetyAccepted: true }),
       completeOnboarding: () => set({ onboarded: true }),

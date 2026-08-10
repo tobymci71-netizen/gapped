@@ -56,7 +56,15 @@
     "web": "expo start --web",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "build:edge": "node scripts/build-edge-shared.mjs"
+    "build:edge": "node scripts/build-edge-shared.mjs",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:studio": "open http://127.0.0.1:54423",
+    "functions:serve": "supabase functions serve --env-file supabase/functions/.env",
+    "verify:roundtrip": "node scripts/verify-roundtrip.mjs",
+    "test:edge": "cd supabase/functions && deno test --allow-net --allow-read --allow-env _server/",
+    "check:edge": "cd supabase/functions && deno check verify-drive/index.ts attest-device/index.ts"
   },
   "private": true,
   "jest": {

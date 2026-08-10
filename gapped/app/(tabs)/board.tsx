@@ -1,4 +1,5 @@
 import { FlashList } from '@shopify/flash-list';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import countries from '@/data/countries.json';
@@ -141,6 +142,7 @@ function OptionSheet<T extends string>({
 }
 
 export default function BoardScreen() {
+  const router = useRouter();
   const { username, country, unitPref } = useProfile();
   const [metric, setMetric] = useState<BoardMetric>('top_speed');
   const [scope, setScope] = useState<BoardScope>('global');
@@ -185,11 +187,13 @@ export default function BoardScreen() {
   const load = useCallback(async () => {
     const seq = ++requestId.current;
     setResult(null);
-    const r = await fetchBoard({ metric, scope, period, verifiedOnly }, username);
+    const r = await fetchBoard({ metric, scope, period, verifiedOnly }, username, country);
     if (seq !== requestId.current) return;
     setResult(r);
     setFiltersLive(r.source === 'server');
-  }, [metric, scope, period, verifiedOnly, username]);
+    // `country` is a real input now that it scopes the query — without it here
+    // a country change would leave the previous country's board on screen.
+  }, [metric, scope, period, verifiedOnly, username, country]);
 
   useEffect(() => {
     load();
@@ -267,6 +271,24 @@ export default function BoardScreen() {
             SAMPLE BOARD — record your first drive to start the real one
           </Text>
         </View>
+      ) : null}
+
+      {/* The friends board is only ever as full as you make it, so the way to
+          fill it belongs right here rather than buried in Settings. */}
+      {scope === 'friends' ? (
+        <PressableScale
+          onPress={() => {
+            haptic.press();
+            router.push('/friends');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Manage friends"
+          style={styles.manageFriends}
+        >
+          <Text variant="caption" style={{ color: color.accent }}>
+            Manage friends →
+          </Text>
+        </PressableScale>
       ) : null}
 
       <View style={styles.list}>
@@ -444,6 +466,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: 6,
   },
+  manageFriends: { marginTop: space.md, alignSelf: 'flex-start' },
   list: { flex: 1, marginTop: space.md },
   row: {
     flexDirection: 'row',

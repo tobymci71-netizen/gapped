@@ -31,7 +31,12 @@ yarn-error.*
 *.pem
 
 # local env files
+# `.env` itself must be listed: the README tells you to put your Supabase URL
+# and anon key there, and `.env*.local` alone does not match it.
+.env
 .env*.local
+!.env.example
+supabase/functions/.env
 
 # typescript
 *.tsbuildinfo

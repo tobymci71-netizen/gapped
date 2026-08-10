@@ -212,44 +212,53 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
   return { rows, isSample: false, framing, source: 'local' };
 }
 
-/** Server board when Supabase is configured; falls back to local. */
+/**
+ * Server board when Supabase is configured; falls back to local.
+ *
+ * Ranking is done by the `board_top` RPC rather than by selecting
+ * leaderboard_entries directly: the board has to be one row per driver (their
+ * best), the country board has to actually filter on country, and the friends
+ * board is the global board narrowed to people you have added. See migration
+ * 0004 — all three are things a flat select got wrong.
+ */
 export async function fetchBoard(
   query: BoardQuery,
   username: string | null,
+  country: string | null = null,
 ): Promise<BoardResult> {
   const now = Date.now();
   if (!supabase) return buildLocalBoard(query, username, now);
 
-  const since = new Date(periodStart(query.period, now)).toISOString();
-  let q = supabase
-    .from('leaderboard_entries')
-    .select('id, profile_id, metric, value, verification, recorded_at, profiles(username, country)')
-    .eq('metric', query.metric)
-    .eq('scope', query.scope === 'friends' ? 'friends' : query.scope)
-    .eq('period', query.period)
-    .order('value', { ascending: query.metric === 'zero_to_60' })
-    .limit(50);
-  if (query.verifiedOnly) q = q.eq('verification', 'verified');
-  if (query.period !== 'all') q = q.gte('recorded_at', since);
+  // A country board with no country is not a board — it would silently widen
+  // to every country, which is the bug this call replaced.
+  if (query.scope === 'country' && !country) return buildLocalBoard(query, username, now);
 
-  const { data, error } = await q;
+  const { data, error } = await supabase.rpc('board_top', {
+    p_metric: query.metric,
+    p_scope: query.scope,
+    p_period: query.period,
+    p_country: country,
+    p_verified_only: query.verifiedOnly,
+    p_limit: 50,
+  });
   if (error || !data) return buildLocalBoard(query, username, now);
 
   type EntryRow = {
     id: string;
+    username: string | null;
+    country: string | null;
     value: number;
     verification: string;
-    profiles: { username: string; country: string | null } | null;
   };
-  const rows: BoardRow[] = (data as unknown as EntryRow[]).map((e, i) => ({
+  const rows: BoardRow[] = (data as EntryRow[]).map((e, i) => ({
     id: e.id,
     rank: i + 1,
-    username: e.profiles?.username ?? 'driver',
-    country: e.profiles?.country ?? null,
+    username: e.username ?? 'driver',
+    country: e.country ?? null,
     vehicle: null,
     value: e.value,
     verification: e.verification === 'verified' ? 'verified' : 'unverified',
-    kind: e.profiles?.username === username ? 'you' : 'user',
+    kind: e.username != null && e.username === username ? 'you' : 'user',
   }));
 
   if (rows.length === 0) return buildLocalBoard(query, username, now);
