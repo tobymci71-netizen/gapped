@@ -18,6 +18,8 @@ export type BoardRow = {
    * labelled SAMPLE (spec §C6). Never presented as real people.
    */
   kind: 'user' | 'you' | 'benchmark' | 'sample';
+  /** Bracket the entry was ranked in, when the server supplied one. */
+  bracketKey?: string | null;
   /** Provenance line for benchmarks, e.g. "manufacturer figure". */
   note?: string;
 };
@@ -27,4 +29,10 @@ export type BoardQuery = {
   scope: BoardScope;
   period: BoardPeriod;
   verifiedOnly: boolean;
+  /**
+   * Vehicle-class bracket, or null for the open board across all classes.
+   * The difference between "fastest phone in the world" and "fastest stock
+   * Miata" — see src/vehicles/brackets.ts.
+   */
+  bracket?: string | null;
 };

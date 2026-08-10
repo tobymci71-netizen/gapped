@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/Skeleton';
 import { Stat } from '@/components/Stat';
 import { Text } from '@/components/Text';
 import { StreakGrid } from '@/components/StreakGrid';
+import { Achievement, listAchievements } from '@/state/achievements';
 import {
   addBins,
   binLabel,
@@ -137,6 +138,21 @@ export default function YouScreen() {
   }, []);
   useFocusEffect(refresh);
 
+  // Server-granted, so they are fetched rather than derived: the app has no
+  // way to award one and must not appear to.
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      let live = true;
+      listAchievements().then((a) => {
+        if (live) setAchievements(a);
+      });
+      return () => {
+        live = false;
+      };
+    }, []),
+  );
+
   const totalDistanceM = drives.reduce((s, d) => s + d.summary.distanceM, 0);
   const totalDurationS = drives.reduce((s, d) => s + d.summary.durationS, 0);
   // null, not 0: with no drives there is no top speed to report.
@@ -232,6 +248,24 @@ export default function YouScreen() {
       <Card style={styles.streakCard}>
         <StreakGrid driveDays={driveDays} />
       </Card>
+
+      {achievements.length > 0 ? (
+        <View style={styles.achievements}>
+          <Text variant="caption">EARNED</Text>
+          {achievements.map((a) => (
+            <Card key={a.kind} style={styles.achievementCard}>
+              <Text style={styles.achievementGlyph}>{a.glyph}</Text>
+              <View style={styles.achievementBody}>
+                <Text variant="cardTitle">{a.title}</Text>
+                <Text variant="caption">{a.detail}</Text>
+              </View>
+            </Card>
+          ))}
+          <Text variant="legal">
+            Achievements are granted on the server, off verified drives only — never by the app.
+          </Text>
+        </View>
+      ) : null}
 
       {pbs.zeroTo60S != null ? (
         <Card style={styles.pbCard}>
@@ -429,6 +463,10 @@ const styles = StyleSheet.create({
   identity: { marginTop: space.lg },
   meta: { marginTop: space.xs },
   grid: { flexDirection: 'row', gap: space.md, marginTop: space.md },
+  achievements: { marginTop: space.xl, gap: space.sm },
+  achievementCard: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  achievementGlyph: { fontSize: 26 },
+  achievementBody: { flex: 1, gap: 2 },
   streakCard: { marginTop: space.xl },
   pbCard: { marginTop: space.md, gap: space.xs },
   sectionTitle: { marginTop: space.xl },

@@ -389,5 +389,80 @@ Deno.serve(async (req) => {
     if (boardErr) return json({ error: boardErr.message }, 500);
   }
 
-  return json({ verification, summary, checks: report.checks, attestation: attestVerdict });
+  // 5. Achievements. Granted only here, only off verified drives, so one means
+  //    as much as a verified run does. Unique per (profile, kind) — earning
+  //    something twice is not an event — so these are plain upserts.
+  const earned = verification === 'verified'
+    ? await grantAchievements(supabase, drive.profile_id, summary, profile?.country ?? null)
+    : [];
+
+  return json({
+    verification,
+    summary,
+    checks: report.checks,
+    attestation: attestVerdict,
+    achievements: earned,
+  });
 });
+
+/**
+ * Award what this drive proves, and nothing it does not.
+ *
+ * Every criterion is checked against the leaderboard entries the server itself
+ * wrote, never the client's numbers. `country_number_one` is deliberately
+ * re-checked rather than assumed from this drive: holding the top spot is a
+ * fact about the board, not about the run that just finished.
+ */
+async function grantAchievements(
+  supabase: Db,
+  profileId: string,
+  summary: { distanceM: number; maxSpeedMs: number; zeroTo60S: number | null },
+  country: string | null,
+): Promise<string[]> {
+  const kinds: { kind: string; payload: Record<string, unknown> }[] = [];
+
+  const { count: verifiedCount } = await supabase
+    .from('drives')
+    .select('id', { count: 'exact', head: true })
+    .eq('profile_id', profileId)
+    .eq('verification', 'verified');
+
+  if ((verifiedCount ?? 0) >= 1) {
+    kinds.push({ kind: 'first_verified_run', payload: { max_speed_ms: summary.maxSpeedMs } });
+  }
+  if ((verifiedCount ?? 0) >= 10) {
+    kinds.push({ kind: 'ten_verified_runs', payload: { count: verifiedCount } });
+  }
+  if (summary.zeroTo60S != null) {
+    kinds.push({ kind: 'first_measured_launch', payload: { zero_to_60_s: summary.zeroTo60S } });
+  }
+
+  // Top of your country's all-time verified top-speed board.
+  if (country) {
+    const { data: top } = await supabase
+      .from('leaderboard_entries')
+      .select('profile_id, value')
+      .eq('metric', 'top_speed')
+      .eq('scope', 'country')
+      .eq('country', country)
+      .eq('period', 'all')
+      .eq('verification', 'verified')
+      .order('value', { ascending: false })
+      .limit(1);
+    if (top?.[0]?.profile_id === profileId) {
+      kinds.push({
+        kind: 'country_number_one',
+        payload: { country, value: top[0].value },
+      });
+    }
+  }
+
+  if (kinds.length === 0) return [];
+
+  const { error } = await supabase.from('achievements').upsert(
+    kinds.map((k) => ({ profile_id: profileId, kind: k.kind, payload: k.payload })),
+    { onConflict: 'profile_id, kind', ignoreDuplicates: true },
+  );
+  if (error) return [];
+  return kinds.map((k) => k.kind);
+}

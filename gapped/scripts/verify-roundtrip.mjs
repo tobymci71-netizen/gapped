@@ -333,6 +333,95 @@ const { error: keyErr } = await app.from('device_attestations').insert({
 });
 check('client cannot register an attestation key directly', !!keyErr, keyErr?.message);
 
+// ── 7b. vehicle specs and brackets ──────────────────────────────────────────
+section('7b. Vehicle specs, brackets and achievements');
+
+// Specs decide which class a run competes in, so the client must not be able
+// to write them — otherwise a fast car declares itself slow and owns the
+// slowest bracket.
+for (const col of ['curb_weight_kg', 'factory_power_hp', 'drivetrain']) {
+  const value = col === 'drivetrain' ? 'rwd' : 500;
+  const { error } = await app.from('vehicles').update({ [col]: value }).eq('id', vehicleId);
+  check(`client cannot set vehicles.${col}`, !!error, error?.message ?? 'ALLOWED — BAD');
+}
+const { error: specInsertErr } = await app.from('vehicles').insert({
+  id: crypto.randomUUID(), profile_id: uid, kind: 'car', make: 'X', model: 'Y',
+  factory_power_hp: 90, curb_weight_kg: 1800,
+});
+check('client cannot insert a vehicle with specs', !!specInsertErr, specInsertErr?.message);
+
+// is_modified stays client-writable on purpose: declaring a mod only ever
+// moves you to a harder class, never an easier one.
+const { error: modErr } = await app.from('vehicles').update({ is_modified: true }).eq('id', vehicleId);
+check('client can still declare a modification', !modErr, modErr?.message);
+await app.from('vehicles').update({ is_modified: false }).eq('id', vehicleId);
+
+// Our drives were recorded with a spec-less vehicle, so they rank open class.
+const { data: openBoard } = await app.rpc('board_top', {
+  p_metric: 'top_speed', p_scope: 'global', p_period: 'all',
+  p_country: null, p_verified_only: false, p_limit: 50, p_bracket: 'any|stock|open',
+});
+check(
+  'bracket filter returns our open-class entry',
+  openBoard?.some((r) => r.username === username),
+  openBoard?.slice(0, 2),
+);
+
+const { data: otherBracket } = await app.rpc('board_top', {
+  p_metric: 'top_speed', p_scope: 'global', p_period: 'all',
+  p_country: null, p_verified_only: false, p_limit: 50, p_bracket: 'rwd|stock|pw4',
+});
+check(
+  'a class we are not in excludes us',
+  !otherBracket?.some((r) => r.username === username),
+  otherBracket,
+);
+
+const { data: bracketList, error: blErr } = await app.rpc('board_brackets', {
+  p_metric: 'top_speed', p_period: 'all',
+});
+check('board_brackets lists only classes with drivers', !blErr && bracketList?.length > 0, {
+  err: blErr?.message, bracketList,
+});
+
+// Achievements are server-granted off verified drives.
+const { data: earned } = await app
+  .from('achievements').select('kind, payload').eq('profile_id', uid);
+check(
+  'first verified run was awarded',
+  earned?.some((a) => a.kind === 'first_verified_run'),
+  earned,
+);
+check(
+  'a measured 0-60 was awarded',
+  earned?.some((a) => a.kind === 'first_measured_launch'),
+  earned,
+);
+check(
+  'top of the GB board was awarded',
+  earned?.some((a) => a.kind === 'country_number_one'),
+  earned,
+);
+check(
+  'ten-run achievement not awarded on two drives',
+  !earned?.some((a) => a.kind === 'ten_verified_runs'),
+  earned,
+);
+
+// Re-verifying must not duplicate an achievement.
+await app.functions.invoke('verify-drive', { body: { drive_id: driveId } });
+const { count: achCount } = await app
+  .from('achievements')
+  .select('*', { count: 'exact', head: true })
+  .eq('profile_id', uid)
+  .eq('kind', 'first_verified_run');
+check('achievements are not re-granted on re-verification', achCount === 1, { achCount });
+
+const { error: forgeAch } = await app.from('achievements').insert({
+  profile_id: uid, kind: 'country_number_one', payload: {},
+});
+check('client cannot grant itself an achievement', !!forgeAch, forgeAch?.message);
+
 // ── 8. friends ──────────────────────────────────────────────────────────────
 section('8. Friends');
 

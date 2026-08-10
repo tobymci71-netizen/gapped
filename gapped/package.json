@@ -66,8 +66,9 @@
     "functions:serve": "supabase functions serve --env-file supabase/functions/.env",
     "verify:roundtrip": "node scripts/verify-roundtrip.mjs",
     "test:edge": "cd supabase/functions && deno test --allow-net --allow-read --allow-env _server/",
-    "check:edge": "cd supabase/functions && deno check verify-drive/index.ts attest-device/index.ts",
-    "lint": "expo lint"
+    "check:edge": "cd supabase/functions && deno check verify-drive/index.ts attest-device/index.ts decode-vin/index.ts",
+    "lint": "expo lint",
+    "verify:vin": "node scripts/verify-vin-decode.mjs"
   },
   "private": true,
   "jest": {

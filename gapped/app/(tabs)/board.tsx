@@ -9,9 +9,10 @@ import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
 import { Skeleton } from '@/components/Skeleton';
 import { Text } from '@/components/Text';
-import { fetchBoard, BoardResult } from '@/board/boards';
+import { fetchBoard, fetchBrackets, BoardResult } from '@/board/boards';
 import { BoardMetric, BoardPeriod, BoardRow, BoardScope } from '@/board/types';
 import { formatDistance, formatSpeed } from '@/drive/units';
+import { bracketLabel } from '@/vehicles/brackets';
 import { haptic } from '@/lib/haptics';
 import { useProfile } from '@/state/profile';
 import { color, radius, space } from '@/theme/tokens';
@@ -148,8 +149,11 @@ export default function BoardScreen() {
   const [scope, setScope] = useState<BoardScope>('global');
   const [period, setPeriod] = useState<BoardPeriod>('week');
   const [verifiedOnly, setVerifiedOnly] = useState(true);
+  // null = open board across every class.
+  const [bracket, setBracket] = useState<string | null>(null);
+  const [brackets, setBrackets] = useState<{ key: string; drivers: number }[]>([]);
   const [result, setResult] = useState<BoardResult | null>(null);
-  const [sheet, setSheet] = useState<'scope' | 'metric' | 'period' | null>(null);
+  const [sheet, setSheet] = useState<'scope' | 'metric' | 'period' | 'bracket' | null>(null);
 
   const monthLabel = useMemo(() => {
     const d = new Date();
@@ -176,6 +180,20 @@ export default function BoardScreen() {
   );
   const scopeGlyph = scopes.find((o) => o.key === scope)?.glyph ?? '🌍';
 
+  // Driver counts are shown because a class of two is a different claim than a
+  // class of two hundred, and the label alone hides that.
+  const bracketOptions: Option<string>[] = useMemo(
+    () => [
+      { key: 'all', label: 'All classes', glyph: '🌐' },
+      ...brackets.map((b) => ({
+        key: b.key,
+        label: `${bracketLabel(b.key)} · ${b.drivers} driver${b.drivers === 1 ? '' : 's'}`,
+        glyph: '🏁',
+      })),
+    ],
+    [brackets],
+  );
+
   // Only the newest request may commit. formatValue reads the *current*
   // metric, so a late response would be rendered through the wrong formatter
   // and labelled with the wrong unit.
@@ -187,17 +205,33 @@ export default function BoardScreen() {
   const load = useCallback(async () => {
     const seq = ++requestId.current;
     setResult(null);
-    const r = await fetchBoard({ metric, scope, period, verifiedOnly }, username, country);
+    const r = await fetchBoard({ metric, scope, period, verifiedOnly, bracket }, username, country);
     if (seq !== requestId.current) return;
     setResult(r);
     setFiltersLive(r.source === 'server');
     // `country` is a real input now that it scopes the query — without it here
     // a country change would leave the previous country's board on screen.
-  }, [metric, scope, period, verifiedOnly, username, country]);
+  }, [metric, scope, period, verifiedOnly, username, country, bracket]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Only classes that actually contain drivers are offered — a combinatorial
+  // menu of empty brackets would be mostly dead ends.
+  useEffect(() => {
+    let live = true;
+    fetchBrackets(metric, period).then((b) => {
+      if (!live) return;
+      setBrackets(b);
+      // A class that has emptied out (period rolled over) must not stay
+      // selected, or the board silently shows nothing with no explanation.
+      setBracket((cur) => (cur && !b.some((x) => x.key === cur) ? null : cur));
+    });
+    return () => {
+      live = false;
+    };
+  }, [metric, period]);
 
   // A lit chip over rows nothing has verified would assert the filter applied.
   const verifiedShown = filtersLive && verifiedOnly;
@@ -233,6 +267,14 @@ export default function BoardScreen() {
         />
         <Pill glyph="⚡" label={labelFor(METRICS, metric)} onPress={() => setSheet('metric')} />
         <Pill glyph="📅" label={labelFor(PERIODS, period)} onPress={() => setSheet('period')} />
+        {brackets.length > 0 ? (
+          <Pill
+            glyph="🏁"
+            label={bracket ? bracketLabel(bracket) : 'All classes'}
+            onPress={() => setSheet('bracket')}
+            disabled={!filtersLive}
+          />
+        ) : null}
       </View>
 
       <View style={styles.toggleRow}>
@@ -264,6 +306,15 @@ export default function BoardScreen() {
           </Text>
         </PressableScale>
       </View>
+
+      <OptionSheet
+        visible={sheet === 'bracket'}
+        title="Vehicle class"
+        options={bracketOptions}
+        value={bracket ?? 'all'}
+        onSelect={(v) => setBracket(v === 'all' ? null : v)}
+        onClose={() => setSheet(null)}
+      />
 
       {result?.isSample ? (
         <View style={styles.sampleBanner}>

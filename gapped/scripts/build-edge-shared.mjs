@@ -27,6 +27,8 @@ const files = [
   // its own inline copy of the tier boundaries — two implementations of the
   // same rule, which is exactly the drift this script exists to prevent.
   ['src/vehicles/brackets.ts', 'brackets.ts'],
+  // VIN parsing is shared so the app and decode-vin agree on what a VIN is.
+  ['src/vehicles/vin.ts', 'vin.ts'],
 ];
 
 const header = `// AUTO-GENERATED from src/ by scripts/build-edge-shared.mjs — do not edit here.\n`;

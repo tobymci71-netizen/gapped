@@ -65,6 +65,18 @@ Expo SDK 57 (React Native 0.86, TypeScript strict) · expo-router · Supabase (P
       offline-tolerant retry on next launch
 - [x] `eas.json` build profiles (dev / preview / production)
 
+- [x] **Phase 4 (boards):** bracket filtering is live. `board_top` takes a bracket, `board_brackets`
+      lists only classes that actually have drivers, and the Board tab has a class picker.
+      Specs come from a VIN decoded server-side by NHTSA vPIC (`decode-vin`) — never from the
+      client, because drivetrain/power/weight choose your class and a self-declared
+      "90 hp, 1800 kg" would put a fast car in the slowest bracket and win it.
+      **Caveat found in live testing:** vPIC reliably returns power but frequently has no
+      drivetrain or curb weight (a 2003 Accord decodes to 240 hp with both blank), so most VINs
+      still land in the open class. The maths is right and the app says so plainly; a second spec
+      source is what would actually populate power-to-weight brackets.
+- [x] **Achievements:** granted only by verify-drive, off verified drives, unique per kind.
+      `first_verified_run`, `ten_verified_runs`, `first_measured_launch`, `country_number_one`.
+      Shown in the You tab. The client cannot grant one.
 - [x] **Phase 5:** share cards — `<ShareCard>` captured with view-shot and handed to the share
       sheet from the drive detail screen. Shows the privacy-trimmed route, and wears the verified
       badge only when the server has actually said so.
@@ -99,9 +111,13 @@ The whole stack runs locally — no cloud account needed, just Docker.
 cp .env.example .env             # then paste in the URL + anon key db:start prints
 npm run db:start                 # Postgres + PostGIS + auth, migrations applied
 npm run functions:serve          # edge functions, in a second terminal
-npm run verify:roundtrip         # 45 assertions over the full path
+npm run verify:roundtrip         # 62 assertions over the full path
 npm run test:edge                # 19 attestation tests (Deno)
+npm run verify:vin               # decode-vin against live NHTSA (needs network)
 ```
+
+`verify:vin` is separate from the round-trip on purpose: it depends on a third-party API being
+up, and a network wobble should not turn the main check red.
 
 `npm run verify:roundtrip` is the thing to run after touching the schema, an Edge Function or
 `sync.ts`. It uploads the `zeroSixtyPull` fixture as a real drive and asserts the **server**

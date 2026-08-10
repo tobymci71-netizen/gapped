@@ -240,6 +240,7 @@ export async function fetchBoard(
     p_country: country,
     p_verified_only: query.verifiedOnly,
     p_limit: 50,
+    p_bracket: query.bracket ?? null,
   });
   if (error || !data) return buildLocalBoard(query, username, now);
 
@@ -249,6 +250,7 @@ export async function fetchBoard(
     country: string | null;
     value: number;
     verification: string;
+    bracket_key: string | null;
   };
   const rows: BoardRow[] = (data as EntryRow[]).map((e, i) => ({
     id: e.id,
@@ -259,8 +261,38 @@ export async function fetchBoard(
     value: e.value,
     verification: e.verification === 'verified' ? 'verified' : 'unverified',
     kind: e.username != null && e.username === username ? 'you' : 'user',
+    bracketKey: e.bracket_key,
   }));
+
+  // A bracket board with nobody in it is a true answer, not a failure. Falling
+  // back to the local board here would swap a real empty class for this
+  // device's own history under a heading that says otherwise.
+  if (rows.length === 0 && query.bracket) {
+    return {
+      rows: [],
+      isSample: false,
+      framing: ['Nobody has a verified run in this class yet.'],
+      source: 'server',
+    };
+  }
 
   if (rows.length === 0) return buildLocalBoard(query, username, now);
   return { rows, isSample: false, framing: [], source: 'server' };
+}
+
+/** Brackets that actually have entries, so the picker offers only real classes. */
+export async function fetchBrackets(
+  metric: BoardQuery['metric'],
+  period: BoardQuery['period'],
+): Promise<{ key: string; drivers: number }[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('board_brackets', {
+    p_metric: metric,
+    p_period: period,
+  });
+  if (error || !data) return [];
+  return (data as { bracket_key: string; entries: number }[]).map((b) => ({
+    key: b.bracket_key,
+    drivers: Number(b.entries),
+  }));
 }
