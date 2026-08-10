@@ -233,7 +233,7 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { height: 44, justifyContent: 'center' },
+  header: { minHeight: 44, justifyContent: 'center' },
   back: {
     position: 'absolute',
     left: -space.md,

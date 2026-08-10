@@ -442,7 +442,7 @@ export default function YouScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { height: 44, justifyContent: 'center' },
+  header: { minHeight: 44, justifyContent: 'center' },
   headerTitle: { textAlign: 'center' },
   gear: {
     position: 'absolute',

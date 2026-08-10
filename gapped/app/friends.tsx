@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   input: {
     flex: 1,
-    height: 48,
+    minHeight: 48,
     paddingHorizontal: space.lg,
     borderRadius: radius.pill,
     backgroundColor: color.surface2,

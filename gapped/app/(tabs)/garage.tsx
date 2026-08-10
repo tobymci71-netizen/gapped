@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   blurb: { marginTop: space.sm },
   input: {
     marginTop: space.md,
-    height: 48,
+    minHeight: 48,
     paddingHorizontal: space.lg,
     borderRadius: radius.pill,
     backgroundColor: color.surface2,

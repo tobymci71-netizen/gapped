@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.card / 2,
   },
   rowBenchmark: { opacity: 0.85 },
-  rank: { width: 28, textAlign: 'center', color: color.text2 },
+  rank: { minWidth: 28, textAlign: 'center', color: color.text2 },
   rowBody: { flex: 1, gap: 1 },
   chip: {
     borderWidth: 1,

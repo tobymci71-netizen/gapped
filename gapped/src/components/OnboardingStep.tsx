@@ -58,12 +58,14 @@ const styles = StyleSheet.create({
     marginTop: space.sm,
   },
   back: {
-    width: 32,
-    height: 32,
+    // 44×44 is Apple's minimum touch target; this was 32×32.
+    width: 44,
+    height: 44,
+    marginLeft: -space.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backGlyph: { color: color.text1, fontSize: 30, lineHeight: 32, marginTop: -4 },
+  backGlyph: { color: color.text1, fontSize: 30, lineHeight: 34 },
   progressTrack: {
     flex: 1,
     height: 6,

@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 56,
+    minHeight: 56,
     borderRadius: radius.card,
     backgroundColor: color.surface1,
     borderWidth: 1,
@@ -75,6 +75,6 @@ const styles = StyleSheet.create({
     color: color.text1,
     fontFamily: font.body,
     fontSize: type.body,
-    height: '100%',
+    paddingVertical: space.md,
   },
 });

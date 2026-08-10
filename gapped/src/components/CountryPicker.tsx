@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   },
   title: { textAlign: 'center', marginBottom: space.md },
   search: {
-    height: 48,
+    minHeight: 48,
     borderRadius: radius.card,
     backgroundColor: color.surface2,
     paddingHorizontal: space.lg,

@@ -101,7 +101,7 @@ export function SettingsSection({
 
 const styles = StyleSheet.create({
   row: {
-    height: 52,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: space.lg,

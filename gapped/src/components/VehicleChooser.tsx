@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 56,
+    minHeight: 56,
     borderRadius: radius.card,
     backgroundColor: color.surface1,
     borderWidth: 1,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { color, gutter } from '@/theme/tokens';
+import { color, gutter, space } from '@/theme/tokens';
 
 type Props = {
   children: React.ReactNode;
@@ -42,6 +42,6 @@ export function Screen({ children, scroll = true, style, footer }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { paddingHorizontal: gutter, paddingBottom: 32 },
-  footer: { paddingHorizontal: gutter, paddingTop: 12, backgroundColor: color.canvas },
+  content: { paddingHorizontal: gutter, paddingBottom: space.xxl },
+  footer: { paddingHorizontal: gutter, paddingTop: space.md, backgroundColor: color.canvas },
 });

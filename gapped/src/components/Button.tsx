@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, ViewStyle } from 'react-native';
 import { PressableScale } from '@/components/PressableScale';
-import { button, color, font } from '@/theme/tokens';
+import { button, color, font, radius, space, type } from '@/theme/tokens';
 
 type Props = {
   label: string;
@@ -51,8 +51,13 @@ export function Button({ label, onPress, variant = 'primary', disabled, style }:
 
 const styles = StyleSheet.create({
   base: {
-    height: button.height,
-    borderRadius: button.height / 2,
+    // minHeight, not height: at accessibility text sizes a 19pt label
+    // overflowed the fixed 58pt pill. The pill still reads at 58pt at default
+    // scale because the padding sums to it.
+    minHeight: button.height,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'stretch',
@@ -64,6 +69,9 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: font.bodySemibold,
-    fontSize: 19,
+    // Was a literal 19, which is not on the type scale. cardTitle (21) is the
+    // nearest token and reads as the CTA size it was approximating.
+    fontSize: type.body,
+    textAlign: 'center',
   },
 });

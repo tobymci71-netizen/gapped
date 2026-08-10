@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
+    minHeight: 48,
     borderRadius: radius.card,
     backgroundColor: color.surface2,
     marginHorizontal: space.lg,
@@ -166,7 +166,6 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    height: '100%',
     color: color.text1,
     fontFamily: font.body,
     fontSize: type.body,

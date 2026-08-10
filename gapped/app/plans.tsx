@@ -78,6 +78,6 @@ const styles = StyleSheet.create({
   table: { marginTop: space.xl, gap: space.md },
   row: { flexDirection: 'row', alignItems: 'center' },
   featureCol: { flex: 1 },
-  tierCol: { width: 48, textAlign: 'center' },
+  tierCol: { minWidth: 48, textAlign: 'center' },
   legal: { marginTop: space.lg },
 });
