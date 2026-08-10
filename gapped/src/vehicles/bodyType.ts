@@ -703,7 +703,7 @@ const CAR_MAKE_RULES: Record<string, MakeRule> = {
 };
 
 /** Ordered: the first pattern that matches wins, so van beats estate beats coupe. */
-const CAR_KEYWORDS: Array<[RegExp, BodyType]> = [
+const CAR_KEYWORDS: [RegExp, BodyType][] = [
   [/\b(pick ?up|truck|hilux|tacoma|tundra|silverado|sierra|el camino|ranchero)\b/, 'pickup'],
   [
     /\b(van|minivan|mpv|transit|sprinter|caddy|transporter|caravan|vito|viano|berlingo|partner|doblo|ducato|boxer|traffic|trafic|vivaro|kombi|eurovan|vanagon|multivan|people carrier)\b/,

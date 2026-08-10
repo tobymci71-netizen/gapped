@@ -255,6 +255,20 @@ const mine = dedup?.filter((r) => r.username === username) ?? [];
 check('two drives, one board row', mine.length === 1, mine);
 check('the row kept is the better one', near(mine[0]?.value, 30, 0.5), mine[0]?.value);
 
+// trip_count is an aggregate, not a per-drive value — the server had no way to
+// produce it at all before 0008, so "Drives" silently fell back to the local
+// board. Two drives uploaded above, so the count is 2.
+const { data: counts, error: countErr } = await app.rpc('board_top', {
+  p_metric: 'trip_count', p_scope: 'global', p_period: 'all',
+  p_country: null, p_verified_only: false, p_limit: 50,
+});
+check('trip_count board query runs', !countErr, countErr?.message);
+check(
+  'trip_count counts our drives',
+  counts?.find((r) => r.username === username)?.value === 2,
+  counts?.filter((r) => r.username === username),
+);
+
 // ── 6. idempotent re-verification ───────────────────────────────────────────
 section('6. Re-verification is idempotent');
 await app.functions.invoke('verify-drive', { body: { drive_id: driveId } });

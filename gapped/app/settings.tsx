@@ -218,9 +218,9 @@ export default function SettingsScreen() {
         />
       </SettingsSection>
       <Text variant="legal" style={styles.note}>
-        Deletion erases your profile, records, streaks and recorded drives on this device.
-        Removing anything already synced to our servers ships with account sync — we won't claim
-        it has happened before then.
+        Deletion erases your profile, records, streaks and recorded drives — on this device and on
+        our servers, including any leaderboard entries. If the server cannot be reached, nothing is
+        deleted and we say so, rather than wiping this device and leaving the rest behind.
       </Text>
 
       <Text variant="legal" style={styles.footer}>

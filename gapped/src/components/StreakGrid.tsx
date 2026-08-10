@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '@/components/Text';
 import { contributionGrid, currentStreak } from '@/state/records';
@@ -9,7 +9,12 @@ import { color, space } from '@/theme/tokens';
  * 12 weeks, GitHub-style, driven entirely from real local drive days.
  */
 export function StreakGrid({ driveDays, now }: { driveDays: string[]; now?: number }) {
-  const t = now ?? Date.now();
+  // Date.now() in the render body made this component non-idempotent: two
+  // renders in the same frame could land either side of a day boundary and
+  // draw different grids. Frozen at mount instead, so the grid is stable for
+  // as long as the screen is on it; `now` stays injectable for tests.
+  const [mountedAt] = useState(() => Date.now());
+  const t = now ?? mountedAt;
   const days = new Set(driveDays);
   const grid = contributionGrid(days, t, 84);
   const streak = currentStreak(days, t);

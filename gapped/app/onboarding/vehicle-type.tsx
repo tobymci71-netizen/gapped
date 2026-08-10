@@ -9,39 +9,50 @@ import { haptic } from '@/lib/haptics';
 import { useProfile } from '@/state/profile';
 import { color, radius, space } from '@/theme/tokens';
 
-/** 2-up square choice cards — the pattern from the recording's vehicle step. */
-export default function VehicleTypeStep() {
-  const router = useRouter();
-  const { vehicleKind, setVehicleKind } = useProfile();
-
-  const CardChoice = ({
-    kind,
-    glyph,
-    label,
-  }: {
-    kind: 'car' | 'motorbike';
-    glyph: string;
-    label: string;
-  }) => (
+/**
+ * Declared at module scope, not inside the screen.
+ *
+ * Defined in the render body it was a new component type on every render, so
+ * React unmounted and remounted both cards each time — discarding
+ * PressableScale's in-flight press animation, which is exactly the tactile
+ * feedback this step exists to give.
+ */
+function CardChoice({
+  kind,
+  glyph,
+  label,
+  selected,
+  onSelect,
+}: {
+  kind: 'car' | 'motorbike';
+  glyph: string;
+  label: string;
+  selected: boolean;
+  onSelect: (kind: 'car' | 'motorbike') => void;
+}) {
+  return (
     <PressableScale
       silent
       onPress={() => {
         haptic.selection();
-        setVehicleKind(kind);
+        onSelect(kind);
       }}
       accessibilityRole="button"
-      accessibilityState={{ selected: vehicleKind === kind }}
-      style={[styles.card, vehicleKind === kind && styles.cardSelected]}
+      accessibilityState={{ selected }}
+      style={[styles.card, selected && styles.cardSelected]}
     >
       <Text style={styles.glyph}>{glyph}</Text>
-      <Text
-        variant="bodyMedium"
-        style={vehicleKind === kind ? { color: color.accent } : undefined}
-      >
+      <Text variant="bodyMedium" style={selected ? { color: color.accent } : undefined}>
         {label}
       </Text>
     </PressableScale>
   );
+}
+
+/** 2-up square choice cards — the pattern from the recording's vehicle step. */
+export default function VehicleTypeStep() {
+  const router = useRouter();
+  const { vehicleKind, setVehicleKind } = useProfile();
 
   return (
     <OnboardingStep
@@ -57,8 +68,20 @@ export default function VehicleTypeStep() {
       }
     >
       <View style={styles.rowWrap}>
-        <CardChoice kind="car" glyph="🚗" label="Car" />
-        <CardChoice kind="motorbike" glyph="🏍️" label="Motorbike" />
+        <CardChoice
+          kind="car"
+          glyph="🚗"
+          label="Car"
+          selected={vehicleKind === 'car'}
+          onSelect={setVehicleKind}
+        />
+        <CardChoice
+          kind="motorbike"
+          glyph="🏍️"
+          label="Motorbike"
+          selected={vehicleKind === 'motorbike'}
+          onSelect={setVehicleKind}
+        />
       </View>
     </OnboardingStep>
   );

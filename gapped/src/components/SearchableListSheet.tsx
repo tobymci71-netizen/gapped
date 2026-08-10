@@ -31,7 +31,7 @@ type Props<T> = {
   placeholder?: string;
   /** Optional chips rendered above the list when the query is empty. */
   shortcuts?: T[];
-  /** Rendered as a final row: 'Can't find it? Enter manually'. */
+  /** Rendered as a final row: 'Can&apos;t find it? Enter manually'. */
   onManualEntry?: (typed: string) => void;
 };
 
@@ -133,7 +133,7 @@ export function SearchableListSheet({
         {onManualEntry ? (
           <PressableScale style={styles.manualRow} onPress={enterManually} silent>
             <Text variant="caption" style={styles.manualLabel}>
-              Can't find it? Enter manually
+              Can&apos;t find it? Enter manually
             </Text>
           </PressableScale>
         ) : null}

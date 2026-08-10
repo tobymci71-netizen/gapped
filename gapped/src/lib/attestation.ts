@@ -46,7 +46,6 @@ let native: NativeAttestation | null | undefined;
 function getNative(): NativeAttestation | null {
   if (native !== undefined) return native;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require('expo-app-integrity') as Partial<NativeAttestation> | undefined;
     native =
       mod &&

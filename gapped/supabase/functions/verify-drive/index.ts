@@ -8,10 +8,11 @@
  *
  * Runs with the service role (bypasses RLS) — deploy with:
  *   supabase functions deploy verify-drive
- * Secrets needed: TRIM_SALT (server-side route-trim salt).
  *
- * Not yet wired (deliberate, needs store credentials): App Attest /
- * Play Integrity attestation — slot its check in before plausibility.
+ * Secrets: TRIM_SALT (route-trim salt), APPLE_APP_ID +
+ * APPLE_APP_ATTEST_ROOT_CA (iOS attestation), ANDROID_PACKAGE_NAME +
+ * PLAY_INTEGRITY_SERVICE_ACCOUNT (Android), and ATTESTATION_REQUIRED once
+ * attestation has been validated on real hardware.
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -19,6 +20,7 @@ import { summarize } from '../_shared/stats.ts';
 import { checkPlausibility } from '../_shared/plausibility.ts';
 import { trimRouteForSharing } from '../_shared/privacy.ts';
 import { encodePolyline } from '../_shared/polyline.ts';
+import { bracketKey, type Drivetrain } from '../_shared/brackets.ts';
 import {
   b64ToBytes,
   verifyAppAttestAssertion,
@@ -336,14 +338,15 @@ Deno.serve(async (req) => {
         .single()
     : { data: null };
 
-  // bracket key derivation mirrors src/vehicles/brackets.ts
-  const pw =
-    vehicle?.factory_power_hp && vehicle?.curb_weight_kg
-      ? vehicle.factory_power_hp / (vehicle.curb_weight_kg / 1000)
-      : null;
-  const tier =
-    pw == null ? 'open' : pw < 100 ? 'pw1' : pw < 170 ? 'pw2' : pw < 260 ? 'pw3' : pw < 400 ? 'pw4' : 'pw5';
-  const bracketKey = `${vehicle?.drivetrain ?? 'any'}|${vehicle?.is_modified ? 'modified' : 'stock'}|${tier}`;
+  // Generated from src/vehicles/brackets.ts, not reimplemented: a second copy
+  // of the tier boundaries could drift from the one the app shows, and a run
+  // would then be ranked in a different class than the user was told.
+  const bracket = bracketKey({
+    drivetrain: (vehicle?.drivetrain ?? null) as Drivetrain | null,
+    curbWeightKg: vehicle?.curb_weight_kg ?? null,
+    factoryPowerHp: vehicle?.factory_power_hp ?? null,
+    isModified: vehicle?.is_modified ?? false,
+  });
 
   const metrics: { metric: string; value: number | null }[] = [
     { metric: 'top_speed', value: summary.maxSpeedMs },
@@ -368,7 +371,7 @@ Deno.serve(async (req) => {
           value: m.value,
           scope: s.scope,
           country: s.country,
-          bracket_key: bracketKey,
+          bracket_key: bracket,
           period,
           verification,
           recorded_at: drive.started_at,

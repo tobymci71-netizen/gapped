@@ -16,7 +16,7 @@ const CAR_BODIES: BodyType[] = [
 const BIKE_BODIES: BodyType[] = ['motorbike', 'cruiser', 'scooter'];
 
 describe('curated model overrides', () => {
-  const cases: Array<[string, string, BodyType]> = [
+  const cases: [string, string, BodyType][] = [
     ['Volkswagen', 'Golf', 'hatchback'],
     ['Volkswagen', 'Golf R', 'hatchback'],
     ['Volkswagen', 'Golf SportWagen', 'estate'],
@@ -134,7 +134,7 @@ describe('alphanumeric naming schemes', () => {
 });
 
 describe('keyword heuristics', () => {
-  const cases: Array<[string, BodyType]> = [
+  const cases: [string, BodyType][] = [
     ['Whatever Wagon', 'estate'],
     ['Something Touring', 'estate'],
     ['Mystery Variant', 'estate'],

@@ -82,8 +82,14 @@ Expo SDK 57 (React Native 0.86, TypeScript strict) · expo-router · Supabase (P
 npm install --legacy-peer-deps   # peer conflict deep in expo-router's optional @expo/ui chain
 npm run typecheck                # tsc --noEmit
 npm test                         # 218 tests, all maths
+npm run lint                     # 0 errors; the remaining warnings are deliberate
 npx expo start                   # Expo Go: everything except background recording works
 ```
+
+`eslint.config.js` downgrades three React Compiler rules to warnings rather than switching them
+off, with the reasoning written down there: they fire on Reanimated worklet assignments (which
+the compiler cannot model) and on deliberate effect resets like seeding the elapsed clock. Real
+instances in new code still surface; an always-red lint is one nobody reads.
 
 ## Backend
 

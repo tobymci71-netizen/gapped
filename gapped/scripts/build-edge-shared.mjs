@@ -23,6 +23,10 @@ const files = [
   ['src/drive/privacy.ts', 'privacy.ts'],
   ['src/drive/polyline.ts', 'polyline.ts'],
   ['src/lib/sha256.ts', 'sha256.ts'],
+  // Bracket derivation decides which board a run competes on. verify-drive had
+  // its own inline copy of the tier boundaries — two implementations of the
+  // same rule, which is exactly the drift this script exists to prevent.
+  ['src/vehicles/brackets.ts', 'brackets.ts'],
 ];
 
 const header = `// AUTO-GENERATED from src/ by scripts/build-edge-shared.mjs — do not edit here.\n`;

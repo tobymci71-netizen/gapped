@@ -45,7 +45,7 @@ export default function LocationStep() {
         <>
           <Text variant="body">
             Location was declined. You can still continue and grant it later from Settings —
-            recording won't work until you do.
+            recording won&apos;t work until you do.
           </Text>
           <Button
             label="Continue without location"
