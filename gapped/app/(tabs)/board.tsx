@@ -1,7 +1,7 @@
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import countries from '@/data/countries.json';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Entrance } from '@/components/Entrance';
@@ -129,7 +129,8 @@ function OptionSheet<T extends string>({
               {o.glyph ? <Text style={styles.optionGlyph}>{o.glyph}</Text> : null}
               <Text
                 variant="bodyMedium"
-                style={{ color: o.key === value ? color.accent : color.text1 }}
+                numberOfLines={1}
+                style={[styles.optionLabel, { color: o.key === value ? color.accent : color.text1 }]}
               >
                 {o.label}
               </Text>
@@ -258,7 +259,15 @@ export default function BoardScreen() {
         {monthLabel}
       </Text>
 
-      <View style={styles.pills}>
+      {/* Pills size to their content inside a scroller. At flex: 1 the fourth
+          pill left roughly 14pt for a label, so "Top speed" and "All-time"
+          rendered as one glyph and an ellipsis. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.pillsScroll}
+        contentContainerStyle={styles.pills}
+      >
         <Pill
           glyph={scopeGlyph}
           label={labelFor(scopes, scope)}
@@ -275,7 +284,7 @@ export default function BoardScreen() {
             disabled={!filtersLive}
           />
         ) : null}
-      </View>
+      </ScrollView>
 
       <View style={styles.toggleRow}>
         <PressableScale
@@ -472,9 +481,9 @@ export default function BoardScreen() {
 
 const styles = StyleSheet.create({
   subtitle: { color: color.text3, marginTop: 2, letterSpacing: 0.4 },
-  pills: { flexDirection: 'row', gap: space.sm, marginTop: space.lg },
+  pills: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
+  pillsScroll: { flexGrow: 0, marginTop: space.lg },
   pill: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
@@ -507,7 +516,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: color.hairline,
   },
-  optionBody: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  optionBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, minWidth: 0 },
+  optionLabel: { flex: 1 },
   optionGlyph: { fontSize: 17, lineHeight: 22 },
   tick: { fontSize: 16, lineHeight: 20, color: color.accent },
   sampleBanner: {

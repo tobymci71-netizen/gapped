@@ -127,7 +127,9 @@ export default function GarageScreen() {
       ) : (
         <>
           <Card style={styles.card}>
-            <Text variant="cardTitle">{name}</Text>
+            <Text variant="cardTitle" numberOfLines={2}>
+              {name}
+            </Text>
             <Text variant="caption">
               Primary vehicle{vehicleKind === 'motorbike' ? ' · Motorbike' : ''}
             </Text>

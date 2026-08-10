@@ -100,6 +100,10 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
 
   const c = size / 2;
   const strokeR = c - 24;
+  // The readout was pinned at 84pt whatever the dial size, so three digits
+  // overprinted the tick ring on the 200pt HUD and the 220pt onboarding
+  // preview. 0.28 keeps the 84pt look at the 300pt default.
+  const readoutSize = Math.round(size * 0.28);
 
   const { ringPath, glowPath } = useMemo(() => {
     const rect = Skia.XYWHRect(c - strokeR, c - strokeR, strokeR * 2, strokeR * 2);
@@ -180,7 +184,7 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
       </Canvas>
 
       <View style={styles.center} pointerEvents="none">
-        <AnimatedNumber value={String(Math.round(active ? value : 0))} size={84} />
+        <AnimatedNumber value={String(Math.round(active ? value : 0))} size={readoutSize} />
         <Text style={styles.unit}>{unit}</Text>
         <Animated.View style={[styles.pbBadge, pbStyle]}>
           <Text style={styles.pbText}>NEW PB</Text>

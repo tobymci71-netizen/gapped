@@ -220,7 +220,7 @@ export default function YouScreen() {
         </PressableScale>
       </View>
 
-      <Text variant="headline" style={styles.identity}>
+      <Text variant="headline" style={styles.identity} numberOfLines={1}>
         {username ? `@${username}` : 'Driver'}
       </Text>
       {country || vehicleMake ? (
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
   barSkeleton: { height: 40 },
   distList: { gap: 6 },
   distRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  distLabel: { width: 56, color: color.text3, fontSize: 12 },
+  distLabel: { minWidth: 56, color: color.text3, fontSize: 12 },
   distTrack: {
     flex: 1,
     flexDirection: 'row',
@@ -493,7 +493,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.surface3,
   },
   distFill: { backgroundColor: color.accent },
-  distCount: { width: 40, textAlign: 'right', color: color.text3, fontSize: 12 },
+  distCount: { minWidth: 40, textAlign: 'right', color: color.text3, fontSize: 12 },
   note: { marginTop: space.md },
   plansLink: { marginTop: space.xl, gap: space.xs },
   historyCard: { marginTop: space.md, gap: space.xs },

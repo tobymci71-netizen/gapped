@@ -189,7 +189,7 @@ function Field({
     >
       <Text
         variant="bodyMedium"
-        style={filled ? undefined : styles.fieldPlaceholder}
+        style={[styles.fieldLabel, filled ? undefined : styles.fieldPlaceholder]}
         numberOfLines={1}
       >
         {label}
@@ -228,6 +228,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
   },
   fieldDisabled: { opacity: 0.45 },
+  // flex so a long catalogue make ellipsizes instead of shoving the chevron out.
+  fieldLabel: { flex: 1 },
   fieldPlaceholder: { color: color.text3 },
   chevron: { color: color.text3, fontSize: 20, marginTop: -8 },
 });

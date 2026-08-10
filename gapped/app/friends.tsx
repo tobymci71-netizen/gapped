@@ -135,7 +135,9 @@ export default function FriendsScreen() {
           >
             <Card style={styles.friend}>
               <View style={styles.friendMain}>
-                <Text variant="cardTitle">{f.username}</Text>
+                <Text variant="cardTitle" numberOfLines={1}>
+                  {f.username}
+                </Text>
                 <Text variant="caption">
                   {f.bestSpeedMs != null
                     ? `Best ${formatSpeed(f.bestSpeedMs, unitPref)}`
@@ -183,6 +185,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  friendMain: { gap: space.xs },
+  friendMain: { flex: 1, gap: space.xs, minWidth: 0 },
   hint: { marginTop: space.lg, textAlign: 'center' },
 });
