@@ -242,7 +242,7 @@ export default function YouScreen() {
           unit={topSpeed ? topSpeed[1] : undefined}
           accent={topSpeedMs != null && topSpeedMs > 0}
         />
-        <Stat label="Drives" value={String(drives.length)} />
+        <Stat label="Total drives" value={String(drives.length)} />
       </View>
 
       <Card style={styles.streakCard}>
@@ -269,7 +269,7 @@ export default function YouScreen() {
 
       {pbs.zeroTo60S != null ? (
         <Card style={styles.pbCard}>
-          <Text variant="caption">PERSONAL BEST · 0–60</Text>
+          <Text variant="caption">PERSONAL BEST · 0–60 MPH</Text>
           <Text variant="cardTitle">{pbs.zeroTo60S.toFixed(2)} s</Text>
         </Card>
       ) : null}
@@ -388,19 +388,12 @@ export default function YouScreen() {
         More stats
       </Text>
       <View style={styles.grid}>
-        <Stat label="Total drives" value={String(drives.length)} />
-        <Stat label="Total stops" value={EM_DASH} />
-      </View>
-      <View style={styles.grid}>
         <Stat
           label="Avg drive length"
           value={avgDistance ? avgDistance.value.toFixed(1) : EM_DASH}
           unit={avgDistance ? avgDistance.unit : undefined}
         />
-        <Stat
-          label="Total duration"
-          value={drives.length > 0 ? formatDuration(totalDurationS) : EM_DASH}
-        />
+        <Stat label="Total stops" value={EM_DASH} />
       </View>
       <Text variant="legal" style={styles.note}>
         Stops are shown as a dash because we do not measure them yet. A number here would be a

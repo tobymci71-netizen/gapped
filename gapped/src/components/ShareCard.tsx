@@ -99,7 +99,7 @@ export function ShareCard({
         <Figure label="Distance" value={dist.value.toFixed(1)} unit={dist.unit} />
         <Figure label="Duration" value={formatDuration(summary.durationS)} />
         <Figure
-          label="0–60"
+          label="0–60 mph"
           value={summary.zeroTo60S != null ? summary.zeroTo60S.toFixed(2) : '—'}
           unit={summary.zeroTo60S != null ? 's' : undefined}
           accent={summary.zeroTo60S != null}

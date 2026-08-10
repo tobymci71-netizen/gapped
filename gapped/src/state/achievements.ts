@@ -37,7 +37,7 @@ const CATALOGUE: Record<string, { title: string; glyph: string; detail: (p: Payl
     glyph: '🚦',
     detail: (p) =>
       p.zero_to_60_s != null
-        ? `A clean standstill launch: 0–60 in ${Number(p.zero_to_60_s).toFixed(2)}s.`
+        ? `A clean standstill launch: 0–60 mph in ${Number(p.zero_to_60_s).toFixed(2)} s.`
         : 'A clean standstill launch, measured rather than estimated.',
   },
   country_number_one: {

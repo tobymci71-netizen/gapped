@@ -155,7 +155,7 @@ export default function DriveDetail() {
       <View style={styles.grid}>
         <Stat label="Peak G" value={s.maxG != null ? s.maxG.toFixed(2) : '—'} unit={s.maxG != null ? 'g' : undefined} />
         <Stat
-          label="0–60"
+          label="0–60 mph"
           value={s.zeroTo60S != null ? s.zeroTo60S.toFixed(2) : '—'}
           unit={s.zeroTo60S != null ? 's' : undefined}
         />

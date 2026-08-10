@@ -33,7 +33,7 @@ export function checkPlausibility(rawFixes: Fix[]): PlausibilityReport {
     detail:
       mockCount === 0
         ? 'No fixes from a mock location provider.'
-        : `${mockCount} fixes came from a mock location provider.`,
+        : `${mockCount} fix${mockCount === 1 ? '' : 'es'} came from a mock location provider.`,
   });
 
   // teleport gaps
@@ -50,7 +50,7 @@ export function checkPlausibility(rawFixes: Fix[]): PlausibilityReport {
     detail:
       teleports === 0
         ? 'No implausible position jumps.'
-        : `${teleports} position jumps imply speeds beyond ${TELEPORT_MS} m/s.`,
+        : `${teleports} position jump${teleports === 1 ? '' : 's'} impl${teleports === 1 ? 'ies' : 'y'} speeds beyond ${TELEPORT_MS} m/s.`,
   });
 
   // sustained acceleration from the GPS speed profile

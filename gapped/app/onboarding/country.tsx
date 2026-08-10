@@ -15,7 +15,7 @@ export default function CountryStep() {
     <OnboardingStep
       step={2}
       title="Select your country"
-      subtitle="This decides which leaderboards you appear on."
+      subtitle="This decides which boards you appear on."
       scroll={false}
       footer={
         <Button

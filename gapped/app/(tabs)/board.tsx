@@ -24,7 +24,7 @@ const METRICS: Option<BoardMetric>[] = [
   { key: 'top_speed', label: 'Top speed' },
   { key: 'distance', label: 'Distance' },
   { key: 'trip_count', label: 'Drives' },
-  { key: 'zero_to_60', label: '0–60' },
+  { key: 'zero_to_60', label: '0–60 mph' },
 ];
 const PERIODS: Option<BoardPeriod>[] = [
   { key: 'day', label: 'Today' },

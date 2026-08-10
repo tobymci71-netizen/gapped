@@ -270,9 +270,13 @@ export default function DriveScreen() {
             active
           />
           <View style={styles.hudRow}>
-            <Text variant="caption">{formatDistance(distanceM, unitPref)}</Text>
+            {/* Tabular locally, not on the `caption` variant: these two tick
+                live, but most captions in the app are prose. */}
+            <Text variant="caption" style={styles.hudNumeral}>
+              {formatDistance(distanceM, unitPref)}
+            </Text>
             <Text variant="caption">·</Text>
-            <Text variant="caption">
+            <Text variant="caption" style={styles.hudNumeral}>
               {formatDuration(startedAt != null ? Math.max(0, now - startedAt) / 1000 : 0)}
             </Text>
           </View>
@@ -350,7 +354,7 @@ export default function DriveScreen() {
             <Button label="End drive" variant="secondary" onPress={stopDrive} />
           ) : (
             <Button
-              label="Start tracking"
+              label="Start drive"
               onPress={() => {
                 haptic.driveStarted();
                 startDrive();
@@ -381,6 +385,7 @@ const styles = StyleSheet.create({
   controlGlyph: { fontSize: 20, lineHeight: 24, color: color.text1 },
   controlLabel: { fontSize: 12, letterSpacing: 0.8 },
   hud: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  hudNumeral: { fontVariant: ['tabular-nums'] },
   hudRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
   panel: {
     position: 'absolute',

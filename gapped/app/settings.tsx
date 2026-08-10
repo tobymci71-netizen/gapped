@@ -7,6 +7,7 @@ import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
 import { SettingsRow, SettingsSection } from '@/components/SettingsRow';
 import { Text } from '@/components/Text';
+import { speedForDisplay } from '@/drive/units';
 import { clearAll } from '@/drive/wal';
 import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
@@ -78,7 +79,8 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { unitPref, country, setUnitPref } = useProfile();
 
-  const unitLabel = unitPref === 'imperial' ? 'mph' : 'km/h';
+  // From units.ts so a unit rename cannot leave this label behind.
+  const unitLabel = speedForDisplay(0, unitPref).unit;
   const countryEntry = country ? FLAGS.find((c) => c.code === country) : undefined;
   const countryValue = countryEntry
     ? `${countryEntry.flag} ${countryEntry.code}`
@@ -191,13 +193,13 @@ export default function SettingsScreen() {
         <SettingsRow
           glyph="💬"
           tint={tint.neutral}
-          label="Leave Feedback"
+          label="Leave feedback"
           onPress={() => openURL('mailto:hello@gapped.app?subject=Gapped%20feedback')}
         />
         <SettingsRow
           glyph="✉️"
           tint={tint.neutral}
-          label="Contact Us"
+          label="Contact us"
           onPress={() => openURL('mailto:hello@gapped.app')}
         />
         <SettingsRow

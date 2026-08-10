@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { speedForDisplay } from '@/drive/units';
+import { useProfile } from '@/state/profile';
 import { Speedometer } from '@/components/Speedometer';
 import { Numeral, Text } from '@/components/Text';
 import { color, space } from '@/theme/tokens';
@@ -14,7 +16,12 @@ import { color, space } from '@/theme/tokens';
  */
 export default function Welcome() {
   const router = useRouter();
+  const unitPref = useProfile((s) => s.unitPref);
+  const imperial = unitPref === 'imperial';
   const [demoSpeed, setDemoSpeed] = useState(0);
+  // Through units.ts: the very first dial the user sees must already obey the
+  // stored preference, which defaults to metric.
+  const demo = speedForDisplay(demoSpeed, unitPref);
 
   useEffect(() => {
     const t = setTimeout(() => setDemoSpeed(87), 600);
@@ -31,7 +38,13 @@ export default function Welcome() {
           GAPPED
         </Numeral>
         <View style={styles.dial}>
-          <Speedometer value={demoSpeed} maxValue={160} unit="mph" size={280} active />
+          <Speedometer
+            value={demo.value}
+            maxValue={imperial ? 160 : 260}
+            unit={demo.unit}
+            size={280}
+            active
+          />
         </View>
         <Text variant="headline" style={styles.headline}>
           The board you can believe.

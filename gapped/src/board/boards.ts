@@ -157,7 +157,7 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
       rows.push({
         id: 'bench-your-best',
         rank: 0,
-        username: `Your all-time — ${drives.length} drives`,
+        username: `Your all-time — ${drives.length} drive${drives.length === 1 ? '' : 's'}`,
         country: null,
         vehicle: null,
         value: drives.length,
@@ -203,7 +203,7 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
   const framing: string[] = [];
   framing.push(
     `${inPeriod.length} drive${inPeriod.length === 1 ? '' : 's'} recorded on this device ${
-      query.period === 'all' ? 'all-time' : `this ${query.period === 'day' ? 'day' : query.period}`
+      query.period === 'all' ? 'all-time' : query.period === 'day' ? 'today' : `this ${query.period}`
     }.`,
   );
   framing.push('Global boards go live once your account syncs — every entry a real drive.');

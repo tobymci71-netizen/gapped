@@ -15,7 +15,7 @@ import { color, space } from '@/theme/tokens';
  */
 const MATRIX: { feature: string; free: boolean; pro: boolean }[] = [
   { feature: 'Record unlimited drives', free: true, pro: true },
-  { feature: 'View your own trip history', free: true, pro: true },
+  { feature: 'View your own drive history', free: true, pro: true },
   { feature: 'All your own stats (speed, G, 0–60)', free: true, pro: true },
   { feature: 'GPX / CSV export', free: true, pro: true },
   { feature: 'Share cards', free: true, pro: true },

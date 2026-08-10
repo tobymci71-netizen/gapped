@@ -21,6 +21,17 @@ function SpecRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * The decoder reports US spelling ("curb weight"); the UI uses "kerb"
+ * throughout. Normalised here at the display boundary rather than renaming the
+ * database column or the vPIC field, both of which are correctly US-spelled.
+ */
+function formatMissing(missing: string[]): string {
+  const spelled = missing.map((m) => (m === 'curb weight' ? 'kerb weight' : m));
+  if (spelled.length <= 1) return spelled.join('');
+  return `${spelled.slice(0, -1).join(', ')} or ${spelled[spelled.length - 1]}`;
+}
+
 const DRIVETRAIN_LABEL: Record<string, string> = {
   fwd: 'Front-wheel drive',
   rwd: 'Rear-wheel drive',
@@ -73,7 +84,7 @@ export default function GarageScreen() {
     setSpecs(result.specs);
     setNote(
       result.missing.length > 0
-        ? `NHTSA had no ${result.missing.join(' or ')} for this VIN, so it stays in the open class until that is known.`
+        ? `NHTSA had no ${formatMissing(result.missing)} for this VIN, so it stays in the open class until ${result.missing.length === 1 ? 'that is' : 'those are'} known.`
         : null,
     );
   };

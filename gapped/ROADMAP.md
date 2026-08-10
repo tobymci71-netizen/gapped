@@ -211,6 +211,26 @@ moderation burden considerably larger than photos of cars. Do not start before 1
 
 ---
 
+---
+
+## Smaller, unscheduled
+
+### 0–100 km/h as a metric-user variant
+
+The 0–60 metric is measured to **60 mph** (`SIXTY_MPH_MS` in `src/drive/units.ts`, used by
+`detectZeroToSixty` in `src/drive/stats.ts`), and every surface now labels it "0–60 mph" so a
+metric-preference user is not misled into reading it as km/h.
+
+The obvious follow-up is a true **0–100 km/h** figure for metric users, which is the standard
+outside the US and is not the same number — 100 km/h is 62.14 mph, so it is a genuinely different
+measurement, not a conversion. `detectZeroToSixty` is already parameterised on a target speed in
+all but name; it would take a target argument, and the board would need a second metric rather
+than a relabelled one, because ranking mph and km/h times against each other would be nonsense.
+
+Deliberately **not** built yet: it adds a metric to the schema, the board enum, the RPC and the
+UI, for a figure the current audience largely does not ask for. Recorded so the decision is a
+decision rather than an oversight.
+
 ## Ordering rationale
 
 1. **Reveal** — small, self-contained, uses only what exists, and it is the moment that makes the
