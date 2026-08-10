@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
     borderBottomColor: color.surface2,
   },
   rowYou: {
-    backgroundColor: '#CCFF0014',
+    backgroundColor: 'rgba(204, 255, 0, 0.08)', // color.accent, tinted
     borderRadius: radius.card / 2,
   },
   rowBenchmark: { opacity: 0.85 },

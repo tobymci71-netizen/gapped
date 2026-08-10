@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: PUCK / 2,
-    backgroundColor: 'rgba(10,10,10,0.72)',
+    backgroundColor: 'rgba(10, 10, 10, 0.72)', // color.canvas, tinted
     borderWidth: 1,
     borderColor: color.hairline,
   },

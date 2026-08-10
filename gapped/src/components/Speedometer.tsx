@@ -22,8 +22,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { useReducedMotion } from '@/lib/useReducedMotion';
-import { duration, spring } from '@/theme/motion';
-import { color, font } from '@/theme/tokens';
+import { duration, easing, spring } from '@/theme/motion';
+import { color, font, radius, space } from '@/theme/tokens';
 
 /**
  * The app's signature object (spec §A3). Skia tick ring with trailing
@@ -64,8 +64,8 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
       ? withTiming(clamped, { duration: duration.instant })
       : withSpring(clamped, spring.needle);
     lit.value = withTiming(clamped, {
-      duration: reduced ? duration.instant : 220,
-      easing: Easing.bezier(0.2, 0, 0, 1),
+      duration: reduced ? duration.instant : duration.fast,
+      easing: easing.standard,
     });
   }, [clamped, reduced, speed, lit]);
 
@@ -150,7 +150,7 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
           path={glowPath}
           style="stroke"
           strokeWidth={20}
-          color={isPb ? '#FFFFFF' : color.accent}
+          color={isPb ? color.text1 : color.accent}
           start={0}
           end={glowEnd}
           opacity={glowOpacity}
@@ -214,9 +214,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 48,
     backgroundColor: color.accent,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
   },
   pbText: {
     fontFamily: font.displayBlack,

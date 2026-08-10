@@ -33,6 +33,9 @@ export const color = {
 
   // Text on accent fills — contrast requires black, not white
   onAccent: '#0A0A0A',
+
+  /** 10% acid over black — the tinted glyph tile behind onboarding icons. */
+  accentTile: '#1E260A',
 } as const;
 
 export const space = {

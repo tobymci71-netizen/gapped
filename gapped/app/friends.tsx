@@ -11,7 +11,7 @@ import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { addFriend, Friend, listFriends, removeFriend } from '@/social/friends';
 import { useProfile } from '@/state/profile';
-import { color, radius, space } from '@/theme/tokens';
+import { color, radius, space, type } from '@/theme/tokens';
 
 /**
  * Friends screen.
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: color.hairline,
     color: color.text1,
-    fontSize: 16,
+    fontSize: type.body,
   },
   addBtn: { width: 96 },
   error: { marginTop: space.md, color: color.danger },

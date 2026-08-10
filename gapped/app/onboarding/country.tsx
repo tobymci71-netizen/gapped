@@ -33,5 +33,5 @@ export default function CountryStep() {
 }
 
 const styles = StyleSheet.create({
-  sheetWrap: { flex: 1, marginHorizontal: -space.xl, marginBottom: -32 },
+  sheetWrap: { flex: 1, marginHorizontal: -space.xl, marginBottom: -space.xxl },
 });

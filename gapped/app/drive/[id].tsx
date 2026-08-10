@@ -19,7 +19,7 @@ import { checkPlausibility } from '@/drive/plausibility';
 import { distanceForDisplay, formatDuration, formatSpeed } from '@/drive/units';
 import { listDrives, readFixes } from '@/drive/wal';
 import { useProfile } from '@/state/profile';
-import { color, space } from '@/theme/tokens';
+import { color, gutter, space } from '@/theme/tokens';
 
 export default function DriveDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -131,7 +131,8 @@ export default function DriveDetail() {
 
       {fixes.length > 1 ? (
         <Card style={styles.routeCard}>
-          <RoutePath fixes={fixes} width={width - 48 - 32} height={200} />
+          {/* viewport − both screen gutters − both Card paddings */}
+          <RoutePath fixes={fixes} width={width - gutter * 2 - space.lg * 2} height={200} />
         </Card>
       ) : null}
 

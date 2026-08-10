@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 30,
-    backgroundColor: '#1E260A', // 10% acid over black — mirrors the tinted tile beat
+    backgroundColor: color.accentTile,
     alignItems: 'center',
     justifyContent: 'center',
   },
