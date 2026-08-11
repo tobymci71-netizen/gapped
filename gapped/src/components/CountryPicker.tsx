@@ -8,7 +8,7 @@ import { PressableScale } from '@/components/PressableScale';
 import { useFooterHeight } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
-import { color, font, radius, space, type } from '@/theme/tokens';
+import { color, font, radius, space, type, textStyle } from '@/theme/tokens';
 
 /**
  * Sheet-style searchable country picker — the pattern from TripRank's
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     color: color.text1,
     fontFamily: font.body,
-    fontSize: type.body,
+    ...textStyle(type.body),
   },
   list: { flex: 1, marginTop: space.sm },
   row: {
@@ -151,6 +151,6 @@ const styles = StyleSheet.create({
     borderBottomColor: color.surface2,
   },
   rowSelected: {},
-  flag: { fontSize: 22 },
+  flag: { fontSize: 22, lineHeight: 28 },
   empty: { padding: space.lg, textAlign: 'center' },
 });

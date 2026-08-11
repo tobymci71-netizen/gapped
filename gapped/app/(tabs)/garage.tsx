@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: color.hairline,
     color: color.text1,
-    fontSize: 16,
+    fontSize: 16, lineHeight: 20,
     letterSpacing: 1,
   },
   decodeBtn: { marginTop: space.md, marginBottom: space.sm },

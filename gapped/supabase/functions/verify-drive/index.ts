@@ -85,10 +85,10 @@ function lineStringWkt(fixes: Fix[]): string | null {
   return `LINESTRING(${fixes.map((f) => `${f.lon} ${f.lat}`).join(',')})`;
 }
 
-const json = (body: unknown, status = 200) =>
+const json = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
   });
 
 type AttestationInput = {
@@ -218,6 +218,10 @@ async function attestDriveInner(
   return result.verdict;
 }
 
+/** Verifications allowed per profile per window. */
+const VERIFY_RATE_LIMIT = 60;
+const VERIFY_RATE_WINDOW_S = 3600;
+
 Deno.serve(async (req) => {
   const { drive_id, attestation } = await req.json().catch(() => ({}));
   if (!drive_id) return json({ error: 'drive_id required' }, 400);
@@ -238,10 +242,43 @@ Deno.serve(async (req) => {
   // drive's owner (the app, after upload) or the service role (internal
   // re-verification, e.g. after a maths fix).
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-  if (token !== serviceKey) {
+  const isServiceCall = token === serviceKey;
+  if (!isServiceCall) {
     const { data: caller } = await supabase.auth.getUser(token);
     if (!caller?.user || caller.user.id !== drive.profile_id) {
       return json({ error: 'forbidden' }, 403);
+    }
+  }
+
+  /*
+   * Rate limit. This function re-derives a whole drive — reads every fix, runs
+   * the plausibility envelope, recomputes the summary and rewrites board
+   * entries — so it costs real money per call, and it is reachable by anyone
+   * with an account.
+   *
+   * Charged AFTER authorisation, so an attacker cannot burn a stranger's quota
+   * by naming their drive_id, and skipped for service-role calls, which are our
+   * own re-verification runs (a maths fix re-verifying every drive must not
+   * rate-limit itself out).
+   *
+   * VERIFY_RATE_LIMIT verifications per hour. A real drive finishing every
+   * minute for an hour would not reach it.
+   */
+  if (!isServiceCall) {
+    const { data: allowed, error: rlErr } = await supabase.rpc('consume_rate_limit', {
+      p_profile_id: drive.profile_id,
+      p_bucket: 'verify_drive',
+      p_limit: VERIFY_RATE_LIMIT,
+      p_window_s: VERIFY_RATE_WINDOW_S,
+    });
+    // Fail CLOSED. If the limiter itself is broken, the safe answer for a
+    // paid endpoint is to stop, not to wave everything through.
+    if (rlErr || allowed === false) {
+      return json(
+        { error: 'rate limited', retry_after_s: VERIFY_RATE_WINDOW_S },
+        429,
+        { 'Retry-After': String(VERIFY_RATE_WINDOW_S) },
+      );
     }
   }
 

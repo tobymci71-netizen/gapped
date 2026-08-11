@@ -11,8 +11,10 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
+import { UpdateRequired } from '@/components/UpdateRequired';
 import { initObservability, track } from '@/lib/observability';
+import { checkVersionGate, type VersionGate } from '@/lib/version-gate';
 import { ensureSession } from '@/lib/supabase';
 import { syncFinalizedDrives } from '@/lib/sync';
 import { useDriveStore } from '@/drive/recorder';
@@ -37,6 +39,7 @@ export default function RootLayout() {
     Inter_600SemiBold,
   });
   const [fontsTimedOut, setFontsTimedOut] = useState(false);
+  const [gate, setGate] = useState<VersionGate>({ status: 'ok' });
 
   const init = useDriveStore((s) => s.init);
 
@@ -46,6 +49,11 @@ export default function RootLayout() {
     init();
     // Anonymous-first session, then push any drives recorded offline.
     ensureSession().then(() => syncFinalizedDrives().catch(() => undefined));
+    // Fails open by design — see version-gate.ts. Never awaited by anything
+    // that could block startup.
+    checkVersionGate(Platform.OS === 'android' ? 'android' : 'ios')
+      .then(setGate)
+      .catch(() => undefined);
   }, [init]);
 
   useEffect(() => {
@@ -70,6 +78,17 @@ export default function RootLayout() {
   // app in the wrong typeface is recoverable; a blank screen forever is not.
   if (!fontsLoaded && !fontError && !fontsTimedOut) {
     return <View style={{ flex: 1, backgroundColor: color.canvas }} />;
+  }
+
+  // Replaces the whole app rather than covering it. A blocked build must not
+  // be able to record a drive behind a modal.
+  if (gate.status === 'blocked') {
+    return (
+      <>
+        <StatusBar style="light" />
+        <UpdateRequired message={gate.message} />
+      </>
+    );
   }
 
   return (

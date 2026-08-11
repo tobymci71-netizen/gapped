@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brand: {
     fontFamily: font.display,
-    fontSize: 18,
+    fontSize: 18, lineHeight: 22,
     letterSpacing: 1.5,
     color: color.accent,
   },
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   badgeMuted: { backgroundColor: 'transparent', borderWidth: 1, borderColor: color.text3 },
   badgeText: {
     fontFamily: font.bodySemibold,
-    fontSize: 9,
+    fontSize: 9, lineHeight: 11,
     letterSpacing: 0.8,
     color: color.onAccent,
   },
@@ -160,13 +160,13 @@ const styles = StyleSheet.create({
   },
   heroUnit: {
     fontFamily: font.bodyMedium,
-    fontSize: 18,
+    fontSize: 18, lineHeight: 22,
     color: color.text2,
     paddingBottom: 12,
   },
   heroLabel: {
     fontFamily: font.bodySemibold,
-    fontSize: 10,
+    fontSize: 10, lineHeight: 12,
     letterSpacing: 1.2,
     color: color.text3,
     marginTop: -8,
@@ -176,19 +176,19 @@ const styles = StyleSheet.create({
   figure: { gap: 2 },
   figureLabel: {
     fontFamily: font.bodySemibold,
-    fontSize: 9,
+    fontSize: 9, lineHeight: 11,
     letterSpacing: 0.8,
     color: color.text3,
   },
   figureValueRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
   figureValue: {
     fontFamily: font.display,
-    fontSize: 24,
+    fontSize: 24, lineHeight: 30,
     color: color.text1,
     fontVariant: ['tabular-nums'],
   },
-  figureUnit: { fontFamily: font.body, fontSize: 11, color: color.text2, paddingBottom: 3 },
+  figureUnit: { fontFamily: font.body, fontSize: 11, lineHeight: 14, color: color.text2, paddingBottom: 3 },
   footer: { gap: 2 },
-  footerText: { fontFamily: font.bodyMedium, fontSize: 12, color: color.text2 },
-  footerNote: { fontFamily: font.body, fontSize: 9, color: color.text3 },
+  footerText: { fontFamily: font.bodyMedium, fontSize: 12, lineHeight: 15, color: color.text2 },
+  footerNote: { fontFamily: font.body, fontSize: 9, lineHeight: 11, color: color.text3 },
 });

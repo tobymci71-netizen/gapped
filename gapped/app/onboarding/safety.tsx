@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tileGlyph: { fontSize: 18 },
+  tileGlyph: { fontSize: 18, lineHeight: 22 },
   guideline: { flex: 1, color: color.text1 },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   checkbox: {

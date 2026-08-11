@@ -330,7 +330,7 @@ export default function BoardScreen() {
             style={{
               color: verifiedShown ? color.verified : color.text3,
               letterSpacing: 0.8,
-              fontSize: 11,
+              fontSize: 11, lineHeight: 14,
             }}
           >
             VERIFIED
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
   },
-  chipText: { color: color.accentDim, fontSize: 9, letterSpacing: 1 },
+  chipText: { color: color.accentDim, fontSize: 9, lineHeight: 11, letterSpacing: 1 },
   empty: { alignItems: 'center', gap: space.md, paddingTop: space.xxl },
   emptyTile: {
     width: 72,

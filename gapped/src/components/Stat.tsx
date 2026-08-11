@@ -45,7 +45,7 @@ export function Stat({ label, value, unit, accent }: Props) {
 
 const styles = StyleSheet.create({
   card: { flex: 1, gap: space.xs },
-  label: { textTransform: 'uppercase', letterSpacing: 0.6, fontSize: 12 },
+  label: { textTransform: 'uppercase', letterSpacing: 0.6, fontSize: 12, lineHeight: 15 },
   row: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs },
   value: { flexShrink: 1 },
   unit: { color: color.text3, flexShrink: 0 },

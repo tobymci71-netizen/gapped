@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   },
   unit: {
     fontFamily: font.bodyMedium,
-    fontSize: 17,
+    fontSize: 17, lineHeight: 21,
     color: color.text2,
     marginTop: -6,
   },
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   },
   pbText: {
     fontFamily: font.displayBlack,
-    fontSize: 13,
+    fontSize: 13, lineHeight: 16,
     color: color.onAccent,
     letterSpacing: 1.5,
   },

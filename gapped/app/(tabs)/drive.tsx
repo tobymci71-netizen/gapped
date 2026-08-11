@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
   },
   controlOff: { opacity: 0.45 },
   controlGlyph: { fontSize: 20, lineHeight: 24, color: color.text1 },
-  controlLabel: { fontSize: 12, letterSpacing: 0.8 },
+  controlLabel: { fontSize: 12, lineHeight: 15, letterSpacing: 0.8 },
   hud: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   hudNumeral: { fontVariant: ['tabular-nums'] },
   hudDebug: { color: color.text3, marginTop: 2, letterSpacing: 0.5 },

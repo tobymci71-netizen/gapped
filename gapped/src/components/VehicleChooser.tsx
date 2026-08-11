@@ -246,5 +246,5 @@ const styles = StyleSheet.create({
   // flex so a long catalogue make ellipsizes instead of shoving the chevron out.
   fieldLabel: { flex: 1 },
   fieldPlaceholder: { color: color.text3 },
-  chevron: { color: color.text3, fontSize: 20, marginTop: -8 },
+  chevron: { color: color.text3, fontSize: 20, lineHeight: 25, marginTop: -8 },
 });

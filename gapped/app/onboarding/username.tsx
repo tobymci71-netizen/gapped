@@ -6,7 +6,7 @@ import { OnboardingStep } from '@/components/OnboardingStep';
 import { Text } from '@/components/Text';
 import { SAFETY_ACKNOWLEDGEMENT } from '@/config/flags';
 import { useProfile } from '@/state/profile';
-import { color, font, radius, space, type } from '@/theme/tokens';
+import { color, font, radius, space, type, textStyle } from '@/theme/tokens';
 
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: color.text1,
     fontFamily: font.body,
-    fontSize: type.body,
+    ...textStyle(type.body),
     paddingVertical: space.md,
   },
 });

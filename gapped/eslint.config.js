@@ -31,7 +31,39 @@ module.exports = defineConfig([
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/immutability': 'warn',
       'react-hooks/purity': 'warn',
+
+      /**
+       * A bare number as `fontSize` is how clipped glyphs happen.
+       *
+       * React Native derives line height from the font's own metrics, which are
+       * cut for Latin text. Anything taller — an emoji, a flag, a stacked
+       * accent — overflows the line box and loses its top. Three onboarding
+       * glyphs shipped clipped for exactly this reason and were each fixed by
+       * hand, one screen at a time, which fixes the screen and not the cause.
+       *
+       * Sizes live in theme/tokens.ts, where every entry carries a lineHeight
+       * it cannot be separated from, and are spread with textStyle().
+       *
+       * A warning rather than an error: roughly forty existing glyph sizes
+       * (chevrons, emoji, icon characters) are still literals, and turning
+       * those red would make the lint output unreadable, which is how a rule
+       * stops being read. It holds the line for new code today; the remaining
+       * migration is tracked in the report.
+       */
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector: "Property[key.name='fontSize'][value.type='Literal']",
+          message:
+            'Use a token: `...textStyle(type.body)` or `...textStyle(glyph.md)` from @/theme/tokens. A raw fontSize has no paired lineHeight, which clips tall glyphs.',
+        },
+      ],
     },
+  },
+  {
+    // tokens.ts is where the numbers are allowed to be numbers.
+    files: ['src/theme/tokens.ts'],
+    rules: { 'no-restricted-syntax': 'off' },
   },
   {
     // Optional native modules are resolved with require() on purpose: a static

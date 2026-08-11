@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, ViewStyle } from 'react-native';
 import { PressableScale } from '@/components/PressableScale';
-import { button, color, font, radius, space, type } from '@/theme/tokens';
+import { button, color, font, radius, space, type, textStyle } from '@/theme/tokens';
 
 type Props = {
   label: string;
@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     fontFamily: font.bodySemibold,
     // Was a literal 19, which is not on the type scale. cardTitle (21) is the
     // nearest token and reads as the CTA size it was approximating.
-    fontSize: type.body,
+    ...textStyle(type.body),
     textAlign: 'center',
   },
 });

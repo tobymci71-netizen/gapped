@@ -13,7 +13,7 @@ import { PressableScale } from '@/components/PressableScale';
 import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
 import { STAGGER_CAP } from '@/theme/motion';
-import { color, font, radius, space, type } from '@/theme/tokens';
+import { color, font, radius, space, type, textStyle } from '@/theme/tokens';
 
 /**
  * Search-and-pick sheet for make and model. Free-text fallback is always one
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: color.text1,
     fontFamily: font.body,
-    fontSize: type.body,
+    ...textStyle(type.body),
     // Android centres single-line inputs badly without this.
     paddingVertical: 0,
   },
