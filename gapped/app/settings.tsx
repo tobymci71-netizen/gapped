@@ -103,7 +103,7 @@ export class LocalWipeError extends Error {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { unitPref, country, setUnitPref } = useProfile();
+  const { unitPref, country, setUnitPref, debugHud, toggleDebugHud } = useProfile();
 
   // From units.ts so a unit rename cannot leave this label behind.
   const unitLabel = speedForDisplay(mps(0), unitPref).unit;
@@ -174,6 +174,22 @@ export default function SettingsScreen() {
           onPress={toggleUnits}
         />
         <SettingsRow glyph="🌍" tint={tint.neutral} label="Country" value={countryValue} />
+        {/*
+          Shows IMU rate and gravity-removed G on the drive HUD. Kept in the
+          shipping build rather than behind __DEV__ because the thing it
+          verifies — adaptive sampling and the gravity fix — only happens in a
+          moving vehicle, which is not where a debug build usually is.
+        */}
+        <SettingsRow
+          glyph="📈"
+          tint={tint.neutral}
+          label="Debug HUD"
+          value={debugHud ? 'On' : 'Off'}
+          onPress={() => {
+            haptic.selection();
+            toggleDebugHud();
+          }}
+        />
         <SettingsRow
           glyph="👥"
           tint={tint.neutral}

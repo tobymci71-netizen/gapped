@@ -23,7 +23,7 @@ import {
 } from '@/drive/units';
 import { LocalDrive, listDrives, readFixesSince } from '@/drive/wal';
 import { haptic } from '@/lib/haptics';
-import { seconds } from '@/types/units';
+import { seconds, raw } from '@/types/units';
 import { useProfile } from '@/state/profile';
 import { useRecords } from '@/state/records';
 import { color, gutter, radius, space } from '@/theme/tokens';
@@ -78,11 +78,13 @@ export default function DriveScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const { unitPref, vehicleKind, vehicleMake, vehicleModel } = useProfile();
+  const { unitPref, vehicleKind, vehicleMake, vehicleModel, debugHud } = useProfile();
   const {
     engineState,
     driveId,
     speedMs,
+    imuHz,
+    lastAccelG,
     distanceM,
     startedAt,
     lastSummary,
@@ -281,6 +283,19 @@ export default function DriveScreen() {
               {formatDuration(seconds(startedAt != null ? Math.max(0, now - startedAt) / 1000 : 0))}
             </Text>
           </View>
+          {/*
+            IMU debug readout, off by default (Settings → Debug HUD).
+            Neither number can be checked from a simulator: on a real drive
+            `g` should sit near 0.00 when stopped and rise under braking or
+            cornering, and `Hz` should sit at 1 when cruising and flick to 10
+            when it does. A `g` that idles near 1.00 means gravity is back in
+            the signal and the sampling will be stuck at 10.
+          */}
+          {debugHud ? (
+            <Text variant="caption" style={styles.hudDebug}>
+              {`IMU ${imuHz} Hz · ${lastAccelG != null ? raw(lastAccelG).toFixed(2) : '—'} g`}
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -387,6 +402,7 @@ const styles = StyleSheet.create({
   controlLabel: { fontSize: 12, letterSpacing: 0.8 },
   hud: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   hudNumeral: { fontVariant: ['tabular-nums'] },
+  hudDebug: { color: color.text3, marginTop: 2, letterSpacing: 0.5 },
   hudRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
   panel: {
     position: 'absolute',

@@ -85,7 +85,11 @@ export const readHpOrNull = (n: number | null | undefined): Horsepower | null =>
 //   CLLocation.altitude                           → metres
 //   CLLocation.horizontalAccuracy                 → metres
 //   CLLocation.course                             → degrees (see heading.ts)
-//   expo-sensors Accelerometer                    → multiples of g
+//   expo-sensors DeviceMotion.acceleration        → m/s^2, GRAVITY REMOVED
+//     (converted to multiples of g at the call site in recorder.ts; the raw
+//      Accelerometer module is deliberately NOT used — it includes gravity,
+//      which inflated every recorded G-force by an orientation-dependent
+//      amount that could not be subtracted back out)
 //   expo-sensors Barometer.pressure               → hectopascals
 //   Date.now() / CLLocation.timestamp             → epoch milliseconds
 

@@ -8,7 +8,7 @@
  */
 
 import * as Location from 'expo-location';
-import { Accelerometer, Barometer } from 'expo-sensors';
+import { Barometer, DeviceMotion } from 'expo-sensors';
 import { create } from 'zustand';
 import { uuid } from '@/lib/ids';
 import { useProfile } from '@/state/profile';
@@ -19,7 +19,17 @@ import {
 } from './backgroundTask';
 import { DriveEngine } from './engine';
 import { sanitiseHeading } from './heading';
-import { EpochMs, Metres, MetresPerSecond, gForce, metres, mps } from '@/types/units';
+import {
+  EpochMs,
+  GForce,
+  Metres,
+  MetresPerSecond,
+  gForce,
+  metres,
+  mps,
+  mps2,
+  ms2ToG,
+} from '@/types/units';
 import {
   nowEpochMs,
   sensorAccel,
@@ -44,6 +54,14 @@ type LiveState = {
   lastSummary: DriveSummary | null;
   recovered: wal.LocalDrive[];
   permission: 'unknown' | 'granted' | 'denied';
+  /**
+   * Debug readout, surfaced on the HUD behind a settings toggle. Present so the
+   * adaptive sampling and the gravity-removed magnitude can be confirmed on a
+   * real drive — neither is observable from a simulator.
+   */
+  imuHz: 1 | 10;
+  /** Magnitude of the latest user-acceleration sample, g. ~0 when parked. */
+  lastAccelG: GForce | null;
 };
 
 type Actions = {
@@ -55,7 +73,26 @@ type Actions = {
 
 const engine = new DriveEngine();
 let watcher: Location.LocationSubscription | null = null;
-let latestAccel: { x: number; y: number; z: number } | null = null;
+/**
+ * Latest IMU sample as USER acceleration in g (gravity excluded). Branded, so
+ * a raw m/s^2 reading cannot be assigned here by mistake — which is exactly the
+ * confusion that produced the gravity-inflated figures.
+ */
+let latestAccel: { x: GForce; y: GForce; z: GForce } | null = null;
+
+/**
+ * Sampling intervals. 10 Hz while something is happening, 1 Hz when it is not.
+ *
+ * The adaptive switch was always implemented, but was permanently saturated:
+ * with gravity included, every magnitude read ~1.0 g, which is above the 0.25 g
+ * HIGH_RATE_ACCEL_G threshold, so the rate never dropped out of 10 Hz. The two
+ * IMU findings shared one root cause — removing gravity is what makes the
+ * sampling adaptive again, not a separate change.
+ */
+const IMU_INTERVAL_MS = { high: 100, low: 1000 } as const;
+
+/** Current IMU rate, tracked so the interval is only reset when it changes. */
+let currentImuHz: 1 | 10 = 1;
 let latestPressure: number | null = null;
 let accumulatedM = 0;
 let lastFix: Fix | null = null;
@@ -72,6 +109,8 @@ export const useDriveStore = create<LiveState & Actions>((set, get) => ({
   lastSummary: null,
   recovered: [],
   permission: 'unknown',
+  imuHz: 1,
+  lastAccelG: null,
 
   /** Cold-start: recover any interrupted drive from the WAL, then arm sensors. */
   init: async () => {
@@ -139,12 +178,53 @@ async function startWatching(set: Set, get: Get) {
     }
   });
 
-  Accelerometer.setUpdateInterval(1000);
-  Accelerometer.addListener((s) => {
-    latestAccel = s;
-    const mag = gForce(Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2));
+  /*
+   * DeviceMotion, not Accelerometer, and the difference is the whole fix.
+   *
+   * Accelerometer reports TOTAL proper acceleration — the vehicle's motion plus
+   * the 1 g of gravity the device is always resisting. Its magnitude therefore
+   * reads ~1.0 on a parked car, and every G-force figure was inflated by an
+   * amount that varied with device orientation, so it could not be subtracted
+   * back out afterwards.
+   *
+   * DeviceMotion.acceleration is CoreMotion's userAcceleration: gravity already
+   * removed by sensor fusion, ~0 at rest. It is reported in m/s^2 rather than
+   * multiples of g, which is why it is converted here — the brands make that
+   * conversion impossible to forget, since MetresPerSecondSq is not assignable
+   * to GForce.
+   *
+   * CONVENTION, stored and re-derived server-side: Fix.accelX/Y/Z are USER
+   * acceleration in multiples of g, gravity excluded. A parked car reads ~0.
+   *
+   * `acceleration` is null on devices without the fused sensor, in which case
+   * no IMU sample is recorded rather than a wrong one being invented.
+   */
+  DeviceMotion.setUpdateInterval(IMU_INTERVAL_MS.low);
+  DeviceMotion.addListener((m) => {
+    const a = m.acceleration;
+    if (!a) {
+      latestAccel = null;
+      return;
+    }
+    latestAccel = {
+      x: ms2ToG(mps2(a.x)),
+      y: ms2ToG(mps2(a.y)),
+      z: ms2ToG(mps2(a.z)),
+    };
+
+    const mag = gForce(
+      Math.sqrt(latestAccel.x ** 2 + latestAccel.y ** 2 + latestAccel.z ** 2),
+    );
     const hz = engine.desiredImuHz(mag);
-    Accelerometer.setUpdateInterval(hz === 10 ? 100 : 1000);
+    if (hz !== currentImuHz) {
+      currentImuHz = hz;
+      DeviceMotion.setUpdateInterval(hz === 10 ? IMU_INTERVAL_MS.high : IMU_INTERVAL_MS.low);
+      // Observable on the drive HUD when the debug readout is on, so the
+      // adaptive rate can be confirmed on a real road rather than assumed.
+      set({ imuHz: hz, lastAccelG: mag });
+    } else {
+      set({ lastAccelG: mag });
+    }
   });
   Barometer.addListener((s) => {
     latestPressure = s.pressure;

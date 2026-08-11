@@ -33,6 +33,12 @@ type ProfileData = {
   vehicleId: string | null;
   username: string | null;
   safetyAccepted: boolean;
+  /**
+   * Shows the IMU debug readout on the drive HUD. Off by default. Exists
+   * because the adaptive sampling rate and the gravity-removed G magnitude
+   * cannot be confirmed from a simulator — they need a moving vehicle.
+   */
+  debugHud: boolean;
 
 };
 
@@ -44,6 +50,7 @@ type ProfileState = ProfileData & {
   setVehicle: (make: string, model: string) => void;
   setUsername: (u: string) => void;
   acceptSafety: () => void;
+  toggleDebugHud: () => void;
   completeOnboarding: () => void;
   /** Returns the store to first-run state. Used by account deletion. */
   reset: () => void;
@@ -65,6 +72,7 @@ const INITIAL: ProfileData = {
   vehicleId: null,
   username: null,
   safetyAccepted: false,
+  debugHud: false,
 };
 
 export const useProfile = create<ProfileState>()(
@@ -97,6 +105,7 @@ export const useProfile = create<ProfileState>()(
         ),
       setUsername: (username) => set({ username }),
       acceptSafety: () => set({ safetyAccepted: true }),
+      toggleDebugHud: () => set((st) => ({ debugHud: !st.debugHud })),
       completeOnboarding: () => set({ onboarded: true }),
       reset: () => set({ ...INITIAL }),
     }),

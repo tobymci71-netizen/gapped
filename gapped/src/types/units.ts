@@ -73,11 +73,15 @@ export type EpochMs = Brand<number, 'epoch-ms'>;
 /**
  * Multiples of standard gravity.
  *
- * NOTE, unresolved: the values currently flowing into this type come from
- * expo-sensors' Accelerometer, which reports total acceleration INCLUDING
- * gravity (~1.0 at rest), while src/drive/types.ts documents them as
- * gravity-removed. Branding does not fix that — it is a sensor question that
- * needs a real drive to settle. See the IMU findings in the project notes.
+ * CONVENTION: values of this type are USER acceleration — gravity excluded. A
+ * stationary vehicle reads ~0, not ~1.
+ *
+ * This was not always true. Samples came from expo-sensors' Accelerometer,
+ * which reports total proper acceleration including the 1 g the device is
+ * always resisting, so every recorded G-force was inflated by an
+ * orientation-dependent amount. Capture now uses DeviceMotion.acceleration
+ * (CoreMotion userAcceleration, gravity removed by sensor fusion), converted
+ * from m/s^2 with ms2ToG. See src/drive/recorder.ts.
  */
 export type GForce = Brand<number, 'g'>;
 /** Metres per second squared. Used where acceleration is derived from the
