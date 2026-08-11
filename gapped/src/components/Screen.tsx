@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, gutter, space } from '@/theme/tokens';
 
@@ -29,14 +29,20 @@ export function Screen({ children, scroll = true, style, footer }: Props) {
   );
 
   return (
-    <View style={[styles.flex, { backgroundColor: color.canvas }]}>
+    // Both onboarding text-entry steps pin their Continue button to the
+    // footer, and without this the keyboard covered it while the field it
+    // belongs to was focused.
+    <KeyboardAvoidingView
+      style={[styles.flex, { backgroundColor: color.canvas }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       {body}
       {footer ? (
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 14 }]}>
           {footer}
         </View>
       ) : null}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

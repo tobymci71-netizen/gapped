@@ -7,7 +7,7 @@ import {
   Skia,
   vec,
 } from '@shopify/react-native-skia';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -89,14 +89,41 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
     return () => cancelAnimation(breathe);
   }, [idle, reduced, breathe]);
 
-  // PB break: label springs in; glow shifts white (handled via pbActive).
-  const isPb = pb != null && pb > 5 && clamped > pb;
+  /**
+   * PB break, LATCHED for the run.
+   *
+   * This was recomputed per fix (`clamped > pb`), so speed oscillating across
+   * the stored best sprang the badge in and out repeatedly and flipped the
+   * glow white and back with it. Breaking a personal best is an event, not a
+   * condition — once it happens it stays true until the dial goes idle or the
+   * best itself changes.
+   */
+  const [isPb, setIsPb] = useState(false);
+  const session = `${pb ?? 'none'}|${active}`;
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    // One effect, not two. Split across a "latch" effect and a "reset" effect
+    // they run in declaration order, so a best broken on the very first fix
+    // was set and then immediately cleared by the reset in the same commit.
+    if (sessionRef.current !== session) {
+      sessionRef.current = session;
+      setIsPb(false);
+      return;
+    }
+    if (pb != null && pb > 5 && clamped > pb) setIsPb(true);
+  }, [clamped, pb, session]);
+
   const pbScale = useSharedValue(0);
   useEffect(() => {
+    if (reduced) {
+      // The one animation in this file that never consulted reduced motion.
+      pbScale.value = withTiming(isPb ? 1 : 0, { duration: duration.instant });
+      return;
+    }
     pbScale.value = isPb
       ? withSpring(1, spring.bouncy)
       : withTiming(0, { duration: duration.fast });
-  }, [isPb, pbScale]);
+  }, [isPb, reduced, pbScale]);
 
   const c = size / 2;
   const strokeR = c - 24;

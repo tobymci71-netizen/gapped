@@ -25,14 +25,18 @@ export function PressableScale({
   const pressed = useSharedValue(0);
   const reduced = useReducedMotion();
 
-  const style = useAnimatedStyle(() => {
-    if (reduced) {
-      return { opacity: withTiming(pressed.value ? 0.7 : 1, { duration: duration.instant }) };
-    }
-    return {
-      transform: [{ scale: withSpring(pressed.value ? 0.97 : 1, spring.snap) }],
-    };
-  });
+  // Both keys are always present. Returning a different set of keys depending
+  // on `reduced` leaves whichever key was dropped stuck at its last value if
+  // the setting changes while mounted — the hazard BottomSheet already
+  // documents.
+  const style = useAnimatedStyle(() => ({
+    opacity: reduced
+      ? withTiming(pressed.value ? 0.7 : 1, { duration: duration.instant })
+      : 1,
+    transform: [
+      { scale: reduced ? 1 : withSpring(pressed.value ? 0.97 : 1, spring.snap) },
+    ],
+  }));
 
   return (
     <AnimatedPressable

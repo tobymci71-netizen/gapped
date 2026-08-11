@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import countries from '@/data/countries.json';
 import { Entrance } from '@/components/Entrance';
+import { STAGGER_CAP } from '@/theme/motion';
 import { PressableScale } from '@/components/PressableScale';
 import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
@@ -56,8 +57,8 @@ export function CountryPicker({
           data={results}
           keyExtractor={(c: Country) => c.code}
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item, index }: { item: Country; index: number }) => (
-            <Entrance index={index}>
+          renderItem={({ item, index }: { item: Country; index: number }) => {
+            const row = (
               <PressableScale
                 silent
                 onPress={() => {
@@ -69,13 +70,19 @@ export function CountryPicker({
                 <Text style={styles.flag}>{item.flag}</Text>
                 <Text
                   variant="bodyMedium"
+                  numberOfLines={1}
                   style={selected === item.code ? { color: color.accent } : undefined}
                 >
                   {item.name}
                 </Text>
               </PressableScale>
-            </Entrance>
-          )}
+            );
+            // Only the first screenful staggers in. This list is 264 countries
+            // and FlashList recycles cells, so an entrance on every row replays
+            // the animation on every scroll — the same guard, and the same
+            // reason, as SearchableListSheet.
+            return index < STAGGER_CAP ? <Entrance index={index}>{row}</Entrance> : row;
+          }}
           ListEmptyComponent={
             <Text variant="body" style={styles.empty}>
               No country matches “{query}”.

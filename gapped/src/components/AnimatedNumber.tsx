@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
-  useDerivedValue,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -17,6 +16,13 @@ import { color as colors, font } from '@/theme/tokens';
  */
 
 const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+/**
+ * The strip carries 0–9 twice. Row i shows DIGITS[i % 10], so slot n and slot
+ * n+10 are visually identical — which is what lets a 9→0 step travel *forward*
+ * one place into the second run and then be silently normalised back by 10.
+ */
+const STRIP = [...DIGITS, ...DIGITS];
 
 type Props = {
   value: string;
@@ -39,35 +45,79 @@ function DigitColumn({
   reduced: boolean;
 }) {
   const lineHeight = Math.round(size * 1.1);
-  const position = useSharedValue(digit);
+  const slot = useSharedValue(digit);
+  /** Logical slot the strip is settled on, kept off the UI thread. */
+  const settled = useRef(digit);
+  const shown = useRef(digit);
 
-  useDerivedValue(() => {
-    position.value = reduced
-      ? digit
-      : withTiming(digit, { duration: duration.base, easing: easing.standard });
-  }, [digit, reduced]);
+  /**
+   * Advance by the FORWARD modular distance, never the signed difference.
+   *
+   * Animating straight to the new digit meant 9→0 ran backwards through
+   * 8,7,6…0 — so on every ten boundary the units column visibly
+   * counter-rotated against the tens column beside it. Going forward by
+   * ((digit - shown) mod 10) into the strip's second run and normalising back
+   * by 10 on completion keeps every column turning the same way.
+   *
+   * Driven from an effect rather than useDerivedValue: writing an animation to
+   * the same shared value the derivation reads registers it as its own mapper
+   * input, which is a self-referential update Reanimated does not promise
+   * anything about.
+   */
+  useEffect(() => {
+    const from = shown.current;
+    if (from === digit) return;
+    shown.current = digit;
+
+    if (reduced) {
+      settled.current = digit;
+      slot.value = digit;
+      return;
+    }
+
+    const forward = ((digit - from) % 10 + 10) % 10;
+    const target = settled.current + forward;
+    settled.current = target >= 10 ? target - 10 : target;
+
+    slot.value = withTiming(
+      target,
+      { duration: duration.base, easing: easing.standard },
+      (finished) => {
+        'worklet';
+        // Slot n and n+10 render the same glyph, so this snap is invisible.
+        if (finished && target >= 10) slot.value = target - 10;
+      },
+    );
+  }, [digit, reduced, slot]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: -position.value * lineHeight }],
+    transform: [{ translateY: -slot.value * lineHeight }],
   }));
 
   return (
     <View style={{ height: lineHeight, overflow: 'hidden' }}>
       <Animated.View style={style}>
-        {DIGITS.map((d) => (
-          <Text
-            key={d}
-            style={{
-              fontFamily,
-              fontSize: size,
-              lineHeight,
-              color,
-              fontVariant: ['tabular-nums'],
-              textAlign: 'center',
-            }}
-          >
-            {d}
-          </Text>
+        {/*
+          Each row is a fixed-height box that centres its glyph, rather than a
+          Text relying on lineHeight to position itself. lineHeight places the
+          baseline, so glyphs whose vertical metrics differ in the display face
+          sat at slightly different heights — visible as one digit riding above
+          its neighbours in a settled number.
+        */}
+        {STRIP.map((d, i) => (
+          <View key={i} style={{ height: lineHeight, justifyContent: 'center' }}>
+            <Text
+              style={{
+                fontFamily,
+                fontSize: size,
+                color,
+                fontVariant: ['tabular-nums'],
+                textAlign: 'center',
+              }}
+            >
+              {d}
+            </Text>
+          </View>
         ))}
       </Animated.View>
     </View>
