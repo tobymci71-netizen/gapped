@@ -181,6 +181,10 @@ Things the code review turned up that are product decisions, not policy text:
 3. **Sentry and PostHog regions are unconfirmed.** Both default to US hosting.
    Both offer EU hosting. Choosing it removes an international-transfer problem
    rather than documenting one.
-4. **There is no in-app link to this policy.** App Review requires a reachable
-   privacy policy URL, and Settings has no row for it. That needs a hosted URL
-   first — see BLOCKED ON TOBY.
+4. **The in-app privacy link points at a domain that does not exist.** Settings
+   *does* have a Privacy Policy row (and a Terms of Use row) — an earlier note
+   here claimed it did not, which was wrong; both were confirmed on device.
+   They open `https://gapped.app/privacy` and `https://gapped.app/terms`. App
+   Review clicks that link, and a dead URL is a rejection. This is worse than a
+   missing link because it looks handled. Host this file at that URL, or change
+   the URL — see BLOCKED ON TOBY.
