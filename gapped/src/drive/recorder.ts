@@ -11,6 +11,7 @@ import * as Location from 'expo-location';
 import { Barometer, DeviceMotion } from 'expo-sensors';
 import { create } from 'zustand';
 import { uuid } from '@/lib/ids';
+import { driveLog } from '@/lib/log';
 import { useProfile } from '@/state/profile';
 import {
   setBackgroundFixSink,
@@ -115,6 +116,7 @@ export const useDriveStore = create<LiveState & Actions>((set, get) => ({
   /** Cold-start: recover any interrupted drive from the WAL, then arm sensors. */
   init: async () => {
     const recovered = wal.recoverUnterminated();
+    if (recovered.length > 0) driveLog('recovery.unterminated', { count: recovered.length });
     set({ recovered });
     if (recovered.length > 0) {
       const last = recovered[recovered.length - 1];
@@ -272,9 +274,12 @@ function handleEvents(events: ReturnType<DriveEngine['onFix']>, set: Set, get: G
       // would quietly credit this drive to whatever they happen to be driving
       // then — a leaderboard that claims to be believable cannot do that.
       wal.openDrive(id, ev.at, useProfile.getState().vehicleId);
+      driveLog('drive.start', { driveId: id, trigger: ev.type });
       set({ driveId: id, startedAt: ev.at, distanceM: metres(0), engineState: engine.getState() });
       // Keep fixes flowing with the screen off. No-op without background permission.
-      startBackgroundUpdates().catch(() => undefined);
+      startBackgroundUpdates()
+        .then(() => driveLog('background.started'))
+        .catch((e) => driveLog('background.FAILED', { message: String(e) }));
     } else if (ev.type === 'fix') {
       const id = get().driveId;
       if (!id) continue;
@@ -292,7 +297,20 @@ function handleEvents(events: ReturnType<DriveEngine['onFix']>, set: Set, get: G
       const id = get().driveId;
       if (!id) continue;
       const summary = wal.finalizeDrive(id, ev.at);
-      stopBackgroundUpdates().catch(() => undefined);
+      // The one line worth reading after a drive that behaved oddly: distance,
+      // duration, top speed, peak g and the 0-60, all scrubbed of position.
+      driveLog('drive.end', {
+        driveId: id,
+        distanceM: Math.round(summary.distanceM),
+        durationS: Math.round(summary.durationS),
+        maxSpeedMs: Number(summary.maxSpeedMs.toFixed(2)),
+        maxG: summary.maxG != null ? Number(summary.maxG.toFixed(3)) : null,
+        zeroTo60S: summary.zeroTo60S != null ? Number(summary.zeroTo60S.toFixed(2)) : null,
+        imuHz: currentImuHz,
+      });
+      stopBackgroundUpdates()
+        .then(() => driveLog('background.stopped'))
+        .catch((e) => driveLog('background.stop.FAILED', { message: String(e) }));
       // Upload + server verification; offline is fine, sync retries next init.
       import('@/lib/sync')
         .then((m) => m.syncFinalizedDrives())

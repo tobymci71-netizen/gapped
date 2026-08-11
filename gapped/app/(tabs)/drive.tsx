@@ -283,19 +283,36 @@ export default function DriveScreen() {
               {formatDuration(seconds(startedAt != null ? Math.max(0, now - startedAt) / 1000 : 0))}
             </Text>
           </View>
-          {/*
-            IMU debug readout, off by default (Settings → Debug HUD).
-            Neither number can be checked from a simulator: on a real drive
-            `g` should sit near 0.00 when stopped and rise under braking or
-            cornering, and `Hz` should sit at 1 when cruising and flick to 10
-            when it does. A `g` that idles near 1.00 means gravity is back in
-            the signal and the sampling will be stuck at 10.
-          */}
-          {debugHud ? (
-            <Text variant="caption" style={styles.hudDebug}>
-              {`IMU ${imuHz} Hz · ${lastAccelG != null ? raw(lastAccelG).toFixed(2) : '—'} g`}
-            </Text>
-          ) : null}
+        </View>
+      ) : null}
+
+      {/*
+        IMU debug readout. Off by default; Settings → Debug HUD turns it on.
+        NOT behind __DEV__ and not inside the HUD block above, both deliberately.
+
+        A TestFlight build is a release build, so a __DEV__ gate would hide the
+        one instrument needed to confirm the gravity and sampling fixes — and
+        those can only be confirmed in a moving vehicle, which is never where a
+        debug build is.
+
+        Nested inside `recording && hudVisible` it would have been almost as
+        useless: the parked baseline and the phone-rotation gravity check both
+        happen BEFORE a drive starts, and tapping HUD to hide the speedometer
+        would have taken the diagnostics with it. It renders whenever the flag
+        is on.
+
+        Reading it: `g` sits near 0.00 parked and rises under braking or
+        cornering; `Hz` sits at 1 cruising and flicks to 10 when something
+        happens. A `g` that idles near 1.00 means gravity is back in the signal,
+        and Hz will be stuck at 10 as a consequence.
+      */}
+      {debugHud ? (
+        <View pointerEvents="none" style={[styles.debugStrip, { top: insets.top + space.md }]}>
+          <Text variant="caption" style={styles.hudDebug}>
+            {`${engineState} · IMU ${imuHz} Hz · ${
+              lastAccelG != null ? raw(lastAccelG).toFixed(2) : '—'
+            } g`}
+          </Text>
         </View>
       ) : null}
 
@@ -402,6 +419,12 @@ const styles = StyleSheet.create({
   controlLabel: { fontSize: 12, lineHeight: 15, letterSpacing: 0.8 },
   hud: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   hudNumeral: { fontVariant: ['tabular-nums'] },
+  debugStrip: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
   hudDebug: { color: color.text3, marginTop: 2, letterSpacing: 0.5 },
   hudRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
   panel: {

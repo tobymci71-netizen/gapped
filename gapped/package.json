@@ -70,7 +70,9 @@
     "check:edge": "cd supabase/functions && deno check verify-drive/index.ts attest-device/index.ts decode-vin/index.ts",
     "lint": "expo lint",
     "verify:vin": "node scripts/verify-vin-decode.mjs",
-    "generate:icon": "python3 scripts/generate-placeholder-icon.py"
+    "generate:icon": "python3 scripts/generate-placeholder-icon.py",
+    "eas-build-pre-install": "node scripts/check-build-env.mjs",
+    "check:buildenv": "node scripts/check-build-env.mjs"
   },
   "private": true,
   "jest": {

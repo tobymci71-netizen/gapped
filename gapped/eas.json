@@ -53,18 +53,10 @@
   },
   "submit": {
     "preview": {
-      "ios": {
-        "appleId": "TODO_TOBY_APPLE_ID",
-        "ascAppId": "TODO_TOBY_ASC_APP_ID",
-        "appleTeamId": "TODO_TOBY_APPLE_TEAM_ID"
-      }
+      "ios": {}
     },
     "production": {
-      "ios": {
-        "appleId": "TODO_TOBY_APPLE_ID",
-        "ascAppId": "TODO_TOBY_ASC_APP_ID",
-        "appleTeamId": "TODO_TOBY_APPLE_TEAM_ID"
-      }
+      "ios": {}
     }
   }
 }
