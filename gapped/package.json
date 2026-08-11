@@ -58,6 +58,7 @@
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "build:edge": "node scripts/build-edge-shared.mjs",
+    "generate:countries": "node scripts/generate-countries.mjs",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
