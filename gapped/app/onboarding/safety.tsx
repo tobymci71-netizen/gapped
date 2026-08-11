@@ -84,7 +84,7 @@ export default function SafetyStep() {
 
 const styles = StyleSheet.create({
   warnWrap: { alignItems: 'center' },
-  warnGlyph: { fontSize: 34 },
+  warnGlyph: { fontSize: 34, lineHeight: 42, textAlign: 'center' },
   card: { gap: space.lg },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   tile: {
