@@ -34,6 +34,10 @@ async function pushIdentity(userId: string): Promise<void> {
       // Only overwrite with values we actually have; a half-finished
       // onboarding must not blank out a username already on the server.
       ...(p.username ? { username: p.username } : {}),
+      // No canonicalisation needed here: useProfile.country is typed
+      // CountryCode, which only canonicaliseCountry can produce, and the
+      // store's persist `merge` re-canonicalises on every rehydration. This
+      // is the constrained source verify-drive reads back out of profiles.
       ...(p.country ? { country: p.country } : {}),
       unit_pref: p.unitPref,
     })

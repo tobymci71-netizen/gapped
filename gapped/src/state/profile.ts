@@ -7,6 +7,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { canonicaliseCountry, type CountryCode } from '@/data/countries';
 import { UnitPref } from '@/drive/units';
 import { uuid } from '@/lib/ids';
 
@@ -15,7 +16,11 @@ export type VehicleKind = 'car' | 'motorbike';
 type ProfileState = {
   onboarded: boolean;
   unitPref: UnitPref;
-  country: string | null; // ISO 3166-1 alpha-2
+  /**
+   * Canonical ISO 3166-1 alpha-2 (plus XK). Branded, so the only way to get a
+   * value in here is through `canonicaliseCountry` — see setCountry.
+   */
+  country: CountryCode | null;
   vehicleKind: VehicleKind | null;
   vehicleMake: string | null;
   vehicleModel: string | null;
@@ -30,7 +35,8 @@ type ProfileState = {
   safetyAccepted: boolean;
 
   setUnitPref: (u: UnitPref) => void;
-  setCountry: (c: string) => void;
+  /** Accepts any string; stores only a canonical code, or null. */
+  setCountry: (c: string | null) => void;
   setVehicleKind: (k: VehicleKind) => void;
   setVehicle: (make: string, model: string) => void;
   setUsername: (u: string) => void;
@@ -52,7 +58,11 @@ export const useProfile = create<ProfileState>()(
       safetyAccepted: false,
 
       setUnitPref: (unitPref) => set({ unitPref }),
-      setCountry: (country) => set({ country }),
+      // Canonicalised here rather than at the call sites. This is the only
+      // way a country enters the store, so normalising once at the setter
+      // means no caller can introduce an alias — not the picker, not a
+      // locale-derived default, not a future settings screen.
+      setCountry: (country) => set({ country: canonicaliseCountry(country) }),
       // Changing kind clears the chosen vehicle. Keeping it left a car
       // selected as the motorbike with Continue already enabled — an invalid
       // vehicle is worse than losing one pick.
@@ -77,6 +87,26 @@ export const useProfile = create<ProfileState>()(
     {
       name: 'gapped-profile',
       storage: createJSONStorage(() => AsyncStorage),
+      /**
+       * Rehydration is the second write path into `country`, and it bypasses
+       * `setCountry` entirely — zustand writes the persisted JSON straight
+       * into state. A device that picked its country on an older build can
+       * therefore carry a non-canonical code across an app update, and would
+       * then push it to the server on next sync.
+       *
+       * Canonicalising on rehydrate closes that. It also means the fix reaches
+       * existing installs without anyone reopening the picker.
+       *
+       * `merge` rather than `migrate`: migrate only fires when the persisted
+       * version differs, so it would clean existing installs once and then
+       * never run again. merge runs on every rehydration, which makes
+       * "the stored country is canonical" true at all times rather than true
+       * after a one-off fix-up.
+       */
+      merge: (persisted, current) => {
+        const s = (persisted ?? {}) as Partial<ProfileState>;
+        return { ...current, ...s, country: canonicaliseCountry(s.country ?? current.country) };
+      },
     },
   ),
 );

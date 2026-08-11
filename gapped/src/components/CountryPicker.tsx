@@ -1,7 +1,7 @@
 import { FlashList } from '@shopify/flash-list';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import countries from '@/data/countries.json';
+import { COUNTRIES, type Country, type CountryCode } from '@/data/countries';
 import { Entrance } from '@/components/Entrance';
 import { STAGGER_CAP } from '@/theme/motion';
 import { PressableScale } from '@/components/PressableScale';
@@ -12,24 +12,27 @@ import { color, font, radius, space, type } from '@/theme/tokens';
 /**
  * Sheet-style searchable country picker — the pattern from TripRank's
  * "Select Country" sheet: grabber, title, search field, full flag list.
- * All 258 current ISO 3166-1 regions ship, so nobody's country is missing.
- * Withdrawn ISO 3166-3 codes are deliberately excluded: the generated list
- * carried DY, HV, UK, NH, VD and RH alongside their modern replacements, so
- * "United Kingdom" appeared twice — once as GB and once as UK with a flag
- * that does not render. Two codes for one country means two country
- * leaderboards for one country, since board_top filters on the code.
+ *
+ * The list is canonical by construction: 249 assigned ISO 3166-1 alpha-2 codes
+ * plus XK for Kosovo, which has no ISO code (see scripts/generate-countries.mjs
+ * for why that exception exists). Because the picker can only offer codes that
+ * are in the list, and the list holds exactly one code per country, selecting
+ * here can never split a nation across two leaderboards — `board_top` filters
+ * on the code, so two codes for one country would mean two half-populated
+ * national boards with nothing to show which was real.
+ *
+ * Aliases such as UK, SU and ZR are absent deliberately. They are handled on
+ * the way in by `canonicaliseCountry`, not offered on the way out.
  */
 
-type Country = { code: string; name: string; flag: string };
-
-const ALL = countries as Country[];
+const ALL = COUNTRIES;
 
 export function CountryPicker({
   selected,
   onSelect,
 }: {
   selected: string | null;
-  onSelect: (code: string) => void;
+  onSelect: (code: CountryCode) => void;
 }) {
   const [query, setQuery] = useState('');
 

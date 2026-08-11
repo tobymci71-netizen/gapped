@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
-import countries from '@/data/countries.json';
+import { countryByCode } from '@/data/countries';
 import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
 import { SettingsRow, SettingsSection } from '@/components/SettingsRow';
@@ -25,7 +25,6 @@ const tint = {
 
 const VERSION = Constants.expoConfig?.version ?? '0.1.0';
 
-const FLAGS = countries as { code: string; name: string; flag: string }[];
 
 /** SettingsRow presses are silent, so each handler owns its haptic. */
 function openURL(url: string): void {
@@ -82,7 +81,7 @@ export default function SettingsScreen() {
 
   // From units.ts so a unit rename cannot leave this label behind.
   const unitLabel = speedForDisplay(mps(0), unitPref).unit;
-  const countryEntry = country ? FLAGS.find((c) => c.code === country) : undefined;
+  const countryEntry = countryByCode(country);
   const countryValue = countryEntry
     ? `${countryEntry.flag} ${countryEntry.code}`
     : (country ?? '—');
