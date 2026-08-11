@@ -13,6 +13,7 @@ import { clearAll } from '@/drive/wal';
 import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { useRecords } from '@/state/records';
+import { triggerTestCrash } from '@/lib/observability';
 import { useProfile } from '@/state/profile';
 import { color, space } from '@/theme/tokens';
 
@@ -180,6 +181,32 @@ export default function SettingsScreen() {
           verifies — adaptive sampling and the gravity fix — only happens in a
           moving vehicle, which is not where a debug build usually is.
         */}
+        {/*
+          Confirms in one tap that a build reports crashes and that the Hermes
+          stack symbolicated. Ships in TestFlight builds deliberately: the thing
+          being verified is the release pipeline (source-map upload, dSYMs), and
+          a dev build cannot verify it. Hidden behind Debug HUD so an ordinary
+          user never meets it.
+        */}
+        {debugHud ? (
+          <SettingsRow
+            glyph="💥"
+            tint={tint.danger}
+            label="Send test crash"
+            value="Sentry"
+            onPress={() => {
+              haptic.press();
+              Alert.alert(
+                'Send a test crash?',
+                'The app will crash on purpose so the report can be checked in Sentry. Nothing is lost — drives are written to disk as they are recorded.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Crash', style: 'destructive', onPress: triggerTestCrash },
+                ],
+              );
+            }}
+          />
+        ) : null}
         <SettingsRow
           glyph="📈"
           tint={tint.neutral}

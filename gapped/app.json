@@ -133,7 +133,15 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "$SENTRY_ORG",
+          "project": "$SENTRY_PROJECT",
+          "url": "https://sentry.io/"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
