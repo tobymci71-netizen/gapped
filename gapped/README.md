@@ -159,6 +159,61 @@ key is absent from the built `.app`'s `Info.plist`.
 - **No `NSFaceIDUsageDescription`.** It used to appear because `expo-secure-store` was installed
   but never imported. Both are gone. Don't re-add the package without a real use.
 
+## Release configuration (iOS)
+
+### Privacy manifest
+
+`expo.ios.privacyManifests` in `app.json` is declared **at app level even where a
+dependency might ship its own**. Two reasons: no pod in this project actually
+ships a `PrivacyInfo.xcprivacy` (checked by searching `ios/Pods` — only the
+React Native dependency bundles have one), and Apple does not reliably read
+manifests embedded in static CocoaPods dependencies.
+
+Three required-reason APIs are declared, each tied to a real call site:
+
+| Category | Reason | Why |
+| --- | --- | --- |
+| `FileTimestamp` | `C617.1` | expo-sqlite WAL files, AsyncStorage's file store and drive exports all stat files inside the app container |
+| `UserDefaults` | `CA92.1` | expo-constants, Sentry and React Native read their own defaults |
+| `SystemBootTime` | `35F9.1` | elapsed-time measurement only — RN/Reanimated frame timing, Sentry span durations |
+
+**`DiskSpace` is deliberately NOT declared.** No call site was found: the app
+never calls `getFreeDiskStorageAsync`, and expo-file-system's legacy disk
+methods throw rather than run. A reason code that does not match a call site is
+worse than a missing one. If App Store Connect returns **ITMS-91053** naming
+`NSPrivacyAccessedAPICategoryDiskSpace` on upload, add it with `E174.1`
+("check disk space to write files") — that is the code that would apply.
+
+### Export compliance
+
+`ITSAppUsesNonExemptEncryption: false`. The app's only cryptography is
+TLS/HTTPS provided by the operating system (Supabase, Sentry), App Attest, and
+SHA-256 hashing — SHA-256 is a digest, not encryption. Nothing proprietary and
+nothing non-exempt, so no export documentation is required and the
+questionnaire is skipped on every upload.
+
+### Versioning
+
+`appVersionSource: "remote"` — EAS owns the build number, and `autoIncrement`
+is set on both `preview` and `production`. **`ios.buildNumber` is deliberately
+absent from `app.json`**: EAS ignores it under remote versioning, so leaving it
+there is a value that looks authoritative and is not. `expo.version` (the
+user-facing string) stays in `app.json` and is bumped by hand.
+
+### Background modes
+
+`UIBackgroundModes` is `["location"]` and nothing else. That is the only mode
+this app needs — background location for drive recording via expo-task-manager.
+Do not add `fetch` or `processing` speculatively; reviewers ask what uses them.
+
+### Known build warning
+
+`eas build` warns that the `preview`/`production` profiles specify a channel
+while `expo-updates` is not installed. Channels are inert without it. Left in
+place deliberately so the profiles are already correct if OTA updates are
+adopted later; installing `expo-updates` is the fix, removing the `channel`
+keys is the alternative.
+
 ## Backend
 
 The whole stack runs locally — no cloud account needed, just Docker.
