@@ -89,6 +89,10 @@ const styles = StyleSheet.create({
   tileGlyph: {
     color: color.accent,
     fontSize: 52,
+    // Without an explicit lineHeight the glyph is clipped to a sliver before
+    // it is even rotated.
+    lineHeight: 64,
+    textAlign: 'center',
     transform: [{ rotate: '-45deg' }],
   },
 });

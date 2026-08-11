@@ -104,5 +104,7 @@ const styles = StyleSheet.create({
     borderColor: color.accent,
     borderWidth: 1.5,
   },
-  glyph: { fontSize: 56 },
+  // Emoji need an explicit lineHeight: iOS lays them out in a line box shorter
+  // than the glyph, so at 56pt the roof of the car and the rider were clipped.
+  glyph: { fontSize: 56, lineHeight: 68, textAlign: 'center' },
 });
