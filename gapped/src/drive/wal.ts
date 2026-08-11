@@ -11,6 +11,15 @@
 import * as SQLite from 'expo-sqlite';
 import { Fix, DriveSummary } from './types';
 import { summarize } from './stats';
+import {
+  readDegrees,
+  readDegreesOrNull,
+  readEpochMs,
+  readGOrNull,
+  readHpaOrNull,
+  readMetresOrNull,
+  readMpsOrNull,
+} from '@/types/boundary';
 
 const DB_NAME = 'gapped-drives.db';
 
@@ -112,19 +121,25 @@ type FixRow = {
   is_mock: number;
 };
 
+/**
+ * SQLite row -> Fix. A SANCTIONED unit boundary: every column is REAL and
+ * carries no unit, so this is where the schema's SI contract is applied. All
+ * branding goes through src/types/boundary.ts — see the note at the top of
+ * that file about why casts are confined to it.
+ */
 function rowToFix(r: FixRow): Fix {
   return {
-    t: r.t,
-    lat: r.lat,
-    lon: r.lon,
-    speedMs: r.speed_ms,
-    accuracyM: r.accuracy_m,
-    altitudeM: r.altitude_m,
-    heading: r.heading,
-    accelX: r.accel_x,
-    accelY: r.accel_y,
-    accelZ: r.accel_z,
-    pressureHpa: r.pressure_hpa,
+    t: readEpochMs(r.t),
+    lat: readDegrees(r.lat),
+    lon: readDegrees(r.lon),
+    speedMs: readMpsOrNull(r.speed_ms),
+    accuracyM: readMetresOrNull(r.accuracy_m),
+    altitudeM: readMetresOrNull(r.altitude_m),
+    heading: readDegreesOrNull(r.heading),
+    accelX: readGOrNull(r.accel_x),
+    accelY: readGOrNull(r.accel_y),
+    accelZ: readGOrNull(r.accel_z),
+    pressureHpa: readHpaOrNull(r.pressure_hpa),
     isMock: r.is_mock === 1,
   };
 }

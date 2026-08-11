@@ -23,6 +23,7 @@ import {
 } from '@/drive/units';
 import { LocalDrive, listDrives, readFixesSince } from '@/drive/wal';
 import { haptic } from '@/lib/haptics';
+import { seconds } from '@/types/units';
 import { useProfile } from '@/state/profile';
 import { useRecords } from '@/state/records';
 import { color, gutter, radius, space } from '@/theme/tokens';
@@ -277,7 +278,7 @@ export default function DriveScreen() {
             </Text>
             <Text variant="caption">·</Text>
             <Text variant="caption" style={styles.hudNumeral}>
-              {formatDuration(startedAt != null ? Math.max(0, now - startedAt) / 1000 : 0)}
+              {formatDuration(seconds(startedAt != null ? Math.max(0, now - startedAt) / 1000 : 0))}
             </Text>
           </View>
         </View>

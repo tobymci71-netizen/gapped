@@ -6,11 +6,12 @@ import { ChoiceRow } from '@/components/ChoiceRow';
 import { OnboardingStep } from '@/components/OnboardingStep';
 import { Speedometer } from '@/components/Speedometer';
 import { speedForDisplay } from '@/drive/units';
+import { mps } from '@/types/units';
 import { useProfile } from '@/state/profile';
 import { space } from '@/theme/tokens';
 
 /** Demo speed shown on the preview dial, in m/s (≈ 68 mph / 109 km/h). */
-const PREVIEW_MS = 30.4;
+const PREVIEW_MS = mps(30.4);
 
 /** Dial ceilings per unit, matching the live drive HUD. */
 const DIAL_MAX_MPH = 160;

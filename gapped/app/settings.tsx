@@ -8,6 +8,7 @@ import { Screen } from '@/components/Screen';
 import { SettingsRow, SettingsSection } from '@/components/SettingsRow';
 import { Text } from '@/components/Text';
 import { speedForDisplay } from '@/drive/units';
+import { mps } from '@/types/units';
 import { clearAll } from '@/drive/wal';
 import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
@@ -80,7 +81,7 @@ export default function SettingsScreen() {
   const { unitPref, country, setUnitPref } = useProfile();
 
   // From units.ts so a unit rename cannot leave this label behind.
-  const unitLabel = speedForDisplay(0, unitPref).unit;
+  const unitLabel = speedForDisplay(mps(0), unitPref).unit;
   const countryEntry = country ? FLAGS.find((c) => c.code === country) : undefined;
   const countryValue = countryEntry
     ? `${countryEntry.flag} ${countryEntry.code}`

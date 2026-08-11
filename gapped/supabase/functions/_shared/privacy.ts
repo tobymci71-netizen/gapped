@@ -10,14 +10,30 @@
  *  - Privacy zones with centre offsets randomised 200–800 m at creation, so
  *    repeated shares can't be triangulated back to the true centre.
  *
- * The salt lives on device (SecureStore); the server holds route_full and
- * applies the same trim server-side before anything becomes public.
+ * Where the salt actually lives, and why that is the right place:
+ *
+ * The salt that matters is the server's — the `TRIM_SALT` secret read by the
+ * verify-drive Edge Function, which re-trims from the raw fixes and produces
+ * the only route that is ever published (drives.route / route_polyline). The
+ * untrimmed route never leaves the server at all; it sits in
+ * drive_routes_private, which has no grants to any client role.
+ *
+ * The client passes a fixed, non-secret constant ('gapped-share-card' in
+ * app/drive/[id].tsx) when it trims a route for the local share card. That is
+ * not a weakness: a salt shipped inside the binary can never be secret, and
+ * the client already holds the full untrimmed trace for its own drive, so
+ * there is nothing there to withhold from it. Secrecy only has to hold for
+ * what becomes public, which is the server's job.
+ *
+ * (An earlier version of this comment claimed the salt lived on device in
+ * SecureStore. It never did — nothing in the app imports expo-secure-store.)
  */
 
 import { sha256Hex } from './sha256.ts';
 import { METERS_PER_MILE } from './units.ts';
 import { haversineM } from './stats.ts';
 import { Fix } from './types.ts';
+import { Degrees, Metres, degrees, metres } from './unit-types.ts';
 
 export const TRIM_MIN_M = 1.0 * METERS_PER_MILE;
 export const TRIM_MAX_M = 1.7 * METERS_PER_MILE;
@@ -70,9 +86,9 @@ export function trimRouteForSharing(fixes: Fix[], salt: string, driveId: string)
 
 export type PrivacyZone = {
   /** Offset centre — the true centre is never stored. */
-  lat: number;
-  lon: number;
-  radiusM: number;
+  lat: Degrees;
+  lon: Degrees;
+  radiusM: Metres;
 };
 
 /**
@@ -81,9 +97,9 @@ export type PrivacyZone = {
  * is widened by the max offset so the true centre always stays covered.
  */
 export function makePrivacyZone(
-  trueLat: number,
-  trueLon: number,
-  radiusM: number,
+  trueLat: Degrees,
+  trueLon: Degrees,
+  radiusM: Metres,
   salt: string,
   zoneId: string,
 ): PrivacyZone {
@@ -94,9 +110,9 @@ export function makePrivacyZone(
   const dLon =
     (offsetM * Math.sin(bearing)) / (111_194.9 * Math.cos((trueLat * Math.PI) / 180));
   return {
-    lat: trueLat + dLat,
-    lon: trueLon + dLon,
-    radiusM: radiusM + ZONE_OFFSET_MAX_M,
+    lat: degrees(trueLat + dLat),
+    lon: degrees(trueLon + dLon),
+    radiusM: metres(radiusM + ZONE_OFFSET_MAX_M),
   };
 }
 

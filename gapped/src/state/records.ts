@@ -10,14 +10,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { DriveSummary } from '@/drive/types';
+import { Metres, MetresPerSecond, Seconds } from '@/types/units';
 
 export type PersonalBests = {
   /** SI m/s — convert at render. */
-  topSpeedMs: number | null;
+  topSpeedMs: MetresPerSecond | null;
   /** Seconds. Lower is better. */
-  zeroTo60S: number | null;
+  zeroTo60S: Seconds | null;
   /** Metres. */
-  longestDriveM: number | null;
+  longestDriveM: Metres | null;
 };
 
 export const EMPTY_PBS: PersonalBests = {
@@ -26,7 +27,19 @@ export const EMPTY_PBS: PersonalBests = {
   longestDriveM: null,
 };
 
-export type PbImprovement = { metric: keyof PersonalBests; prev: number | null; next: number };
+/**
+ * An improvement to one PB.
+ *
+ * A DISCRIMINATED union, not `{ metric; next: A | B | C }`. The loose version
+ * type-checked `{ metric: 'topSpeedMs', next: seconds(40) }` — a duration
+ * recorded as a speed — which is the same species of bug as the 313 km/h
+ * reading and was found the same way: by the compiler only once the shape was
+ * tightened. Tying `next` to `metric` makes that unrepresentable.
+ */
+export type PbImprovement =
+  | { metric: 'topSpeedMs'; prev: MetresPerSecond | null; next: MetresPerSecond }
+  | { metric: 'zeroTo60S'; prev: Seconds | null; next: Seconds }
+  | { metric: 'longestDriveM'; prev: Metres | null; next: Metres };
 
 /** Which PBs does this drive beat? Pure — unit-tested. */
 export function findImprovements(pbs: PersonalBests, s: DriveSummary): PbImprovement[] {
@@ -45,7 +58,14 @@ export function findImprovements(pbs: PersonalBests, s: DriveSummary): PbImprove
 
 export function applyImprovements(pbs: PersonalBests, imps: PbImprovement[]): PersonalBests {
   const next = { ...pbs };
-  for (const i of imps) next[i.metric] = i.next;
+  for (const i of imps) {
+    // The discriminated union guarantees metric and next agree; TypeScript
+    // cannot express that through a computed key, so the write is narrowed
+    // per-branch rather than cast.
+    if (i.metric === 'topSpeedMs') next.topSpeedMs = i.next;
+    else if (i.metric === 'zeroTo60S') next.zeroTo60S = i.next;
+    else next.longestDriveM = i.next;
+  }
   return next;
 }
 

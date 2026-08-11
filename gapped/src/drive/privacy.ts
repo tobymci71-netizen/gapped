@@ -32,6 +32,7 @@ import { sha256Hex } from '@/lib/sha256';
 import { METERS_PER_MILE } from './units';
 import { haversineM } from './stats';
 import { Fix } from './types';
+import { Degrees, Metres, degrees, metres } from '@/types/units';
 
 export const TRIM_MIN_M = 1.0 * METERS_PER_MILE;
 export const TRIM_MAX_M = 1.7 * METERS_PER_MILE;
@@ -84,9 +85,9 @@ export function trimRouteForSharing(fixes: Fix[], salt: string, driveId: string)
 
 export type PrivacyZone = {
   /** Offset centre — the true centre is never stored. */
-  lat: number;
-  lon: number;
-  radiusM: number;
+  lat: Degrees;
+  lon: Degrees;
+  radiusM: Metres;
 };
 
 /**
@@ -95,9 +96,9 @@ export type PrivacyZone = {
  * is widened by the max offset so the true centre always stays covered.
  */
 export function makePrivacyZone(
-  trueLat: number,
-  trueLon: number,
-  radiusM: number,
+  trueLat: Degrees,
+  trueLon: Degrees,
+  radiusM: Metres,
   salt: string,
   zoneId: string,
 ): PrivacyZone {
@@ -108,9 +109,9 @@ export function makePrivacyZone(
   const dLon =
     (offsetM * Math.sin(bearing)) / (111_194.9 * Math.cos((trueLat * Math.PI) / 180));
   return {
-    lat: trueLat + dLat,
-    lon: trueLon + dLon,
-    radiusM: radiusM + ZONE_OFFSET_MAX_M,
+    lat: degrees(trueLat + dLat),
+    lon: degrees(trueLon + dLon),
+    radiusM: metres(radiusM + ZONE_OFFSET_MAX_M),
   };
 }
 

@@ -9,6 +9,7 @@
  */
 
 import { Fix, PlausibilityCheck, PlausibilityReport } from './types.ts';
+import { Metres } from './unit-types.ts';
 import { deriveSpeeds, gateFixes, haversineM } from './stats.ts';
 
 /** Sustained acceleration beyond this (g) over the window is flagged. */
@@ -34,7 +35,7 @@ export function checkPlausibility(rawFixes: Fix[]): PlausibilityReport {
     detail:
       mockCount === 0
         ? 'No fixes from a mock location provider.'
-        : `${mockCount} fixes came from a mock location provider.`,
+        : `${mockCount} fix${mockCount === 1 ? '' : 'es'} came from a mock location provider.`,
   });
 
   // teleport gaps
@@ -51,7 +52,7 @@ export function checkPlausibility(rawFixes: Fix[]): PlausibilityReport {
     detail:
       teleports === 0
         ? 'No implausible position jumps.'
-        : `${teleports} position jumps imply speeds beyond ${TELEPORT_MS} m/s.`,
+        : `${teleports} position jump${teleports === 1 ? '' : 's'} impl${teleports === 1 ? 'ies' : 'y'} speeds beyond ${TELEPORT_MS} m/s.`,
   });
 
   // sustained acceleration from the GPS speed profile
@@ -75,7 +76,7 @@ export function checkPlausibility(rawFixes: Fix[]): PlausibilityReport {
   // zero-jitter accuracy variance (simulated-location signature)
   const accuracies = rawFixes
     .map((f) => f.accuracyM)
-    .filter((a): a is number => a != null && a > 0);
+    .filter((a): a is Metres => a != null && a > 0);
   let jitterPass = true;
   if (accuracies.length >= 10) {
     const mean = accuracies.reduce((s, a) => s + a, 0) / accuracies.length;

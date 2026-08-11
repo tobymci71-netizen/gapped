@@ -10,6 +10,19 @@
 
 import { Fix, DriveSummary } from './types.ts';
 import { ROLLOUT_M, SIXTY_MPH_MS } from './units.ts';
+import {
+  Degrees,
+  EpochMs,
+  GForce,
+  Metres,
+  MetresPerSecond,
+  Seconds,
+  epochMs,
+  gForce,
+  metres,
+  mps,
+  seconds,
+} from './unit-types.ts';
 
 /** Fixes with worse reported accuracy than this are discarded outright. */
 export const MAX_ACCURACY_M = 20;
@@ -23,14 +36,14 @@ const MAX_NEG_EXCURSION = 0.5;
 
 const EARTH_RADIUS_M = 6371008.8;
 
-export function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): number {
+export function haversineM(lat1: Degrees, lon1: Degrees, lat2: Degrees, lon2: Degrees): Metres {
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(a)));
+  return metres(2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(a))));
 }
 
 /** Accuracy gating: never let a bad fix inflate max speed or distance. */
@@ -45,7 +58,7 @@ export function gateFixes(fixes: Fix[]): Fix[] {
  * positional differentiation); falls back to distance/Δt from the previous
  * fix. Median-of-3 smoothed so a single glitch fix cannot set max speed.
  */
-export function deriveSpeeds(fixes: Fix[]): number[] {
+export function deriveSpeeds(fixes: Fix[]): MetresPerSecond[] {
   const raw = fixes.map((f, i) => {
     if (f.speedMs != null && f.speedMs >= 0) return f.speedMs;
     if (i === 0) return 0;
@@ -56,7 +69,7 @@ export function deriveSpeeds(fixes: Fix[]): number[] {
   });
   return raw.map((_, i) => {
     const window = raw.slice(Math.max(0, i - 1), i + 2);
-    return median(window);
+    return mps(median(window));
   });
 }
 
@@ -66,19 +79,19 @@ function median(xs: number[]): number {
   return s.length % 2 === 1 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-export function totalDistanceM(fixes: Fix[]): number {
+export function totalDistanceM(fixes: Fix[]): Metres {
   let d = 0;
   for (let i = 1; i < fixes.length; i++) {
     d += haversineM(fixes[i - 1].lat, fixes[i - 1].lon, fixes[i].lat, fixes[i].lon);
   }
-  return d;
+  return metres(d);
 }
 
 /** |acceleration| per fix in g, from IMU components. Null where absent. */
-export function accelMagnitudesG(fixes: Fix[]): (number | null)[] {
+export function accelMagnitudesG(fixes: Fix[]): (GForce | null)[] {
   return fixes.map((f) =>
     f.accelX != null && f.accelY != null && f.accelZ != null
-      ? Math.sqrt(f.accelX ** 2 + f.accelY ** 2 + f.accelZ ** 2)
+      ? gForce(Math.sqrt(f.accelX ** 2 + f.accelY ** 2 + f.accelZ ** 2))
       : null,
   );
 }
@@ -90,15 +103,15 @@ export function accelMagnitudesG(fixes: Fix[]): (number | null)[] {
 export function gForces(
   fixes: Fix[],
   windowS = 2,
-): { maxG: number | null; avgG: number | null } {
+): { maxG: GForce | null; avgG: GForce | null } {
   const mags = accelMagnitudesG(fixes);
-  const present: { t: number; g: number }[] = [];
+  const present: { t: EpochMs; g: GForce }[] = [];
   mags.forEach((g, i) => {
     if (g != null) present.push({ t: fixes[i].t, g });
   });
   if (present.length === 0) return { maxG: null, avgG: null };
 
-  const maxG = Math.max(...present.map((p) => p.g));
+  const maxG = gForce(Math.max(...present.map((p) => p.g)));
 
   let bestWindow = 0;
   let lo = 0;
@@ -112,7 +125,7 @@ export function gForces(
     const n = hi - lo + 1;
     if (n >= 2) bestWindow = Math.max(bestWindow, sum / n);
   }
-  return { maxG, avgG: bestWindow > 0 ? bestWindow : present[0].g };
+  return { maxG, avgG: bestWindow > 0 ? gForce(bestWindow) : present[0].g };
 }
 
 /**
@@ -128,7 +141,7 @@ export function gForces(
  *
  * Returns null unless a clean window exists. Never fabricate a number.
  */
-export function detectZeroToSixty(fixes: Fix[], speeds?: number[]): number | null {
+export function detectZeroToSixty(fixes: Fix[], speeds?: MetresPerSecond[]): Seconds | null {
   if (fixes.length < 3) return null;
   const v = speeds ?? deriveSpeeds(fixes);
 
@@ -191,7 +204,7 @@ export function detectZeroToSixty(fixes: Fix[], speeds?: number[]): number | nul
       fixes[crossIdx - 1].t + frac * (fixes[crossIdx].t - fixes[crossIdx - 1].t);
 
     const result = (crossT - rolloutT) / 1000;
-    if (result > 0 && result < 60) return result;
+    if (result > 0 && result < 60) return seconds(result);
   }
   return null;
 }
@@ -203,14 +216,14 @@ export function detectZeroToSixty(fixes: Fix[], speeds?: number[]): number | nul
 export function summarize(rawFixes: Fix[]): DriveSummary {
   const fixes = gateFixes(rawFixes);
   if (fixes.length < 2) {
-    const t = rawFixes[0]?.t ?? Date.now();
+    const t = rawFixes[0]?.t ?? epochMs(Date.now());
     return {
       startedAt: t,
       endedAt: t,
-      distanceM: 0,
-      durationS: 0,
-      maxSpeedMs: 0,
-      avgSpeedMs: 0,
+      distanceM: metres(0),
+      durationS: seconds(0),
+      maxSpeedMs: mps(0),
+      avgSpeedMs: mps(0),
       maxG: null,
       avgG: null,
       zeroTo60S: null,
@@ -221,8 +234,8 @@ export function summarize(rawFixes: Fix[]): DriveSummary {
   const speeds = deriveSpeeds(fixes);
   const distanceM = totalDistanceM(fixes);
   const durationS = (fixes[fixes.length - 1].t - fixes[0].t) / 1000;
-  const maxSpeedMs = Math.max(...speeds);
-  const avgSpeedMs = durationS > 0 ? distanceM / durationS : 0;
+  const maxSpeedMs = mps(Math.max(...speeds));
+  const avgSpeedMs = mps(durationS > 0 ? distanceM / durationS : 0);
   const { maxG, avgG } = gForces(fixes);
   const zeroTo60S = detectZeroToSixty(fixes, speeds);
 
@@ -233,7 +246,7 @@ export function summarize(rawFixes: Fix[]): DriveSummary {
       startedAt: fixes[0].t,
       endedAt: fixes[fixes.length - 1].t,
       distanceM,
-      durationS: Math.round(durationS),
+      durationS: seconds(Math.round(durationS)),
       maxSpeedMs: avgSpeedMs,
       avgSpeedMs,
       maxG,
@@ -247,7 +260,7 @@ export function summarize(rawFixes: Fix[]): DriveSummary {
     startedAt: fixes[0].t,
     endedAt: fixes[fixes.length - 1].t,
     distanceM,
-    durationS: Math.round(durationS),
+    durationS: seconds(Math.round(durationS)),
     maxSpeedMs,
     avgSpeedMs,
     maxG,

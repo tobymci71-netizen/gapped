@@ -6,8 +6,9 @@
  */
 
 import { Fix } from '../types';
+import { degrees, epochMs, gForce, hectopascals, metres, mps } from '@/types/units';
 
-export const ORIGIN = { lat: 51.5, lon: -0.12 };
+export const ORIGIN = { lat: degrees(51.5), lon: degrees(-0.12) };
 export const M_PER_DEG_LAT = (2 * Math.PI * 6371008.8) / 360;
 
 type TraceOpts = {
@@ -20,7 +21,7 @@ type TraceOpts = {
 export function traceFromSpeeds(speeds: number[], opts: TraceOpts = {}): Fix[] {
   const startT = opts.startT ?? 1_700_000_000_000;
   const fixes: Fix[] = [];
-  let lat = ORIGIN.lat;
+  let lat: number = ORIGIN.lat;
   let prevSpeed = 0;
   for (let i = 0; i < speeds.length; i++) {
     const v = speeds[i];
@@ -35,21 +36,21 @@ export function traceFromSpeeds(speeds: number[], opts: TraceOpts = {}): Fix[] {
         ? opts.accuracyM()
         : opts.accuracyM ?? 5 + Math.sin(i * 1.7) * 1.5; // natural jitter by default
     fixes.push({
-      t: startT + i * 1000,
-      lat,
-      lon: ORIGIN.lon,
-      speedMs: v,
-      accuracyM: accuracy,
-      altitudeM: 30,
-      heading: 0,
+      t: epochMs(startT + i * 1000),
+      lat: degrees(lat),
+      lon: degrees(ORIGIN.lon),
+      speedMs: mps(v),
+      accuracyM: metres(accuracy),
+      altitudeM: metres(30),
+      heading: degrees(0),
       ...(opts.withImu === false
         ? {}
         : {
-            accelX: accel,
-            accelY: 0.02 * Math.sin(i), // road noise
-            accelZ: 0.03 * Math.cos(i * 0.7),
+            accelX: gForce(accel),
+            accelY: gForce(0.02 * Math.sin(i)), // road noise
+            accelZ: gForce(0.03 * Math.cos(i * 0.7)),
           }),
-      pressureHpa: 1013 + Math.sin(i * 0.1),
+      pressureHpa: hectopascals(1013 + Math.sin(i * 0.1)),
       isMock: false,
     });
   }
@@ -60,7 +61,7 @@ export function traceFromSpeeds(speeds: number[], opts: TraceOpts = {}): Fix[] {
 export function traceFromSpeeds10Hz(speeds: number[], opts: TraceOpts = {}): Fix[] {
   const startT = opts.startT ?? 1_700_000_000_000;
   const fixes: Fix[] = [];
-  let lat = ORIGIN.lat;
+  let lat: number = ORIGIN.lat;
   let prevSpeed = 0;
   for (let i = 0; i < speeds.length; i++) {
     const v = speeds[i];
@@ -70,17 +71,19 @@ export function traceFromSpeeds10Hz(speeds: number[], opts: TraceOpts = {}): Fix
     prevSpeed = v;
     const accel = i > 0 ? (v - speeds[i - 1]) / 0.1 / 9.80665 : 0;
     fixes.push({
-      t: startT + i * 100,
-      lat,
-      lon: ORIGIN.lon,
-      speedMs: v,
-      accuracyM: typeof opts.accuracyM === 'function' ? opts.accuracyM() : opts.accuracyM ?? 5 + Math.sin(i) * 1.2,
-      altitudeM: 30,
-      heading: 0,
-      accelX: accel,
-      accelY: 0.01,
-      accelZ: 0.02,
-      pressureHpa: 1013,
+      t: epochMs(startT + i * 100),
+      lat: degrees(lat),
+      lon: degrees(ORIGIN.lon),
+      speedMs: mps(v),
+      accuracyM: metres(
+        typeof opts.accuracyM === 'function' ? opts.accuracyM() : opts.accuracyM ?? 5 + Math.sin(i) * 1.2,
+      ),
+      altitudeM: metres(30),
+      heading: degrees(0),
+      accelX: gForce(accel),
+      accelY: gForce(0.01),
+      accelZ: gForce(0.02),
+      pressureHpa: hectopascals(1013),
       isMock: false,
     });
   }
@@ -123,7 +126,7 @@ export function dirtyPullWithLift(): Fix[] {
 export function teleportSpoof(): Fix[] {
   const fixes = cleanCruise();
   for (let i = 30; i < fixes.length; i++) {
-    fixes[i] = { ...fixes[i], lat: fixes[i].lat + 0.045 }; // ~5 km jump at i=30
+    fixes[i] = { ...fixes[i], lat: degrees(fixes[i].lat + 0.045) }; // ~5 km jump at i=30
   }
   return fixes;
 }
@@ -152,6 +155,6 @@ export function jetAccelTrace(): Fix[] {
 /** Cruise with one garbage fix (accuracy 500 m, speed 90 m/s) that gating must reject. */
 export function cruiseWithGlitch(): Fix[] {
   const fixes = cleanCruise();
-  fixes[30] = { ...fixes[30], speedMs: 90, accuracyM: 500 };
+  fixes[30] = { ...fixes[30], speedMs: mps(90), accuracyM: metres(500) };
   return fixes;
 }

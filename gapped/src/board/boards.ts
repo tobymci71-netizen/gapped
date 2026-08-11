@@ -16,6 +16,7 @@
 import { listDrives } from '@/drive/wal';
 import { supabase } from '@/lib/supabase';
 import { MS_PER_MPH } from '@/drive/units';
+import { raw } from '@/types/units';
 import { BoardQuery, BoardRow } from './types';
 
 /** Published manufacturer 0-60 mph figures — benchmark ghosts, not people. */
@@ -123,9 +124,17 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
     yourValue = inPeriod.length;
   } else {
     const col = metricColumn(query.metric);
+    // FINDING (reported, not silently fixed): BoardRow.value carries a
+    // DIFFERENT physical unit depending on query.metric — m/s for top_speed,
+    // metres for distance, seconds for zero_to_60 — and nothing ties the two
+    // together. `raw` is used here because the board is a unit-agnostic
+    // container; board.tsx's formatValue switches on the same metric to pick a
+    // formatter, and if those two switches ever disagree the board renders one
+    // quantity in another quantity's units.
     const values = inPeriod
       .map((d) => d.summary?.[col])
-      .filter((v): v is number => v != null && v > 0);
+      .filter((v): v is NonNullable<typeof v> => v != null && v > 0)
+      .map(raw);
     if (values.length > 0) {
       yourValue = query.metric === 'zero_to_60' ? Math.min(...values) : Math.max(...values);
     }
@@ -152,7 +161,8 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
     const col = metricColumn(query.metric);
     const allValues = drives
       .map((d) => d.summary?.[col])
-      .filter((v): v is number => v != null && v > 0);
+      .filter((v): v is NonNullable<typeof v> => v != null && v > 0)
+      .map(raw);
     if (query.metric === 'trip_count') {
       rows.push({
         id: 'bench-your-best',

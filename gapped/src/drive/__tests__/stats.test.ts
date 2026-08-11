@@ -1,3 +1,4 @@
+import { degrees, mps } from '@/types/units';
 import {
   detectZeroToSixty,
   deriveSpeeds,
@@ -18,13 +19,13 @@ import {
 
 describe('haversine', () => {
   test('1 degree of latitude ≈ 111.195 km', () => {
-    expect(haversineM(ORIGIN.lat, ORIGIN.lon, ORIGIN.lat + 1, ORIGIN.lon)).toBeCloseTo(
+    expect(haversineM(ORIGIN.lat, ORIGIN.lon, degrees(ORIGIN.lat + 1), ORIGIN.lon)).toBeCloseTo(
       M_PER_DEG_LAT,
       -1, // within 5 m
     );
   });
   test('zero distance for identical points', () => {
-    expect(haversineM(51.5, -0.12, 51.5, -0.12)).toBe(0);
+    expect(haversineM(degrees(51.5), degrees(-0.12), degrees(51.5), degrees(-0.12))).toBe(0);
   });
 });
 
@@ -46,7 +47,7 @@ describe('accuracy gating', () => {
 describe('speed derivation', () => {
   test('median-of-3 suppresses a single glitch sample', () => {
     const fixes = cleanCruise();
-    fixes[30] = { ...fixes[30], speedMs: 90 }; // in-band accuracy, absurd speed
+    fixes[30] = { ...fixes[30], speedMs: mps(90) }; // in-band accuracy, absurd speed
     const speeds = deriveSpeeds(fixes);
     expect(Math.max(...speeds)).toBeLessThan(25);
   });

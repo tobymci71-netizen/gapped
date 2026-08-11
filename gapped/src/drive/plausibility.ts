@@ -8,6 +8,7 @@
  */
 
 import { Fix, PlausibilityCheck, PlausibilityReport } from './types';
+import { Metres } from '@/types/units';
 import { deriveSpeeds, gateFixes, haversineM } from './stats';
 
 /** Sustained acceleration beyond this (g) over the window is flagged. */
@@ -74,7 +75,7 @@ export function checkPlausibility(rawFixes: Fix[]): PlausibilityReport {
   // zero-jitter accuracy variance (simulated-location signature)
   const accuracies = rawFixes
     .map((f) => f.accuracyM)
-    .filter((a): a is number => a != null && a > 0);
+    .filter((a): a is Metres => a != null && a > 0);
   let jitterPass = true;
   if (accuracies.length >= 10) {
     const mean = accuracies.reduce((s, a) => s + a, 0) / accuracies.length;

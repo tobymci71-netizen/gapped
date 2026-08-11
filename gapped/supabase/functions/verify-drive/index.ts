@@ -28,6 +28,15 @@ import {
   type AttestationVerdict,
 } from '../_server/attestation.ts';
 import type { Fix } from '../_shared/types.ts';
+import {
+  readDegrees,
+  readDegreesOrNull,
+  readEpochMs,
+  readGOrNull,
+  readHpaOrNull,
+  readMetresOrNull,
+  readMpsOrNull,
+} from '../_shared/unit-boundary.ts';
 
 type FixRow = {
   t: string;
@@ -52,18 +61,21 @@ type FixRow = {
  * generated column derived from these two; see migration 0003.
  */
 function rowToFix(r: FixRow): Fix {
+  // PostgREST boundary: every column arrives as a plain JSON number. Branding
+  // goes through _shared/unit-boundary.ts so the server asserts the same SI
+  // contract the client does — see the note at the top of that file.
   return {
-    t: Date.parse(r.t),
-    lat: r.lat,
-    lon: r.lon,
-    speedMs: r.speed_ms,
-    accuracyM: r.accuracy_m,
-    altitudeM: r.altitude_m,
-    heading: r.heading,
-    accelX: r.accel_x,
-    accelY: r.accel_y,
-    accelZ: r.accel_z,
-    pressureHpa: r.pressure_hpa,
+    t: readEpochMs(Date.parse(r.t)),
+    lat: readDegrees(r.lat),
+    lon: readDegrees(r.lon),
+    speedMs: readMpsOrNull(r.speed_ms),
+    accuracyM: readMetresOrNull(r.accuracy_m),
+    altitudeM: readMetresOrNull(r.altitude_m),
+    heading: readDegreesOrNull(r.heading),
+    accelX: readGOrNull(r.accel_x),
+    accelY: readGOrNull(r.accel_y),
+    accelZ: readGOrNull(r.accel_z),
+    pressureHpa: readHpaOrNull(r.pressure_hpa),
     isMock: r.is_mock,
   };
 }

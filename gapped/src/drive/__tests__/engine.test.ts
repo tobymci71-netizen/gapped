@@ -1,10 +1,17 @@
 import { AUTO_END_HOLD_MS, AUTO_START_HOLD_MS, DriveEngine } from '../engine';
 import { Fix } from '../types';
+import { degrees, epochMs, gForce, metres, mps } from '@/types/units';
 
 const T0 = 1_700_000_000_000;
 
 function fix(t: number, speedMs: number): Fix {
-  return { t, lat: 51.5, lon: -0.12, speedMs, accuracyM: 5 };
+  return {
+    t: epochMs(t),
+    lat: degrees(51.5),
+    lon: degrees(-0.12),
+    speedMs: mps(speedMs),
+    accuracyM: metres(5),
+  };
 }
 
 describe('DriveEngine auto start/stop', () => {
@@ -41,7 +48,7 @@ describe('DriveEngine auto start/stop', () => {
 
   test('auto-ends after 3 min stationary', () => {
     const e = new DriveEngine();
-    e.startManual(T0);
+    e.startManual(epochMs(T0));
     e.onFix(fix(T0 + 1000, 20));
     let ended = false;
     const stationaryStart = T0 + 2000;
@@ -55,7 +62,7 @@ describe('DriveEngine auto start/stop', () => {
 
   test('a stop at the lights does not end the drive', () => {
     const e = new DriveEngine();
-    e.startManual(T0);
+    e.startManual(epochMs(T0));
     e.onFix(fix(T0 + 1000, 20));
     // 60 s stationary — under the 3 min hold
     for (let s = 0; s < 60; s++) {
@@ -69,18 +76,18 @@ describe('DriveEngine auto start/stop', () => {
 
   test('manual stop ends immediately', () => {
     const e = new DriveEngine();
-    e.startManual(T0);
-    const events = e.stopManual(T0 + 5000);
+    e.startManual(epochMs(T0));
+    const events = e.stopManual(epochMs(T0 + 5000));
     expect(events).toEqual([{ type: 'end', at: T0 + 5000 }]);
     expect(e.getState()).toBe('idle');
   });
 
   test('adaptive IMU rate: 10 Hz under hard accel, 1 Hz cruising', () => {
     const e = new DriveEngine();
-    e.startManual(T0);
-    expect(e.desiredImuHz(0.05)).toBe(1);
-    expect(e.desiredImuHz(0.6)).toBe(10);
-    e.stopManual(T0 + 1000);
-    expect(e.desiredImuHz(0.6)).toBe(1); // not recording → battery discipline
+    e.startManual(epochMs(T0));
+    expect(e.desiredImuHz(gForce(0.05))).toBe(1);
+    expect(e.desiredImuHz(gForce(0.6))).toBe(10);
+    e.stopManual(epochMs(T0 + 1000));
+    expect(e.desiredImuHz(gForce(0.6))).toBe(1); // not recording → battery discipline
   });
 });

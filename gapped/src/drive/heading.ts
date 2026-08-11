@@ -1,3 +1,5 @@
+import { Degrees, degrees } from '@/types/units';
+
 /**
  * Bearing sanitisation.
  *
@@ -12,6 +14,6 @@
  * by range alone; the yaw-rate gate in maneuvers.ts rejects it on physics
  * instead.
  */
-export function sanitiseHeading(h: number | null | undefined): number | null {
-  return h != null && Number.isFinite(h) && h >= 0 && h <= 360 ? h : null;
+export function sanitiseHeading(h: number | null | undefined): Degrees | null {
+  return h != null && Number.isFinite(h) && h >= 0 && h <= 360 ? degrees(h) : null;
 }

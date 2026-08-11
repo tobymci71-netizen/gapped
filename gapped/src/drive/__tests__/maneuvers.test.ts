@@ -1,3 +1,4 @@
+import { degrees, epochMs, metres, mps } from '@/types/units';
 import { aggregateManeuvers, countManeuvers, ManeuverCounts } from '../maneuvers';
 import { Fix } from '../types';
 import { cleanCruise, M_PER_DEG_LAT, ORIGIN } from './fixtures';
@@ -17,8 +18,8 @@ function headedTrace(
   const startT = opts.startT ?? 1_700_000_000_000;
   const accuracyM = opts.accuracyM ?? 6;
   const fixes: Fix[] = [];
-  let lat = ORIGIN.lat;
-  let lon = ORIGIN.lon;
+  let lat: number = ORIGIN.lat;
+  let lon: number = ORIGIN.lon;
   for (let i = 0; i < samples.length; i++) {
     const s = samples[i];
     if (i > 0) {
@@ -29,13 +30,13 @@ function headedTrace(
       lon += (stepM * Math.sin(rad)) / (M_PER_DEG_LAT * Math.cos((lat * Math.PI) / 180));
     }
     fixes.push({
-      t: startT + i * dtMs,
-      lat,
-      lon,
-      speedMs: s.speedMs,
-      accuracyM,
-      altitudeM: 30,
-      heading: s.heading,
+      t: epochMs(startT + i * dtMs),
+      lat: degrees(lat),
+      lon: degrees(lon),
+      speedMs: mps(s.speedMs),
+      accuracyM: metres(accuracyM),
+      altitudeM: metres(30),
+      heading: s.heading == null ? null : degrees(s.heading),
       accelX: null,
       accelY: null,
       accelZ: null,
@@ -181,7 +182,7 @@ describe('turns', () => {
     // CLLocation.course is -1 when invalid and expo-location passes it through
     // raw; wrapped into compass space it reads as 359 and looks like a spike.
     const clean = headedTrace(hold(20, 20, 270));
-    const glitched = clean.map((f, i) => (i === 10 ? { ...f, heading: -1 } : f));
+    const glitched = clean.map((f, i) => (i === 10 ? { ...f, heading: degrees(-1) } : f));
     expect(countManeuvers(glitched)).toEqual(countManeuvers(clean));
     expect(countManeuvers(glitched).turnPreference).toBeNull();
   });
@@ -190,7 +191,7 @@ describe('turns', () => {
     // Location.getBearing() is 0.0 when hasBearing() is false — indistinguishable
     // from due north by range, so the yaw-rate gate has to reject it.
     const clean = headedTrace(hold(20, 20, 270));
-    const glitched = clean.map((f, i) => (i === 10 ? { ...f, heading: 0 } : f));
+    const glitched = clean.map((f, i) => (i === 10 ? { ...f, heading: degrees(0) } : f));
     const m = countManeuvers(glitched);
     expect(m.leftTurns).toBe(0);
     expect(m.rightTurns).toBe(0);
@@ -199,7 +200,7 @@ describe('turns', () => {
 
   test('a heading above 360 is rejected rather than wrapped', () => {
     const clean = headedTrace(hold(20, 20, 90));
-    const glitched = clean.map((f, i) => (i === 8 ? { ...f, heading: 451 } : f));
+    const glitched = clean.map((f, i) => (i === 8 ? { ...f, heading: degrees(451) } : f));
     expect(countManeuvers(glitched)).toEqual(countManeuvers(clean));
   });
 

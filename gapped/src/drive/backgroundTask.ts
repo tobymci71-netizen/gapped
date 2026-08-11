@@ -13,6 +13,13 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { sanitiseHeading } from './heading';
+import {
+  sensorAccuracy,
+  sensorAltitude,
+  sensorCoord,
+  sensorSpeed,
+  sensorTimestamp,
+} from '@/types/boundary';
 import { Fix } from './types';
 
 export const BACKGROUND_LOCATION_TASK = 'gapped-background-location';
@@ -29,12 +36,14 @@ export function setBackgroundFixSink(sink: (fixes: Fix[]) => void): void {
 TaskManager.defineTask<LocationTaskData>(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   if (error || !data?.locations?.length) return;
   const fixes: Fix[] = data.locations.map((loc) => ({
-    t: loc.timestamp,
-    lat: loc.coords.latitude,
-    lon: loc.coords.longitude,
-    speedMs: loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : null,
-    accuracyM: loc.coords.accuracy,
-    altitudeM: loc.coords.altitude,
+    t: sensorTimestamp(loc.timestamp),
+    lat: sensorCoord(loc.coords.latitude),
+    lon: sensorCoord(loc.coords.longitude),
+    speedMs: sensorSpeed(
+      loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : null,
+    ),
+    accuracyM: sensorAccuracy(loc.coords.accuracy),
+    altitudeM: sensorAltitude(loc.coords.altitude),
     heading: sanitiseHeading(loc.coords.heading),
     isMock: (loc as { mocked?: boolean }).mocked ?? false,
   }));

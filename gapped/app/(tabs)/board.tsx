@@ -12,6 +12,7 @@ import { Text } from '@/components/Text';
 import { fetchBoard, fetchBrackets, BoardResult } from '@/board/boards';
 import { BoardMetric, BoardPeriod, BoardRow, BoardScope } from '@/board/types';
 import { formatDistance, formatSpeed } from '@/drive/units';
+import { metres, mps } from '@/types/units';
 import { bracketLabel } from '@/vehicles/brackets';
 import { haptic } from '@/lib/haptics';
 import { useProfile } from '@/state/profile';
@@ -237,12 +238,24 @@ export default function BoardScreen() {
   // A lit chip over rows nothing has verified would assert the filter applied.
   const verifiedShown = filtersLive && verifiedOnly;
 
+  /**
+   * BoardRow.value is unit-agnostic: it holds m/s for top_speed, metres for
+   * distance, seconds for zero_to_60 and a bare count for trip_count. This
+   * switch is the ONLY place that knows which, so it is where the unit is
+   * asserted — via smart constructors, not casts.
+   *
+   * It is also a coupling worth naming: src/board/boards.ts has a matching
+   * switch (metricColumn) choosing which summary field to read. If those two
+   * ever disagree the board will render one quantity in another quantity's
+   * units, and the types cannot catch it because the row carries no brand.
+   * See the FINDING comment in boards.ts.
+   */
   const formatValue = (row: BoardRow): string => {
     switch (metric) {
       case 'top_speed':
-        return formatSpeed(row.value, unitPref);
+        return formatSpeed(mps(row.value), unitPref);
       case 'distance':
-        return formatDistance(row.value, unitPref);
+        return formatDistance(metres(row.value), unitPref);
       case 'trip_count':
         return `${Math.round(row.value)}`;
       case 'zero_to_60':

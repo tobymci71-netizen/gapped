@@ -10,13 +10,15 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { readMpsOrNull } from '@/types/boundary';
+import { MetresPerSecond } from '@/types/units';
 
 export type Friend = {
   friendId: string;
   username: string;
   country: string | null;
   /** Best verified top speed, m/s (SI — convert at render). Null if none yet. */
-  bestSpeedMs: number | null;
+  bestSpeedMs: MetresPerSecond | null;
   addedAt: number;
 };
 
@@ -55,7 +57,7 @@ export async function listFriends(): Promise<FriendsResult> {
     friendId: r.friend_id,
     username: r.username ?? 'driver',
     country: r.country,
-    bestSpeedMs: r.best_speed,
+    bestSpeedMs: readMpsOrNull(r.best_speed),
     addedAt: Date.parse(r.added_at),
   }));
   return { ok: true, friends };

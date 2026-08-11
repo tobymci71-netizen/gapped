@@ -1,3 +1,4 @@
+import { epochMs, metres, mps, seconds } from '@/types/units';
 import { buildLocalBoard } from '../boards';
 import { BoardQuery } from '../types';
 import type { LocalDrive } from '@/drive/wal';
@@ -13,15 +14,15 @@ const NOW = 1_700_000_000_000;
 
 function summary(over: Partial<DriveSummary> = {}): DriveSummary {
   return {
-    startedAt: NOW - 3600_000,
-    endedAt: NOW,
-    distanceM: 12_000,
-    durationS: 900,
-    maxSpeedMs: 30,
-    avgSpeedMs: 13,
+    startedAt: epochMs(NOW - 3600_000),
+    endedAt: epochMs(NOW),
+    distanceM: metres(12_000),
+    durationS: seconds(900),
+    maxSpeedMs: mps(30),
+    avgSpeedMs: mps(13),
     maxG: null,
     avgG: null,
-    zeroTo60S: 6.2,
+    zeroTo60S: seconds(6.2),
     fixCount: 900,
     ...over,
   };
@@ -32,7 +33,7 @@ function addDrive(over: Partial<DriveSummary> = {}, startedAt = NOW - 3600_000):
     id: `d${drives.length}`,
     vehicleId: null,
     startedAt,
-    endedAt: startedAt + 900_000,
+    endedAt: epochMs(startedAt + 900_000),
     status: 'finalized',
     summary: summary(over),
   });

@@ -9,17 +9,18 @@
  */
 
 import { Fix } from './types';
+import { EpochMs, GForce, MetresPerSecond, mps } from '@/types/units';
 
 export type EngineState = 'idle' | 'arming' | 'recording' | 'stopping';
 
 export type EngineEvent =
-  | { type: 'start'; at: number }
+  | { type: 'start'; at: EpochMs }
   | { type: 'fix'; fix: Fix }
-  | { type: 'end'; at: number };
+  | { type: 'end'; at: EpochMs };
 
-export const AUTO_START_SPEED_MS = 15 / 3.6; // 15 km/h
+export const AUTO_START_SPEED_MS: MetresPerSecond = mps(15 / 3.6); // 15 km/h
 export const AUTO_START_HOLD_MS = 30_000;
-export const AUTO_END_SPEED_MS = 1.0;
+export const AUTO_END_SPEED_MS: MetresPerSecond = mps(1.0);
 export const AUTO_END_HOLD_MS = 3 * 60_000;
 
 /** |accel| (g) above which we want 10 Hz IMU sampling (0-60 capture). */
@@ -27,8 +28,8 @@ export const HIGH_RATE_ACCEL_G = 0.25;
 
 export class DriveEngine {
   private state: EngineState = 'idle';
-  private motionSince: number | null = null;
-  private stationarySince: number | null = null;
+  private motionSince: EpochMs | null = null;
+  private stationarySince: EpochMs | null = null;
   /** Fixes seen while arming, so the drive includes the run-up. */
   private armingBuffer: Fix[] = [];
 
@@ -37,7 +38,7 @@ export class DriveEngine {
   }
 
   /** Manual start — user pressed the button while safely parked. */
-  startManual(at: number): EngineEvent[] {
+  startManual(at: EpochMs): EngineEvent[] {
     if (this.state === 'recording') return [];
     this.state = 'recording';
     this.stationarySince = null;
@@ -48,7 +49,7 @@ export class DriveEngine {
   }
 
   /** Manual stop. */
-  stopManual(at: number): EngineEvent[] {
+  stopManual(at: EpochMs): EngineEvent[] {
     if (this.state !== 'recording') return [];
     this.state = 'idle';
     this.motionSince = null;
@@ -61,7 +62,7 @@ export class DriveEngine {
    * finalize). Speed for the state machine prefers device speed, else 0.
    */
   onFix(fix: Fix): EngineEvent[] {
-    const speed = fix.speedMs ?? 0;
+    const speed = fix.speedMs ?? mps(0);
     const events: EngineEvent[] = [];
 
     switch (this.state) {
@@ -113,7 +114,7 @@ export class DriveEngine {
    * Desired IMU sample rate given current dynamics: 10 Hz under hard
    * accel/braking (0-60 needs it), 1 Hz cruising (battery discipline).
    */
-  desiredImuHz(currentAccelG: number | null): 1 | 10 {
+  desiredImuHz(currentAccelG: GForce | null): 1 | 10 {
     if (this.state !== 'recording') return 1;
     return currentAccelG != null && Math.abs(currentAccelG) > HIGH_RATE_ACCEL_G ? 10 : 1;
   }

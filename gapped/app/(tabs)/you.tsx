@@ -23,6 +23,7 @@ import { aggregateManeuvers, countManeuvers, ManeuverCounts } from '@/drive/mane
 import { DriveSummary } from '@/drive/types';
 import { LocalDrive, listDrives, readFixes } from '@/drive/wal';
 import { distanceForDisplay, formatDuration, formatSpeed, UnitPref } from '@/drive/units';
+import { metres, mps, seconds } from '@/types/units';
 import { useProfile } from '@/state/profile';
 import { useRecords } from '@/state/records';
 import { color, space } from '@/theme/tokens';
@@ -153,11 +154,11 @@ export default function YouScreen() {
     }, []),
   );
 
-  const totalDistanceM = drives.reduce((s, d) => s + d.summary.distanceM, 0);
-  const totalDurationS = drives.reduce((s, d) => s + d.summary.durationS, 0);
+  const totalDistanceM = metres(drives.reduce((s, d) => s + d.summary.distanceM, 0));
+  const totalDurationS = seconds(drives.reduce((s, d) => s + d.summary.durationS, 0));
   // null, not 0: with no drives there is no top speed to report.
   const topSpeedMs =
-    drives.length > 0 ? drives.reduce((s, d) => Math.max(s, d.summary.maxSpeedMs), 0) : null;
+    drives.length > 0 ? mps(drives.reduce((s, d) => Math.max(s, d.summary.maxSpeedMs), 0)) : null;
   const topSpeed = topSpeedMs != null ? formatSpeed(topSpeedMs, unitPref).split(' ') : null;
   const dist = distanceForDisplay(totalDistanceM, unitPref);
 
@@ -202,7 +203,7 @@ export default function YouScreen() {
   const distPeak = distBins != null ? Math.max(...distBins) : 0;
 
   const avgDistance =
-    drives.length > 0 ? distanceForDisplay(totalDistanceM / drives.length, unitPref) : null;
+    drives.length > 0 ? distanceForDisplay(metres(totalDistanceM / drives.length), unitPref) : null;
 
   return (
     <Screen>

@@ -4,6 +4,7 @@ import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { speedForDisplay } from '@/drive/units';
+import { mps } from '@/types/units';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { duration } from '@/theme/motion';
 import { useProfile } from '@/state/profile';
@@ -16,15 +17,22 @@ import { color, space } from '@/theme/tokens';
  * object; ours is the real component, not an illustration). The dial sweeps
  * up to a demo speed on mount.
  */
-/** Demo speed the hero dial sweeps to, m/s (≈ 87 mph / 140 km/h). */
-const DEMO_MS = 38.9;
+/**
+ * Demo speed the hero dial sweeps to, m/s (≈ 87 mph / 140 km/h).
+ *
+ * Branded. This constant is where the 313 km/h bug lived: it briefly held 87,
+ * a value already in display units (mph), which speedForDisplay then converted
+ * a second time. With MetresPerSecond on the parameter, a bare 87 no longer
+ * compiles here — the mistake is now caught at build time, not on a screenshot.
+ */
+const DEMO_MS = mps(38.9);
 
 export default function Welcome() {
   const router = useRouter();
   const reduced = useReducedMotion();
   const unitPref = useProfile((s) => s.unitPref);
   const imperial = unitPref === 'imperial';
-  const [demoSpeed, setDemoSpeed] = useState(0);
+  const [demoSpeed, setDemoSpeed] = useState(mps(0));
   // demoSpeed is SI (m/s) like every other speed in the app, so speedForDisplay
   // can convert it. It used to be 87 in *display* units, which passed through
   // the metric branch as 87 m/s and put 313 km/h on the first screen.

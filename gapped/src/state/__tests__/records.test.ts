@@ -1,3 +1,4 @@
+import { epochMs, gForce, metres, mps, seconds } from '@/types/units';
 import { DriveSummary } from '@/drive/types';
 import {
   applyImprovements,
@@ -10,14 +11,14 @@ import {
 
 function summary(partial: Partial<DriveSummary>): DriveSummary {
   return {
-    startedAt: 1_700_000_000_000,
-    endedAt: 1_700_000_600_000,
-    distanceM: 10_000,
-    durationS: 600,
-    maxSpeedMs: 30,
-    avgSpeedMs: 16,
-    maxG: 0.4,
-    avgG: 0.2,
+    startedAt: epochMs(1_700_000_000_000),
+    endedAt: epochMs(1_700_000_600_000),
+    distanceM: metres(10_000),
+    durationS: seconds(600),
+    maxSpeedMs: mps(30),
+    avgSpeedMs: mps(16),
+    maxG: gForce(0.4),
+    avgG: gForce(0.2),
     zeroTo60S: null,
     fixCount: 600,
     ...partial,
@@ -35,20 +36,20 @@ describe('personal bests', () => {
 
   test('0-60 counts only when detected, and lower is better', () => {
     const withPb = applyImprovements(EMPTY_PBS, [
-      { metric: 'zeroTo60S', prev: null, next: 6.0 },
+      { metric: 'zeroTo60S', prev: null, next: seconds(6.0) },
     ]);
     expect(findImprovements(withPb, summary({ zeroTo60S: null }))).not.toContainEqual(
       expect.objectContaining({ metric: 'zeroTo60S' }),
     );
-    const better = findImprovements(withPb, summary({ zeroTo60S: 5.2 }));
-    expect(better).toContainEqual(expect.objectContaining({ metric: 'zeroTo60S', next: 5.2 }));
-    const worse = findImprovements(withPb, summary({ zeroTo60S: 7.9 }));
+    const better = findImprovements(withPb, summary({ zeroTo60S: seconds(5.2) }));
+    expect(better).toContainEqual(expect.objectContaining({ metric: 'zeroTo60S', next: seconds(5.2) }));
+    const worse = findImprovements(withPb, summary({ zeroTo60S: seconds(7.9) }));
     expect(worse.map((i) => i.metric)).not.toContain('zeroTo60S');
   });
 
   test('slower drive does not beat a speed PB', () => {
-    const pbs = applyImprovements(EMPTY_PBS, [{ metric: 'topSpeedMs', prev: null, next: 40 }]);
-    const imps = findImprovements(pbs, summary({ maxSpeedMs: 35 }));
+    const pbs = applyImprovements(EMPTY_PBS, [{ metric: 'topSpeedMs', prev: null, next: mps(40) }]);
+    const imps = findImprovements(pbs, summary({ maxSpeedMs: mps(35) }));
     expect(imps.map((i) => i.metric)).not.toContain('topSpeedMs');
   });
 });

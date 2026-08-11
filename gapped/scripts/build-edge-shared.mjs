@@ -16,6 +16,11 @@ const outDir = join(root, 'supabase', 'functions', '_shared');
 mkdirSync(outDir, { recursive: true });
 
 const files = [
+  // Branded quantity types. Must come first conceptually: every other shared
+  // module imports from it, and the edge functions need the same brands the
+  // app uses or the shared maths would silently accept the wrong unit.
+  ['src/types/units.ts', 'unit-types.ts'],
+  ['src/types/boundary.ts', 'unit-boundary.ts'],
   ['src/drive/types.ts', 'types.ts'],
   ['src/drive/units.ts', 'units.ts'],
   ['src/drive/stats.ts', 'stats.ts'],
@@ -41,6 +46,8 @@ for (const [src, out] of files) {
   );
   // path-alias imports used by src modules → local siblings
   code = code.replace(/from '@\/lib\/sha256'/g, `from './sha256.ts'`);
+  code = code.replace(/from '@\/types\/units'/g, `from './unit-types.ts'`);
+  code = code.replace(/from '@\/types\/boundary'/g, `from './unit-boundary.ts'`);
   code = code.replace(/from '@\/drive\/([^']+)'/g, `from './$1.ts'`);
   writeFileSync(join(outDir, out), header + code);
 }

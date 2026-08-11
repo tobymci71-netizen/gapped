@@ -13,6 +13,7 @@ import {
 import { decodePolyline, encodePolyline, routePolyline } from '../polyline';
 import { haversineM, totalDistanceM } from '../stats';
 import { traceFromSpeeds } from './fixtures';
+import { degrees, metres } from '@/types/units';
 
 describe('sha256 (FIPS 180-4 vectors)', () => {
   test('empty string', () => {
@@ -79,23 +80,23 @@ describe('privacy zones', () => {
   const salt = 'device-salt-1';
 
   test('zone centre is offset 200–800 m from the true centre, deterministically', () => {
-    const z1 = makePrivacyZone(51.5, -0.12, 300, salt, 'home');
-    const z2 = makePrivacyZone(51.5, -0.12, 300, salt, 'home');
+    const z1 = makePrivacyZone(degrees(51.5), degrees(-0.12), metres(300), salt, 'home');
+    const z2 = makePrivacyZone(degrees(51.5), degrees(-0.12), metres(300), salt, 'home');
     expect(z1).toEqual(z2);
-    const offset = haversineM(51.5, -0.12, z1.lat, z1.lon);
+    const offset = haversineM(degrees(51.5), degrees(-0.12), z1.lat, z1.lon);
     expect(offset).toBeGreaterThanOrEqual(ZONE_OFFSET_MIN_M * 0.95);
     expect(offset).toBeLessThanOrEqual(ZONE_OFFSET_MAX_M * 1.05);
   });
 
   test('the widened radius still covers the true centre', () => {
-    const z = makePrivacyZone(51.5, -0.12, 300, salt, 'work');
-    expect(haversineM(51.5, -0.12, z.lat, z.lon)).toBeLessThanOrEqual(z.radiusM);
+    const z = makePrivacyZone(degrees(51.5), degrees(-0.12), metres(300), salt, 'work');
+    expect(haversineM(degrees(51.5), degrees(-0.12), z.lat, z.lon)).toBeLessThanOrEqual(z.radiusM);
   });
 
   test('fixes inside a zone are excluded', () => {
     const fixes = traceFromSpeeds(Array.from({ length: 300 }, () => 20));
     const mid = fixes[150];
-    const zone = { lat: mid.lat, lon: mid.lon, radiusM: 500 };
+    const zone = { lat: mid.lat, lon: mid.lon, radiusM: metres(500) };
     const filtered = excludeZones(fixes, [zone]);
     expect(filtered.length).toBeLessThan(fixes.length);
     for (const f of filtered) {
@@ -107,9 +108,9 @@ describe('privacy zones', () => {
 describe('polyline codec', () => {
   test("Google's documented example round-trips", () => {
     const pts = [
-      { lat: 38.5, lon: -120.2 },
-      { lat: 40.7, lon: -120.95 },
-      { lat: 43.252, lon: -126.453 },
+      { lat: degrees(38.5), lon: degrees(-120.2) },
+      { lat: degrees(40.7), lon: degrees(-120.95) },
+      { lat: degrees(43.252), lon: degrees(-126.453) },
     ];
     const encoded = encodePolyline(pts);
     expect(encoded).toBe('_p~iF~ps|U_ulLnnqC_mqNvxq`@');
@@ -128,7 +129,12 @@ describe('polyline codec', () => {
     const origLen = totalDistanceM(fixes);
     let decLen = 0;
     for (let i = 1; i < decoded.length; i++) {
-      decLen += haversineM(decoded[i - 1].lat, decoded[i - 1].lon, decoded[i].lat, decoded[i].lon);
+      decLen += haversineM(
+        degrees(decoded[i - 1].lat),
+        degrees(decoded[i - 1].lon),
+        degrees(decoded[i].lat),
+        degrees(decoded[i].lon),
+      );
     }
     expect(Math.abs(decLen - origLen)).toBeLessThan(20);
   });

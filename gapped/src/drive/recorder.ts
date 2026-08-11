@@ -19,6 +19,17 @@ import {
 } from './backgroundTask';
 import { DriveEngine } from './engine';
 import { sanitiseHeading } from './heading';
+import { EpochMs, Metres, MetresPerSecond, gForce, metres, mps } from '@/types/units';
+import {
+  nowEpochMs,
+  sensorAccel,
+  sensorAccuracy,
+  sensorAltitude,
+  sensorCoord,
+  sensorPressure,
+  sensorSpeed,
+  sensorTimestamp,
+} from '@/types/boundary';
 import { haversineM } from './stats';
 import { DriveSummary, Fix } from './types';
 import * as wal from './wal';
@@ -27,9 +38,9 @@ type LiveState = {
   engineState: ReturnType<DriveEngine['getState']>;
   driveId: string | null;
   /** Current smoothed speed, m/s (SI — convert at render). */
-  speedMs: number;
-  distanceM: number;
-  startedAt: number | null;
+  speedMs: MetresPerSecond;
+  distanceM: Metres;
+  startedAt: EpochMs | null;
   lastSummary: DriveSummary | null;
   recovered: wal.LocalDrive[];
   permission: 'unknown' | 'granted' | 'denied';
@@ -55,8 +66,8 @@ const makeDriveId = uuid;
 export const useDriveStore = create<LiveState & Actions>((set, get) => ({
   engineState: 'idle',
   driveId: null,
-  speedMs: 0,
-  distanceM: 0,
+  speedMs: mps(0),
+  distanceM: metres(0),
   startedAt: null,
   lastSummary: null,
   recovered: [],
@@ -90,11 +101,11 @@ export const useDriveStore = create<LiveState & Actions>((set, get) => ({
   },
 
   startDrive: () => {
-    handleEvents(engine.startManual(Date.now()), set, get);
+    handleEvents(engine.startManual(nowEpochMs()), set, get);
   },
 
   stopDrive: () => {
-    handleEvents(engine.stopManual(Date.now()), set, get);
+    handleEvents(engine.stopManual(nowEpochMs()), set, get);
   },
 }));
 
@@ -106,7 +117,7 @@ function processFix(fix: Fix, set: Set, get: Get) {
   lastProcessedT = fix.t;
   const events = engine.onFix(fix);
   handleEvents(events, set, get);
-  set({ engineState: engine.getState(), speedMs: fix.speedMs ?? 0 });
+  set({ engineState: engine.getState(), speedMs: fix.speedMs ?? mps(0) });
 }
 
 async function startWatching(set: Set, get: Get) {
@@ -117,10 +128,10 @@ async function startWatching(set: Set, get: Get) {
       processFix(
         {
           ...f,
-          accelX: latestAccel?.x ?? null,
-          accelY: latestAccel?.y ?? null,
-          accelZ: latestAccel?.z ?? null,
-          pressureHpa: latestPressure,
+          accelX: sensorAccel(latestAccel?.x),
+          accelY: sensorAccel(latestAccel?.y),
+          accelZ: sensorAccel(latestAccel?.z),
+          pressureHpa: sensorPressure(latestPressure),
         },
         set,
         get,
@@ -131,7 +142,7 @@ async function startWatching(set: Set, get: Get) {
   Accelerometer.setUpdateInterval(1000);
   Accelerometer.addListener((s) => {
     latestAccel = s;
-    const mag = Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2);
+    const mag = gForce(Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2));
     const hz = engine.desiredImuHz(mag);
     Accelerometer.setUpdateInterval(hz === 10 ? 100 : 1000);
   });
@@ -148,17 +159,19 @@ async function startWatching(set: Set, get: Get) {
     (loc) => {
       processFix(
         {
-          t: loc.timestamp,
-          lat: loc.coords.latitude,
-          lon: loc.coords.longitude,
-          speedMs: loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : null,
-          accuracyM: loc.coords.accuracy,
-          altitudeM: loc.coords.altitude,
+          t: sensorTimestamp(loc.timestamp),
+          lat: sensorCoord(loc.coords.latitude),
+          lon: sensorCoord(loc.coords.longitude),
+          speedMs: sensorSpeed(
+            loc.coords.speed != null && loc.coords.speed >= 0 ? loc.coords.speed : null,
+          ),
+          accuracyM: sensorAccuracy(loc.coords.accuracy),
+          altitudeM: sensorAltitude(loc.coords.altitude),
           heading: sanitiseHeading(loc.coords.heading),
-          accelX: latestAccel?.x ?? null,
-          accelY: latestAccel?.y ?? null,
-          accelZ: latestAccel?.z ?? null,
-          pressureHpa: latestPressure,
+          accelX: sensorAccel(latestAccel?.x),
+          accelY: sensorAccel(latestAccel?.y),
+          accelZ: sensorAccel(latestAccel?.z),
+          pressureHpa: sensorPressure(latestPressure),
           isMock: (loc as { mocked?: boolean }).mocked ?? false,
         },
         set,
@@ -179,7 +192,7 @@ function handleEvents(events: ReturnType<DriveEngine['onFix']>, set: Set, get: G
       // would quietly credit this drive to whatever they happen to be driving
       // then — a leaderboard that claims to be believable cannot do that.
       wal.openDrive(id, ev.at, useProfile.getState().vehicleId);
-      set({ driveId: id, startedAt: ev.at, distanceM: 0, engineState: engine.getState() });
+      set({ driveId: id, startedAt: ev.at, distanceM: metres(0), engineState: engine.getState() });
       // Keep fixes flowing with the screen off. No-op without background permission.
       startBackgroundUpdates().catch(() => undefined);
     } else if (ev.type === 'fix') {
@@ -194,7 +207,7 @@ function handleEvents(events: ReturnType<DriveEngine['onFix']>, set: Set, get: G
         }
       }
       lastFix = ev.fix;
-      set({ distanceM: accumulatedM });
+      set({ distanceM: metres(accumulatedM) });
     } else if (ev.type === 'end') {
       const id = get().driveId;
       if (!id) continue;
@@ -209,7 +222,7 @@ function handleEvents(events: ReturnType<DriveEngine['onFix']>, set: Set, get: G
         startedAt: null,
         lastSummary: summary,
         engineState: engine.getState(),
-        speedMs: 0,
+        speedMs: mps(0),
       });
     }
   }
