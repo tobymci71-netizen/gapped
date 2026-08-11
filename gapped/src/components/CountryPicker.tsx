@@ -12,8 +12,12 @@ import { color, font, radius, space, type } from '@/theme/tokens';
 /**
  * Sheet-style searchable country picker — the pattern from TripRank's
  * "Select Country" sheet: grabber, title, search field, full flag list.
- * All 264 ISO regions ship (generated from Intl at build time), so nobody's
- * country is missing.
+ * All 258 current ISO 3166-1 regions ship, so nobody's country is missing.
+ * Withdrawn ISO 3166-3 codes are deliberately excluded: the generated list
+ * carried DY, HV, UK, NH, VD and RH alongside their modern replacements, so
+ * "United Kingdom" appeared twice — once as GB and once as UK with a flag
+ * that does not render. Two codes for one country means two country
+ * leaderboards for one country, since board_top filters on the code.
  */
 
 type Country = { code: string; name: string; flag: string };
@@ -77,7 +81,7 @@ export function CountryPicker({
                 </Text>
               </PressableScale>
             );
-            // Only the first screenful staggers in. This list is 264 countries
+            // Only the first screenful staggers in. This list is 258 countries
             // and FlashList recycles cells, so an entrance on every row replays
             // the animation on every scroll — the same guard, and the same
             // reason, as SearchableListSheet.
