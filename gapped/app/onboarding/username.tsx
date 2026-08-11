@@ -4,6 +4,7 @@ import { StyleSheet, TextInput, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { OnboardingStep } from '@/components/OnboardingStep';
 import { Text } from '@/components/Text';
+import { SAFETY_ACKNOWLEDGEMENT } from '@/config/flags';
 import { useProfile } from '@/state/profile';
 import { color, font, radius, space, type } from '@/theme/tokens';
 
@@ -11,7 +12,7 @@ const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 
 export default function UsernameStep() {
   const router = useRouter();
-  const { username, setUsername } = useProfile();
+  const { username, setUsername, completeOnboarding } = useProfile();
   const [value, setValue] = useState(username ?? '');
 
   const normalized = value.trim().toLowerCase();
@@ -28,7 +29,15 @@ export default function UsernameStep() {
           disabled={!valid}
           onPress={() => {
             setUsername(normalized);
-            router.push('/onboarding/safety');
+            // The acknowledgement is the reversible minimum for putting a
+            // public speed board on public roads; SAFETY_ACKNOWLEDGEMENT=false
+            // routes straight into the app without deleting anything.
+            if (SAFETY_ACKNOWLEDGEMENT) {
+              router.push('/onboarding/safety');
+            } else {
+              completeOnboarding();
+              router.replace('/(tabs)/drive');
+            }
           }}
         />
       }

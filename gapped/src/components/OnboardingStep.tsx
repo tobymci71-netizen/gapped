@@ -4,13 +4,19 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
+import { SAFETY_ACKNOWLEDGEMENT } from '@/config/flags';
 import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { duration, easing } from '@/theme/motion';
 import { color, space } from '@/theme/tokens';
 
-export const TOTAL_STEPS = 7;
+/**
+ * Steps in onboarding, so the progress bar fills to exactly 100% on the last
+ * one. Shrinks by one when the road-legal acknowledgement is switched off,
+ * otherwise the bar would stop short of full and look broken.
+ */
+export const TOTAL_STEPS = SAFETY_ACKNOWLEDGEMENT ? 7 : 6;
 
 type Props = {
   step: number; // 1-based
