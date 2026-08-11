@@ -13,7 +13,7 @@ import { uuid } from '@/lib/ids';
 
 export type VehicleKind = 'car' | 'motorbike';
 
-type ProfileState = {
+type ProfileData = {
   onboarded: boolean;
   unitPref: UnitPref;
   /**
@@ -34,6 +34,9 @@ type ProfileState = {
   username: string | null;
   safetyAccepted: boolean;
 
+};
+
+type ProfileState = ProfileData & {
   setUnitPref: (u: UnitPref) => void;
   /** Accepts any string; stores only a canonical code, or null. */
   setCountry: (c: string | null) => void;
@@ -42,20 +45,32 @@ type ProfileState = {
   setUsername: (u: string) => void;
   acceptSafety: () => void;
   completeOnboarding: () => void;
+  /** Returns the store to first-run state. Used by account deletion. */
+  reset: () => void;
+};
+
+/**
+ * The first-run state, named so that `reset()` and store creation cannot drift
+ * apart. Account deletion previously re-listed these nine fields by hand at the
+ * call site: adding a tenth field to the store would have left it surviving a
+ * "full" wipe, with nothing to catch it.
+ */
+const INITIAL: ProfileData = {
+  onboarded: false,
+  unitPref: 'metric',
+  country: null,
+  vehicleKind: null,
+  vehicleMake: null,
+  vehicleModel: null,
+  vehicleId: null,
+  username: null,
+  safetyAccepted: false,
 };
 
 export const useProfile = create<ProfileState>()(
   persist(
     (set) => ({
-      onboarded: false,
-      unitPref: 'metric',
-      country: null,
-      vehicleKind: null,
-      vehicleMake: null,
-      vehicleModel: null,
-      vehicleId: null,
-      username: null,
-      safetyAccepted: false,
+      ...INITIAL,
 
       setUnitPref: (unitPref) => set({ unitPref }),
       // Canonicalised here rather than at the call sites. This is the only
@@ -83,6 +98,7 @@ export const useProfile = create<ProfileState>()(
       setUsername: (username) => set({ username }),
       acceptSafety: () => set({ safetyAccepted: true }),
       completeOnboarding: () => set({ onboarded: true }),
+      reset: () => set({ ...INITIAL }),
     }),
     {
       name: 'gapped-profile',

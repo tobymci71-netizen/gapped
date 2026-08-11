@@ -114,6 +114,8 @@ type RecordsState = {
   driveDays: string[]; // persisted as array; Set at call sites
   /** Returns the improvements this summary achieved (already applied). */
   recordDrive: (s: DriveSummary) => PbImprovement[];
+  /** Returns the store to first-run state. Used by account deletion. */
+  reset: () => void;
 };
 
 export const useRecords = create<RecordsState>()(
@@ -131,6 +133,7 @@ export const useRecords = create<RecordsState>()(
         });
         return imps;
       },
+      reset: () => set({ pbs: EMPTY_PBS, driveDays: [] }),
     }),
     { name: 'gapped-records', storage: createJSONStorage(() => AsyncStorage) },
   ),

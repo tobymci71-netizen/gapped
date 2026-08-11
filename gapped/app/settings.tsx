@@ -12,7 +12,7 @@ import { mps } from '@/types/units';
 import { clearAll } from '@/drive/wal';
 import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
-import { EMPTY_PBS, useRecords } from '@/state/records';
+import { useRecords } from '@/state/records';
 import { useProfile } from '@/state/profile';
 import { color, space } from '@/theme/tokens';
 
@@ -54,25 +54,51 @@ async function deleteAccount(): Promise<void> {
     }
   }
 
-  clearAll();
+  // Past the server call, the account is already gone. Everything below is
+  // local cleanup, and each step is independent — one throwing must not stop
+  // the others, or the app is left showing a deleted user's drives.
+  const localFailures: string[] = [];
+  const step = (name: string, fn: () => void) => {
+    try {
+      fn();
+    } catch {
+      localFailures.push(name);
+    }
+  };
+
+  step('sqlite', clearAll);
 
   // Reset in memory first, then drop the persisted copy — a pending persist
-  // write can only ever re-persist these defaults.
-  useProfile.setState({
-    onboarded: false,
-    unitPref: 'metric',
-    country: null,
-    vehicleKind: null,
-    vehicleMake: null,
-    vehicleModel: null,
-    vehicleId: null,
-    username: null,
-    safetyAccepted: false,
+  // write can only ever re-persist first-run defaults. The field list lives on
+  // the store (INITIAL) rather than here, so adding a field to the profile
+  // cannot leave it surviving a "full" wipe.
+  step('profile', () => {
+    useProfile.getState().reset();
+    useProfile.persist.clearStorage();
   });
-  useProfile.persist.clearStorage();
+  step('records', () => {
+    useRecords.getState().reset();
+    useRecords.persist.clearStorage();
+  });
 
-  useRecords.setState({ pbs: EMPTY_PBS, driveDays: [] });
-  useRecords.persist.clearStorage();
+  if (localFailures.length > 0) {
+    // The account IS deleted; only this device's leftovers remain, and a
+    // reinstall clears them. Reported rather than swallowed so the crash
+    // reporter sees it.
+    throw new LocalWipeError(localFailures);
+  }
+}
+
+/**
+ * Thrown when the server deletion succeeded but local cleanup did not. Distinct
+ * from a server failure because the user-facing consequence is the opposite:
+ * their account is gone and this device is merely stale.
+ */
+export class LocalWipeError extends Error {
+  constructor(readonly steps: string[]) {
+    super(`account deleted, but local cleanup failed: ${steps.join(', ')}`);
+    this.name = 'LocalWipeError';
+  }
 }
 
 export default function SettingsScreen() {
@@ -93,8 +119,9 @@ export default function SettingsScreen() {
 
   const confirmDelete = () => {
     haptic.press();
-    // Says exactly what the code does. Anything already uploaded is untouched
-    // until the server delete_account RPC exists, so we do not claim it.
+    // Says exactly what the code does. delete_account() removes the auth user
+    // and every row that cascades from it, verified by pgTAP against an orphan
+    // search rather than a row count — so claiming the server half is honest.
     Alert.alert(
       'Delete account?',
       'This erases your profile, records, streaks and every drive — on this device and on our servers, including any leaderboard entries. It cannot be undone.',
