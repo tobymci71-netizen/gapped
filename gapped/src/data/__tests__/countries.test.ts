@@ -15,7 +15,12 @@ import {
   isCanonicalCountry,
 } from '../countries';
 
-const CODES = COUNTRIES.map((c) => c.code);
+/**
+ * Widened to string[] on purpose. These tests check membership for arbitrary
+ * inputs — aliases, reserved codes, typos — and a CountryCode[] would refuse
+ * the very values the tests exist to prove are absent.
+ */
+const CODES: string[] = COUNTRIES.map((c) => c.code);
 
 describe('the shipped list', () => {
   test('holds 249 assigned ISO 3166-1 codes plus XK', () => {
