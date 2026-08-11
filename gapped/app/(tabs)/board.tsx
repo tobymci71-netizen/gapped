@@ -2,7 +2,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import countries from '@/data/countries.json';
+import { countryByCode } from '@/data/countries';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Entrance } from '@/components/Entrance';
 import { PressableScale } from '@/components/PressableScale';
@@ -12,7 +12,6 @@ import { Text } from '@/components/Text';
 import { fetchBoard, fetchBrackets, BoardResult } from '@/board/boards';
 import { BoardMetric, BoardPeriod, BoardRow, BoardScope } from '@/board/types';
 import { formatDistance, formatSpeed } from '@/drive/units';
-import { metres, mps } from '@/types/units';
 import { bracketLabel } from '@/vehicles/brackets';
 import { haptic } from '@/lib/haptics';
 import { useProfile } from '@/state/profile';
@@ -51,7 +50,6 @@ const MONTHS = [
   'Dec',
 ];
 
-const FLAGS = countries as { code: string; name: string; flag: string }[];
 
 /** Fallback glyph when the profile carries no country. */
 const NO_FLAG = '🏳️';
@@ -164,10 +162,7 @@ export default function BoardScreen() {
 
   // The reference labels its scope options with flags; ours names the user's
   // own country rather than a generic "Country".
-  const countryEntry = useMemo(
-    () => (country ? FLAGS.find((c) => c.code === country) : undefined),
-    [country],
-  );
+  const countryEntry = useMemo(() => countryByCode(country), [country]);
   const scopes: Option<BoardScope>[] = useMemo(
     () => [
       { key: 'global', label: 'World', glyph: '🌍' },
@@ -196,9 +191,12 @@ export default function BoardScreen() {
     [brackets],
   );
 
-  // Only the newest request may commit. formatValue reads the *current*
-  // metric, so a late response would be rendered through the wrong formatter
-  // and labelled with the wrong unit.
+  // Only the newest request may commit, so a slow response for an earlier
+  // filter cannot overwrite a newer one. This used to carry a second job —
+  // rows were formatted using the screen's current metric, so a late response
+  // would be labelled with the wrong unit — but rows now carry their own
+  // metric and format correctly regardless of arrival order. What remains is
+  // ordering alone.
   const requestId = useRef(0);
   // A local board holds only this device's drives: scope and verification are
   // server concepts, so those controls are shown inert rather than lying. Held
@@ -239,27 +237,38 @@ export default function BoardScreen() {
   const verifiedShown = filtersLive && verifiedOnly;
 
   /**
-   * BoardRow.value is unit-agnostic: it holds m/s for top_speed, metres for
-   * distance, seconds for zero_to_60 and a bare count for trip_count. This
-   * switch is the ONLY place that knows which, so it is where the unit is
-   * asserted — via smart constructors, not casts.
+   * Formats a row's value in the unit that row's metric is measured in.
    *
-   * It is also a coupling worth naming: src/board/boards.ts has a matching
-   * switch (metricColumn) choosing which summary field to read. If those two
-   * ever disagree the board will render one quantity in another quantity's
-   * units, and the types cannot catch it because the row carries no brand.
-   * See the FINDING comment in boards.ts.
+   * Two things changed here when BoardRow.value became a discriminated union.
+   *
+   * The unit no longer has to be asserted: `row.metric` narrows `row.value` to
+   * a single branded type, so `formatSpeed` can only ever be handed m/s. The
+   * smart-constructor calls that used to re-brand a bare number are gone, and
+   * with them the possibility that this switch and the one in boards.ts drift
+   * apart — they now share a discriminant, and adding a fifth metric fails to
+   * compile in both files until both handle it.
+   *
+   * More importantly, this switched on `metric` — the screen's *current*
+   * selection — rather than on the row. Rows fetched for one metric and still
+   * on screen when the pill changed were formatted in the new metric's units:
+   * a 0-60 time rendered as "4 m", a distance rendered as a speed. Switching
+   * on `row.metric` makes the row carry its own unit, so a stale row formats
+   * correctly no matter what the pill says.
    */
   const formatValue = (row: BoardRow): string => {
-    switch (metric) {
+    switch (row.metric) {
       case 'top_speed':
-        return formatSpeed(mps(row.value), unitPref);
+        return formatSpeed(row.value, unitPref);
       case 'distance':
-        return formatDistance(metres(row.value), unitPref);
+        return formatDistance(row.value, unitPref);
       case 'trip_count':
         return `${Math.round(row.value)}`;
       case 'zero_to_60':
         return `${row.value.toFixed(2)} s`;
+      default: {
+        const unhandled: never = row;
+        return unhandled;
+      }
     }
   };
 

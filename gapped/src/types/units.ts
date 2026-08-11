@@ -94,6 +94,14 @@ export type Kilograms = Brand<number, 'kg'>;
 /** Metric horsepower as reported by NHTSA vPIC. */
 export type Horsepower = Brand<number, 'hp'>;
 
+/**
+ * A dimensionless tally — drives completed, runs recorded. Branded despite
+ * having no unit, because the board ranks by a value whose meaning depends on
+ * the metric: without a brand, a count is assignable everywhere a distance is,
+ * and "12 drives" can be rendered as "12 m".
+ */
+export type Count = Brand<number, 'count'>;
+
 // ── Smart constructors ──────────────────────────────────────────────────────
 // The ONLY sanctioned way to brand a raw number. Each is an identity function
 // at runtime; TypeScript erases the cast entirely.
@@ -112,6 +120,7 @@ export const degrees = (n: number): Degrees => n as Degrees;
 export const hectopascals = (n: number): Hectopascals => n as Hectopascals;
 export const kilograms = (n: number): Kilograms => n as Kilograms;
 export const horsepower = (n: number): Horsepower => n as Horsepower;
+export const count = (n: number): Count => n as Count;
 
 /** Strip a brand back to a plain number. Use at serialisation boundaries and
  *  when handing a value to a numeric API that does not care about units. */

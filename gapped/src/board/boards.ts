@@ -15,9 +15,10 @@
 
 import { listDrives } from '@/drive/wal';
 import { supabase } from '@/lib/supabase';
+import { DriveSummary } from '@/drive/types';
 import { MS_PER_MPH } from '@/drive/units';
-import { raw } from '@/types/units';
-import { BoardQuery, BoardRow } from './types';
+import { count, metres, mps, raw, seconds } from '@/types/units';
+import { BoardMetric, BoardQuery, BoardRow, BoardValue } from './types';
 
 /** Published manufacturer 0-60 mph figures — benchmark ghosts, not people. */
 const ZERO_TO_60_BENCHMARKS: { name: string; seconds: number }[] = [
@@ -50,18 +51,62 @@ function periodStart(period: BoardQuery['period'], now: number): number {
   }
 }
 
-function metricColumn(metric: BoardQuery['metric']): 'maxSpeedMs' | 'distanceM' | 'zeroTo60S' {
+/**
+ * Read the field a metric ranks on out of a drive summary, tagged with its
+ * metric so the unit travels with the number.
+ *
+ * This replaces `metricColumn`, which returned a field name and — because
+ * `trip_count` has no summary field — returned `'distanceM'` for it with the
+ * comment "count handled separately". Anything that forgot to handle it
+ * separately silently ranked drives by distance and labelled the result a
+ * count. Returning null for trip_count makes that impossible: there is no
+ * field to read, so the type says so.
+ */
+function summaryValue(metric: BoardMetric, s: DriveSummary): BoardValue | null {
   switch (metric) {
     case 'top_speed':
-      return 'maxSpeedMs';
+      return { metric, value: s.maxSpeedMs };
     case 'distance':
-      return 'distanceM';
+      return { metric, value: s.distanceM };
     case 'zero_to_60':
-      return 'zeroTo60S';
+      return s.zeroTo60S == null ? null : { metric, value: s.zeroTo60S };
     case 'trip_count':
-      return 'distanceM'; // count handled separately
+      // Not a summary field. Counts are derived from how many drives there
+      // are, never from what is inside one.
+      return null;
   }
 }
+
+/**
+ * Tag a plain SI number coming from outside with the metric it belongs to.
+ *
+ * The board RPC returns `value` as a bare JSON number whose unit is a property
+ * of the row's metric, not of the value — the same situation as SQLite and the
+ * sensors, and handled the same way: asserted once, at the boundary, in one
+ * place rather than at each use.
+ */
+function boardValue(metric: BoardMetric, si: number): BoardValue {
+  switch (metric) {
+    case 'top_speed':
+      return { metric, value: mps(si) };
+    case 'distance':
+      return { metric, value: metres(si) };
+    case 'zero_to_60':
+      return { metric, value: seconds(si) };
+    case 'trip_count':
+      return { metric, value: count(si) };
+  }
+}
+
+/** Compare two same-metric values; lower wins for 0-60, higher for the rest. */
+const better = (metric: BoardMetric, a: BoardValue, b: BoardValue): BoardValue =>
+  metric === 'zero_to_60'
+    ? raw(a.value) <= raw(b.value)
+      ? a
+      : b
+    : raw(a.value) >= raw(b.value)
+      ? a
+      : b;
 
 export type BoardResult = {
   rows: BoardRow[];
@@ -99,7 +144,8 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
           username: s.username,
           country: null,
           vehicle: s.vehicle,
-          value: s.mph * MS_PER_MPH,
+          metric: 'top_speed',
+          value: mps(s.mph * MS_PER_MPH),
           // Not a measurement at all, so never coloured as a verified one.
           verification: 'unverified',
           kind: 'sample',
@@ -119,24 +165,15 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
   }
 
   // Your entries.
-  let yourValue: number | null = null;
+  let yourValue: BoardValue | null = null;
   if (query.metric === 'trip_count') {
-    yourValue = inPeriod.length;
+    yourValue = { metric: 'trip_count', value: count(inPeriod.length) };
   } else {
-    const col = metricColumn(query.metric);
-    // FINDING (reported, not silently fixed): BoardRow.value carries a
-    // DIFFERENT physical unit depending on query.metric — m/s for top_speed,
-    // metres for distance, seconds for zero_to_60 — and nothing ties the two
-    // together. `raw` is used here because the board is a unit-agnostic
-    // container; board.tsx's formatValue switches on the same metric to pick a
-    // formatter, and if those two switches ever disagree the board renders one
-    // quantity in another quantity's units.
     const values = inPeriod
-      .map((d) => d.summary?.[col])
-      .filter((v): v is NonNullable<typeof v> => v != null && v > 0)
-      .map(raw);
+      .map((d) => (d.summary ? summaryValue(query.metric, d.summary) : null))
+      .filter((v): v is BoardValue => v != null && raw(v.value) > 0);
     if (values.length > 0) {
-      yourValue = query.metric === 'zero_to_60' ? Math.min(...values) : Math.max(...values);
+      yourValue = values.reduce((a, b) => better(query.metric, a, b));
     }
   }
 
@@ -150,7 +187,8 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
         username: b.name,
         country: null,
         vehicle: null,
-        value: b.seconds,
+        metric: 'zero_to_60',
+        value: seconds(b.seconds),
         // A published manufacturer claim is not a verified measurement.
         verification: 'unverified',
         kind: 'benchmark',
@@ -158,11 +196,9 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
       });
     }
   } else if (query.period !== 'all') {
-    const col = metricColumn(query.metric);
     const allValues = drives
-      .map((d) => d.summary?.[col])
-      .filter((v): v is NonNullable<typeof v> => v != null && v > 0)
-      .map(raw);
+      .map((d) => (d.summary ? summaryValue(query.metric, d.summary) : null))
+      .filter((v): v is BoardValue => v != null && raw(v.value) > 0);
     if (query.metric === 'trip_count') {
       rows.push({
         id: 'bench-your-best',
@@ -170,7 +206,8 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
         username: `Your all-time — ${drives.length} drive${drives.length === 1 ? '' : 's'}`,
         country: null,
         vehicle: null,
-        value: drives.length,
+        metric: 'trip_count',
+        value: count(drives.length),
         // Your own device's record: measured, but not server-verified.
         verification: 'unverified',
         kind: 'benchmark',
@@ -183,7 +220,7 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
         username: 'Your all-time best',
         country: null,
         vehicle: null,
-        value: Math.max(...allValues),
+        ...allValues.reduce((a, b) => better(query.metric, a, b)),
         verification: 'unverified',
         kind: 'benchmark',
         note: 'your own record',
@@ -198,7 +235,7 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
       username: username ? `@${username}` : 'You',
       country: null,
       vehicle: null,
-      value: yourValue,
+      ...yourValue,
       verification: 'unverified',
       kind: 'you',
     });
@@ -206,7 +243,9 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
 
   // Rank: ascending for 0-60 (lower is better), descending otherwise.
   rows.sort((a, b) =>
-    query.metric === 'zero_to_60' ? a.value - b.value : b.value - a.value,
+    query.metric === 'zero_to_60'
+      ? raw(a.value) - raw(b.value)
+      : raw(b.value) - raw(a.value),
   );
   rows.forEach((r, i) => (r.rank = i + 1));
 
@@ -268,7 +307,9 @@ export async function fetchBoard(
     username: e.username ?? 'driver',
     country: e.country ?? null,
     vehicle: null,
-    value: e.value,
+    // The network boundary: `value` arrives as a bare JSON number whose unit
+    // is fixed by the metric we asked for, so it is tagged here on the way in.
+    ...boardValue(query.metric, e.value),
     verification: e.verification === 'verified' ? 'verified' : 'unverified',
     kind: e.username != null && e.username === username ? 'you' : 'user',
     bracketKey: e.bracket_key,
