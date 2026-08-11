@@ -119,14 +119,27 @@ export function VehicleChooser({
         </Animated.View>
       </View>
 
-      {revealed ? (
-        <View style={styles.caption}>
-          <Text variant="cardTitle" numberOfLines={1}>
-            {make} {model}
-          </Text>
-          <Text variant="caption">{bodyTypeLabel(bodyType)}</Text>
-        </View>
-      ) : null}
+      {/*
+        Always mounted, so choosing a model does not shove both pickers down
+        the screen. A name appearing under the car is a label resolving, not
+        an event worth animating — the fields should stay where the thumb
+        left them.
+
+        The space is reserved by rendering the same two Text elements with a
+        blank line and hiding them, rather than by a hardcoded height: the box
+        then matches the real type metrics exactly, and keeps matching if the
+        type scale changes.
+      */}
+      <View
+        style={[styles.caption, revealed ? null : styles.captionReserved]}
+        accessibilityElementsHidden={!revealed}
+        importantForAccessibility={revealed ? 'auto' : 'no-hide-descendants'}
+      >
+        <Text variant="cardTitle" numberOfLines={1}>
+          {revealed ? `${make} ${model}` : ' '}
+        </Text>
+        <Text variant="caption">{revealed ? bodyTypeLabel(bodyType) : ' '}</Text>
+      </View>
 
       <Field
         label={make ?? 'Select make'}
@@ -216,6 +229,8 @@ const styles = StyleSheet.create({
     color: color.text3,
   },
   caption: { alignItems: 'center', gap: 2 },
+  /** Occupies its space without showing it — see the comment at the usage. */
+  captionReserved: { opacity: 0 },
   field: {
     flexDirection: 'row',
     alignItems: 'center',

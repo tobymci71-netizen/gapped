@@ -514,7 +514,13 @@ const styles = StyleSheet.create({
     borderColor: color.hairline,
   },
   pillGlyph: { fontSize: 13, lineHeight: 17 },
-  pillLabel: { flex: 1, color: color.text1 },
+  // No flex here. These pills live in a horizontal scroller, so there is no
+  // bounded width to take a share of: `flex: 1` made the first pill's label
+  // absorb the whole viewport, so "World" filled the row and the metric,
+  // period and class pills were pushed off-screen entirely — reachable only by
+  // scrolling a row that gave no sign it could scroll. Sizing to content is
+  // what lets all four sit side by side.
+  pillLabel: { color: color.text1 },
   pillChevron: { fontSize: 11, lineHeight: 15, color: color.text3 },
   pillOff: { opacity: 0.45 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', marginTop: space.md },

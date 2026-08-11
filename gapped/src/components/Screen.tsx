@@ -1,7 +1,27 @@
-import React from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, gutter, space } from '@/theme/tokens';
+
+/**
+ * How much of the bottom of the screen the pinned footer covers, safe-area
+ * inset included.
+ *
+ * A body that hosts its own full-bleed list needs this: the footer is opaque
+ * and sits over the bottom of the screen, so a list that ends where the footer
+ * begins can never scroll its final row clear of it. The country picker's last
+ * entry — Zimbabwe — sat permanently half-under the Continue button.
+ *
+ * Published from here rather than recomputed by each caller, because the
+ * alternative is every list re-deriving `space.md + buttonHeight +
+ * max(insets.bottom, 16) + 14` and drifting the moment the footer changes.
+ */
+const FooterHeightContext = createContext(0);
+
+/** Height of the pinned footer, or 0 when the screen has none. */
+export function useFooterHeight(): number {
+  return useContext(FooterHeightContext);
+}
 
 type Props = {
   children: React.ReactNode;
@@ -14,6 +34,7 @@ type Props = {
 
 export function Screen({ children, scroll = true, style, footer }: Props) {
   const insets = useSafeAreaInsets();
+  const [footerHeight, setFooterHeight] = useState(0);
   const body = scroll ? (
     <ScrollView
       style={styles.flex}
@@ -36,9 +57,12 @@ export function Screen({ children, scroll = true, style, footer }: Props) {
       style={[styles.flex, { backgroundColor: color.canvas }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {body}
+      <FooterHeightContext.Provider value={footerHeight}>{body}</FooterHeightContext.Provider>
       {footer ? (
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 14 }]}>
+        <View
+          style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 14 }]}
+          onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
+        >
           {footer}
         </View>
       ) : null}

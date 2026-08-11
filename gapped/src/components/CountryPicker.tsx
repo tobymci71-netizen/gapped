@@ -5,6 +5,7 @@ import { COUNTRIES, type Country, type CountryCode } from '@/data/countries';
 import { Entrance } from '@/components/Entrance';
 import { STAGGER_CAP } from '@/theme/motion';
 import { PressableScale } from '@/components/PressableScale';
+import { useFooterHeight } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
 import { color, font, radius, space, type } from '@/theme/tokens';
@@ -35,6 +36,7 @@ export function CountryPicker({
   onSelect: (code: CountryCode) => void;
 }) {
   const [query, setQuery] = useState('');
+  const footerHeight = useFooterHeight();
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -64,6 +66,14 @@ export function CountryPicker({
           data={results}
           keyExtractor={(c: Country) => c.code}
           keyboardShouldPersistTaps="handled"
+          /*
+           * The screen's footer is opaque and sits over the bottom of the
+           * list, so without this the final entry — Zimbabwe — could never be
+           * scrolled clear of the Continue button. Reserving the footer's own
+           * measured height (safe-area inset included) lets the list scroll
+           * past it rather than stopping underneath it.
+           */
+          contentContainerStyle={{ paddingBottom: footerHeight }}
           renderItem={({ item, index }: { item: Country; index: number }) => {
             const row = (
               <PressableScale
