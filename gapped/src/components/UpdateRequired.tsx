@@ -21,8 +21,12 @@ const DEFAULT_MESSAGE =
   'This version of Gapped is no longer supported. Update to the latest build to keep recording drives.';
 
 export function UpdateRequired({ message }: { message: string | null }) {
+  // Scrolls, and is centred only while it fits. This screen is the whole app
+  // and has no way out, and at accessibility text sizes its copy is far taller
+  // than a small phone: fixed and centred, the headline and the instruction
+  // overflowed off both edges with nothing to bring them back.
   return (
-    <Screen scroll={false}>
+    <Screen style={styles.fill}>
       <View style={styles.body}>
         <Text style={styles.glyph}>⚠️</Text>
         <Text variant="headline" style={styles.title}>
@@ -46,7 +50,9 @@ export function UpdateRequired({ message }: { message: string | null }) {
 }
 
 const styles = StyleSheet.create({
-  body: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md },
+  // On the scroll content container: fill the viewport when the copy is short.
+  fill: { flexGrow: 1 },
+  body: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: space.md },
   glyph: { fontSize: 44, lineHeight: 52 },
   title: { textAlign: 'center' },
   copy: { textAlign: 'center', color: color.text2 },

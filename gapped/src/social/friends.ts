@@ -9,9 +9,10 @@
  * matching the rest of the app's offline-first posture.
  */
 
-import { supabase } from '@/lib/supabase';
+import { ensureUserId, supabase } from '@/lib/supabase';
 import { readMpsOrNull } from '@/types/boundary';
 import { MetresPerSecond } from '@/types/units';
+import { friendUsernameFromInput, isValidUsername, USERNAME_RULE } from './username';
 
 export type Friend = {
   friendId: string;
@@ -38,11 +39,26 @@ export type FriendsResult =
  * is the same honesty the board already applies when it disables its scope
  * pills rather than pretending a local board is a global one.
  */
+/**
+ * The friend RPCs are granted to `authenticated` only. Called before the
+ * anonymous session exists (an offline first launch, or straight after
+ * Delete account) they failed with a permission error, so every call makes
+ * sure there is a session first, and a refusal reads as what it is.
+ */
+const NOT_CONNECTED = 'Still connecting your account. Try again in a moment.';
+const isPermissionDenied = (e: { code?: string } | null) => e?.code === '42501';
+
 export async function listFriends(): Promise<FriendsResult> {
   if (!supabase) return { ok: true, friends: [] };
+  await ensureUserId();
   const { data, error } = await supabase.rpc('list_friends');
   if (error) {
-    return { ok: false, reason: 'Could not load your friends. Check your connection.' };
+    return {
+      ok: false,
+      reason: isPermissionDenied(error)
+        ? NOT_CONNECTED
+        : 'Could not load your friends. Check your connection.',
+    };
   }
   if (!data) return { ok: true, friends: [] };
   const friends = (
@@ -66,19 +82,29 @@ export async function listFriends(): Promise<FriendsResult> {
 /**
  * Add by username. Failure reasons are surfaced verbatim to the user, so they
  * are phrased as sentences in the migration rather than as error codes.
+ *
+ * The input is normalised first. The server matches usernames exactly, and
+ * only trimming here meant '@toby_m' — copied off a share card — or 'Toby_M'
+ * came back "No driver called @toby_m" for a driver who exists.
  */
 export async function addFriend(username: string): Promise<AddFriendResult> {
-  const name = username.trim();
+  const name = friendUsernameFromInput(username);
   if (!name) return { ok: false, reason: 'Enter a username.' };
+  // Nothing outside this pattern can exist, so say why rather than asking the
+  // server and reporting that nobody has that name.
+  if (!isValidUsername(name)) return { ok: false, reason: USERNAME_RULE };
   if (!supabase) return { ok: false, reason: 'Friends need an account. Connect one first.' };
 
+  await ensureUserId();
   const { data, error } = await supabase.rpc('add_friend', { p_username: name });
   if (error) {
     return {
       ok: false,
-      reason: /no driver called/i.test(error.message)
-        ? `No driver called ${name}.`
-        : error.message.replace(/^.*?:\s*/, ''),
+      reason: isPermissionDenied(error)
+        ? NOT_CONNECTED
+        : /no driver called/i.test(error.message)
+          ? `No driver called @${name}.`
+          : error.message.replace(/^.*?:\s*/, ''),
     };
   }
   return { ok: true, friendId: data as string };
@@ -86,6 +112,7 @@ export async function addFriend(username: string): Promise<AddFriendResult> {
 
 export async function removeFriend(friendId: string): Promise<boolean> {
   if (!supabase) return false;
+  await ensureUserId();
   const { error } = await supabase.rpc('remove_friend', { p_friend_id: friendId });
   return !error;
 }

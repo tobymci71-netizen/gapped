@@ -31,7 +31,7 @@ export default function UnitStep() {
       step={1}
       title="Choose your unit"
       subtitle="For the speedometer and every stat. Stored once, converted at render — it will never disagree with itself."
-      footer={<Button label="Continue" onPress={() => router.push('/onboarding/country')} />}
+      footer={<Button label="Continue" onPress={() => router.navigate('/onboarding/country')} />}
     >
       {/* Live preview: the dial re-renders in the chosen unit immediately. */}
       <View style={styles.dial}>

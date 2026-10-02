@@ -7,12 +7,12 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Platform, StyleSheet, View, ViewStyle } from 'react-native';
-import type { Camera, MapType, Provider, Region } from 'react-native-maps';
+import { Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import type { Camera, EdgePadding, MapType, Provider, Region } from 'react-native-maps';
 import { Text } from '@/components/Text';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { duration } from '@/theme/motion';
-import { color } from '@/theme/tokens';
+import { color, space } from '@/theme/tokens';
 
 /**
  * Full-bleed map surface for the Driving tab. react-native-maps 1.27.2 is
@@ -61,13 +61,20 @@ type Props = {
   route: { lat: number; lon: number }[];
   /** True while a drive is recording — the camera follows the position. */
   following: boolean;
-  style?: ViewStyle;
+  /**
+   * Points at the bottom of the map that an overlay covers (the drives panel's
+   * rounded corners). The map's own furniture — Apple's Legal link and logo,
+   * Google's logo, which the providers require to stay visible — is lifted
+   * clear of it.
+   */
+  obscuredBottom?: number;
+  style?: StyleProp<ViewStyle>;
 };
 
 export type DriveMapHandle = { recentre: () => void };
 
 export const DriveMap = forwardRef<DriveMapHandle, Props>(function DriveMap(
-  { position, route, following, style },
+  { position, route, following, obscuredBottom = 0, style },
   ref,
 ) {
   const reduced = useReducedMotion();
@@ -146,16 +153,31 @@ export const DriveMap = forwardRef<DriveMapHandle, Props>(function DriveMap(
   );
 
   if (!MapView || !Marker || !Polyline) {
-    return <MapUnavailable style={style} />;
+    return <MapUnavailable style={style} obscuredBottom={obscuredBottom} />;
   }
+
+  // Only `bottom` is set: the native side keeps each ornament's own default
+  // edge for any inset left at 0.
+  const furniture: EdgePadding = { top: 0, left: 0, right: 0, bottom: obscuredBottom + space.xs };
+  // Apple Maps ignores Marker `rotation`/`flat` (Google-only in
+  // react-native-maps), so on iOS the puck was always drawn pointing north.
+  // There the marker's children are live subviews, not a cached bitmap, so the
+  // puck view itself is rotated; the disc is round, so only the arrow turns.
+  // The map is north-up (rotateEnabled off), so the course is the screen angle.
+  const heading = position?.heading ?? null;
+  const iosTurn =
+    Platform.OS === 'ios' && heading != null ? { transform: [{ rotate: `${heading}deg` }] } : null;
 
   return (
     <View style={[styles.container, style]}>
-      <MapBoundary fallback={<MapUnavailable />}>
+      <MapBoundary fallback={<MapUnavailable obscuredBottom={obscuredBottom} />}>
         <MapView
           ref={mapRef}
           style={StyleSheet.absoluteFill}
           provider={PROVIDER_DEFAULT}
+          mapPadding={{ top: 0, left: 0, right: 0, bottom: obscuredBottom }}
+          legalLabelInsets={furniture}
+          appleLogoInsets={furniture}
           mapType={MAP_TYPE}
           userInterfaceStyle="dark"
           initialRegion={initialRegion}
@@ -192,13 +214,13 @@ export const DriveMap = forwardRef<DriveMapHandle, Props>(function DriveMap(
               coordinate={{ latitude: position.lat, longitude: position.lon }}
               anchor={{ x: 0.5, y: 0.5 }}
               flat
-              // Native rotation — rotating the child view instead would force a
-              // marker re-rasterisation on every fix.
-              rotation={position.heading ?? 0}
+              // Native rotation on Android (Google) — rotating the child view
+              // there would force a marker re-rasterisation on every fix.
+              rotation={Platform.OS === 'android' ? (heading ?? 0) : undefined}
               tracksViewChanges={tracksMarker}
               zIndex={2}
             >
-              <View style={styles.puck}>
+              <View style={[styles.puck, iosTurn]}>
                 <View style={styles.disc} />
                 {/* No bearing, no arrow: pointing north when the device has
                     not reported a course would be an invented heading. */}
@@ -221,9 +243,17 @@ export const DriveMap = forwardRef<DriveMapHandle, Props>(function DriveMap(
  * would be indistinguishable from a working map that is showing the wrong
  * place.
  */
-function MapUnavailable({ style }: { style?: ViewStyle }) {
+function MapUnavailable({
+  style,
+  obscuredBottom = 0,
+}: {
+  style?: StyleProp<ViewStyle>;
+  obscuredBottom?: number;
+}) {
   return (
-    <View style={[styles.container, styles.unavailable, style]}>
+    <View
+      style={[styles.container, styles.unavailable, { paddingBottom: obscuredBottom }, style]}
+    >
       <Text variant="caption" style={styles.unavailableLabel}>
         Map unavailable
       </Text>
@@ -260,8 +290,6 @@ const styles = StyleSheet.create({
   unavailable: {
     alignItems: 'center',
     justifyContent: 'center',
-    // Sits clear of the drives panel that overlays the lower half.
-    paddingBottom: '45%',
   },
   unavailableLabel: {
     color: color.text3,

@@ -1,6 +1,13 @@
 import { epochMs, metres, mps, seconds } from '@/types/units';
-import { buildLocalBoard } from '../boards';
-import { BoardQuery } from '../types';
+import {
+  BoardResult,
+  buildLocalBoard,
+  emptyBoardFraming,
+  periodPhrase,
+  sameBrackets,
+  settleBoard,
+} from '../boards';
+import { BoardQuery, BoardRow } from '../types';
 import type { LocalDrive } from '@/drive/wal';
 import { DriveSummary } from '@/drive/types';
 
@@ -96,5 +103,118 @@ describe('nothing local is presented as verified', () => {
       const r = buildLocalBoard(query({ metric }), 'me', NOW);
       expect(r.rows.some((row) => row.verification === 'verified')).toBe(false);
     }
+  });
+});
+
+describe('periods are described as the rolling windows they are', () => {
+  test('a drive from 22:00 last night is in the 24-hour window, and not called "today"', () => {
+    // 11 hours old at "09:00": inside the window, so it is counted — the
+    // framing must not claim it was recorded today.
+    addDrive({}, NOW - 11 * 3600_000);
+    const framing = buildLocalBoard(query({ period: 'day' }), 'me', NOW).framing.join(' ');
+    expect(framing).toMatch(/1 drive recorded on this device in the last 24 hours\./);
+    expect(framing).not.toMatch(/today/);
+  });
+
+  test('week and month name their length, not a calendar unit', () => {
+    addDrive();
+    expect(buildLocalBoard(query({ period: 'week' }), 'me', NOW).framing[0]).toMatch(
+      /in the last 7 days\.$/,
+    );
+    expect(buildLocalBoard(query({ period: 'month' }), 'me', NOW).framing[0]).toMatch(
+      /in the last 30 days\.$/,
+    );
+    expect(periodPhrase('all')).toBe('all-time');
+  });
+});
+
+describe('empty server boards say which slice is empty', () => {
+  test('world, verified-only', () => {
+    expect(emptyBoardFraming(query(), null)).toEqual([
+      'Nobody has a verified run in the last 7 days.',
+      'Unverified runs are hidden while VERIFIED is on.',
+    ]);
+  });
+
+  test('friends includes you, because the friends board does', () => {
+    expect(emptyBoardFraming(query({ scope: 'friends', verifiedOnly: false }), null)).toEqual([
+      'Neither you nor anyone you follow has a run in the last 7 days.',
+    ]);
+  });
+
+  test('country names the country', () => {
+    expect(
+      emptyBoardFraming(query({ scope: 'country', period: 'day', verifiedOnly: false }), 'GB')[0],
+    ).toMatch(/^Nobody in .+ has a run in the last 24 hours\.$/);
+    expect(emptyBoardFraming(query({ scope: 'country' }), 'GB')[0]).not.toMatch(/your country/);
+  });
+
+  test('an all-time class board keeps the wording the bracket board always had', () => {
+    expect(emptyBoardFraming(query({ period: 'all', bracket: 'awd|stock|open' }), null)[0]).toBe(
+      'Nobody has a verified run in this class yet.',
+    );
+  });
+});
+
+describe('settleBoard', () => {
+  const row = (over: Partial<BoardRow> = {}): BoardRow =>
+    ({
+      id: 'e1',
+      rank: 1,
+      username: 'a',
+      country: null,
+      vehicle: null,
+      metric: 'top_speed',
+      value: mps(30),
+      verification: 'verified',
+      kind: 'user',
+      ...over,
+    }) as BoardRow;
+  const server = (rows: BoardRow[], framing: string[] = []): BoardResult => ({
+    rows,
+    isSample: false,
+    framing,
+    source: 'server',
+  });
+  const local = (): BoardResult => ({ rows: [], isSample: true, framing: ['x'], source: 'local' });
+
+  test('a new slice always shows the new answer', () => {
+    const prev = server([row()]);
+    const next = server([row()]);
+    expect(settleBoard(prev, next, false)).toBe(next);
+    expect(settleBoard(null, next, true)).toBe(next);
+  });
+
+  test('an identical refocus answer keeps the object on screen, so nothing re-renders', () => {
+    const prev = server([row()]);
+    expect(settleBoard(prev, server([row()]), true)).toBe(prev);
+  });
+
+  test('a changed refocus answer replaces it — a new drive or friend shows up', () => {
+    const prev = server([row()]);
+    const moved = server([row({ value: mps(31) })]);
+    expect(settleBoard(prev, moved, true)).toBe(moved);
+    const added = server([row(), row({ id: 'e2', rank: 2 })]);
+    expect(settleBoard(prev, added, true)).toBe(added);
+    const sampleGone = buildLocalBoard(query(), 'me', NOW);
+    expect(settleBoard(local(), sampleGone, true)).toBe(sampleGone);
+  });
+
+  test('a refocus that could not reach the server keeps the server board', () => {
+    const prev = server([row()]);
+    expect(settleBoard(prev, local(), true)).toBe(prev);
+  });
+
+  test('but a new slice that could not reach the server says so', () => {
+    const next = local();
+    expect(settleBoard(server([row()]), next, false)).toBe(next);
+  });
+});
+
+describe('sameBrackets', () => {
+  test('compares keys and counts in order', () => {
+    expect(sameBrackets([{ key: 'a', drivers: 2 }], [{ key: 'a', drivers: 2 }])).toBe(true);
+    expect(sameBrackets([{ key: 'a', drivers: 2 }], [{ key: 'a', drivers: 3 }])).toBe(false);
+    expect(sameBrackets([], [{ key: 'a', drivers: 1 }])).toBe(false);
   });
 });

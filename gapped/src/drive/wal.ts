@@ -172,16 +172,51 @@ export function readFixesSince(
   };
 }
 
-/** Compute the summary from disk and mark the drive finalized. */
-export function finalizeDrive(driveId: string, endedAt: number): DriveSummary {
-  const fixes = readFixes(driveId);
-  const summary = summarize(fixes);
+/**
+ * Mark the drive finalized with its summary. Private: every ending goes
+ * through closeDrive, so nothing can finalise a drive that should have been
+ * discarded.
+ */
+function markFinalized(driveId: string, endedAt: number, summary: DriveSummary): void {
   getDb().runSync(
     `UPDATE local_drives SET ended_at = ?, status = 'finalized', summary = ? WHERE id = ?`,
     [endedAt, JSON.stringify(summary), driveId],
   );
   delete seqCounters[driveId];
-  return summary;
+}
+
+/**
+ * Fewest usable fixes that make a drive. `summarize` needs two that pass the
+ * accuracy gate to measure anything; below that every figure is zero.
+ */
+export const MIN_DRIVE_FIXES = 2;
+
+/**
+ * End a drive: finalise it if it recorded something, discard it if it did not.
+ * Returns the summary, or null when the drive was discarded.
+ *
+ * Start then End before a fix arrived (or a session whose every fix failed the
+ * accuracy gate, as indoors) used to be finalised as a permanent
+ * "0.0 km · 0s · top 0" row that credited a streak day — and nothing in the app
+ * can delete a drive. Crash recovery already discarded these; both paths now
+ * decide here, on the same gated count, so they cannot disagree again.
+ *
+ * `endedAt` defaults to the last fix, which is all recovery has to go on.
+ */
+export function closeDrive(driveId: string, endedAt?: number): DriveSummary | null {
+  const fixes = readFixes(driveId);
+  const summary = summarize(fixes);
+  const end = endedAt ?? fixes[fixes.length - 1]?.t ?? null;
+  if (summary.fixCount >= MIN_DRIVE_FIXES && end != null) {
+    markFinalized(driveId, end, summary);
+    return summary;
+  }
+  getDb().runSync(`UPDATE local_drives SET ended_at = ?, status = 'discarded' WHERE id = ?`, [
+    end,
+    driveId,
+  ]);
+  delete seqCounters[driveId];
+  return null;
 }
 
 export type LocalDrive = {
@@ -253,12 +288,8 @@ export function recoverUnterminated(): LocalDrive[] {
   );
   const recovered: LocalDrive[] = [];
   for (const { id } of stale) {
-    const fixes = readFixes(id);
-    if (fixes.length < 2) {
-      getDb().runSync(`UPDATE local_drives SET status = 'discarded' WHERE id = ?`, [id]);
-      continue;
-    }
-    finalizeDrive(id, fixes[fixes.length - 1].t);
+    // Nothing usable on disk: discarded, exactly as a live End would be.
+    if (!closeDrive(id)) continue;
     const drive = getDb().getFirstSync<{
       id: string;
       vehicle_id: string | null;

@@ -1,5 +1,6 @@
 import {
   allMakes,
+  exactEntry,
   fuzzyScore,
   modelsForMake,
   popularMakes,
@@ -61,5 +62,22 @@ describe('fuzzy search', () => {
 
   test('no match returns empty, not garbage', () => {
     expect(searchMakes('car', 'zzzzqqqq')).toEqual([]);
+  });
+});
+
+describe('exactEntry — what Return commits in the picker', () => {
+  test('matches a candidate ignoring case and surrounding space', () => {
+    expect(exactEntry(['Golf', 'Golf R', 'Polo'], '  golf ')).toBe('Golf');
+    expect(exactEntry(['Golf', 'Golf R'], 'GOLF R')).toBe('Golf R');
+  });
+
+  test('a prefix is not an exact match — Return must not guess', () => {
+    expect(exactEntry(['Golf R', 'Golf GTI'], 'golf')).toBeNull();
+  });
+
+  test('empty input matches nothing', () => {
+    expect(exactEntry(['Golf'], '')).toBeNull();
+    expect(exactEntry(['Golf'], '   ')).toBeNull();
+    expect(exactEntry([], 'golf')).toBeNull();
   });
 });

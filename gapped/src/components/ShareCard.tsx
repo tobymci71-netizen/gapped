@@ -26,6 +26,18 @@ export type ShareCardProps = {
   verification: 'verified' | 'unverified' | 'pending' | null;
 };
 
+/**
+ * Every Text on the card. The card is a fixed 360pt square captured as an
+ * image, so its type must not follow the SHARER's Dynamic Type setting: at
+ * accessibility sizes the stack outgrew the square and the export lost its
+ * footer (@user, the verification note) and half its figures, unseen, since
+ * the card renders off-screen. Set after the spread so nothing can turn
+ * scaling back on.
+ */
+function CardText(props: React.ComponentProps<typeof Text>) {
+  return <Text {...props} allowFontScaling={false} />;
+}
+
 function Figure({ label, value, unit, accent }: {
   label: string;
   value: string;
@@ -34,10 +46,12 @@ function Figure({ label, value, unit, accent }: {
 }) {
   return (
     <View style={styles.figure}>
-      <Text style={styles.figureLabel}>{label.toUpperCase()}</Text>
+      <CardText style={styles.figureLabel}>{label.toUpperCase()}</CardText>
       <View style={styles.figureValueRow}>
-        <Text style={[styles.figureValue, accent ? { color: color.accent } : null]}>{value}</Text>
-        {unit ? <Text style={styles.figureUnit}>{unit}</Text> : null}
+        <CardText style={[styles.figureValue, accent ? { color: color.accent } : null]}>
+          {value}
+        </CardText>
+        {unit ? <CardText style={styles.figureUnit}>{unit}</CardText> : null}
       </View>
     </View>
   );
@@ -66,23 +80,23 @@ export function ShareCard({
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Text style={styles.brand}>GAPPED</Text>
+        <CardText style={styles.brand}>GAPPED</CardText>
         {verified ? (
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>✓ VERIFIED</Text>
+            <CardText style={styles.badgeText}>✓ VERIFIED</CardText>
           </View>
         ) : (
           <View style={[styles.badge, styles.badgeMuted]}>
-            <Text style={[styles.badgeText, styles.badgeTextMuted]}>UNVERIFIED</Text>
+            <CardText style={[styles.badgeText, styles.badgeTextMuted]}>UNVERIFIED</CardText>
           </View>
         )}
       </View>
 
       <View style={styles.hero}>
-        <Text style={styles.heroValue}>{topValue}</Text>
-        <Text style={styles.heroUnit}>{topUnit}</Text>
+        <CardText style={styles.heroValue}>{topValue}</CardText>
+        <CardText style={styles.heroUnit}>{topUnit}</CardText>
       </View>
-      <Text style={styles.heroLabel}>TOP SPEED</Text>
+      <CardText style={styles.heroLabel}>TOP SPEED</CardText>
 
       <View style={styles.route}>
         {fixes.length > 1 ? (
@@ -107,15 +121,15 @@ export function ShareCard({
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText} numberOfLines={1}>
+        <CardText style={styles.footerText} numberOfLines={1}>
           {username ? `@${username}` : 'Anonymous driver'}
           {vehicle ? ` · ${vehicle}` : ''}
-        </Text>
-        <Text style={styles.footerNote}>
+        </CardText>
+        <CardText style={styles.footerNote}>
           {verified
             ? 'Re-derived from raw GPS on our servers'
             : 'Not server-verified'}
-        </Text>
+        </CardText>
       </View>
     </View>
   );

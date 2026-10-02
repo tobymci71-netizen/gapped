@@ -31,6 +31,17 @@ type Props = {
 };
 
 const MAX_CIRCLE = 280;
+/**
+ * Smallest the circle shrinks to before the step scrolls instead. The fields
+ * are what have to fit; the circle is the payoff, and at this size the
+ * silhouette still reads as a car.
+ */
+const MIN_CIRCLE = 96;
+/**
+ * Below this the in-circle hint cannot fit its two lines inside the circle's
+ * chord, and the field placeholders already say the same thing.
+ */
+const HINT_MIN_CIRCLE = 180;
 
 export function VehicleChooser({
   kind,
@@ -43,7 +54,23 @@ export function VehicleChooser({
   const reduced = useReducedMotion();
   const [sheet, setSheet] = useState<'none' | 'make' | 'model'>('none');
 
-  const diameter = Math.min(MAX_CIRCLE, Math.round(width * 0.68));
+  /*
+   * The circle takes the room the fields leave it, up to its width-based
+   * size. Sized from the width alone it was 255pt on a 375pt-wide phone, which
+   * on a 667pt screen pushed both fields under the opaque Continue footer —
+   * with Continue disabled until both were set, onboarding could not be
+   * finished. Now the fields always sit above the footer, and on a screen
+   * with no room even for MIN_CIRCLE (large text, small Android phones) the
+   * step scrolls.
+   *
+   * `room` is measured from a box that grows into the leftover space but has
+   * no content of its own (the circle is drawn absolutely inside it), so the
+   * measurement is the space available, never the circle's previous size.
+   */
+  const maxDiameter = Math.min(MAX_CIRCLE, Math.round(width * 0.68));
+  const [room, setRoom] = useState<number | null>(null);
+  const diameter =
+    room == null ? maxDiameter : Math.max(MIN_CIRCLE, Math.min(maxDiameter, Math.floor(room)));
   const revealed = !!make && !!model;
 
   const bodyType = useMemo(
@@ -86,37 +113,54 @@ export function VehicleChooser({
 
   return (
     <View style={styles.root}>
-      <View style={[styles.circleWrap, { height: diameter }]}>
-        <Animated.View
-          style={[
-            styles.glow,
-            {
-              width: diameter * 1.06,
-              height: diameter * 1.06,
-              borderRadius: diameter,
-            },
-            glowStyle,
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.circle,
-            { width: diameter, height: diameter, borderRadius: diameter / 2 },
-            ringStyle,
-          ]}
-        >
-          <CarSilhouette
-            bodyType={bodyType}
-            size={diameter * 0.78}
-            revealKey={`${bodyType}:${make ?? ''}:${model ?? ''}`}
-            color={revealed ? color.accent : color.text3}
-          />
-          {!revealed ? (
-            <Text variant="caption" style={styles.hint}>
-              {`Select a make and model\nto see your ride`}
-            </Text>
-          ) : null}
-        </Animated.View>
+      <View
+        style={[styles.circleRoom, { maxHeight: maxDiameter }]}
+        onLayout={(e) => {
+          // Not re-fitted while a picker is open. Its keyboard squeezes this
+          // screen as well (the step avoids the keyboard underneath the
+          // sheet's Modal), so the circle shrank to the minimum behind the
+          // sheet and then jumped back to full size in one frame as the sheet
+          // slid away. The room is the same again once the keyboard is gone.
+          if (sheet === 'none') setRoom(e.nativeEvent.layout.height);
+        }}
+      >
+        {/* Not drawn until measured, so it never flashes at the wrong size. */}
+        {room != null ? (
+          <View style={styles.circleCentre}>
+            <View style={[styles.circleWrap, { height: diameter }]}>
+              <Animated.View
+                style={[
+                  styles.glow,
+                  {
+                    width: diameter * 1.06,
+                    height: diameter * 1.06,
+                    borderRadius: diameter,
+                  },
+                  glowStyle,
+                ]}
+              />
+              <Animated.View
+                style={[
+                  styles.circle,
+                  { width: diameter, height: diameter, borderRadius: diameter / 2 },
+                  ringStyle,
+                ]}
+              >
+                <CarSilhouette
+                  bodyType={bodyType}
+                  size={diameter * 0.78}
+                  revealKey={`${bodyType}:${make ?? ''}:${model ?? ''}`}
+                  color={revealed ? color.accent : color.text3}
+                />
+                {!revealed && diameter >= HINT_MIN_CIRCLE ? (
+                  <Text variant="caption" style={styles.hint}>
+                    {`Select a make and model\nto see your ride`}
+                  </Text>
+                ) : null}
+              </Animated.View>
+            </View>
+          </View>
+        ) : null}
       </View>
 
       {/*
@@ -214,6 +258,16 @@ function Field({
 
 const styles = StyleSheet.create({
   root: { flex: 1, gap: space.md },
+  circleRoom: { flex: 1, minHeight: MIN_CIRCLE },
+  circleCentre: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   circleWrap: { alignItems: 'center', justifyContent: 'center' },
   glow: { position: 'absolute', backgroundColor: color.accentDim },
   circle: {
@@ -226,7 +280,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: '18%',
     textAlign: 'center',
-    color: color.text3,
+    color: color.text2,
   },
   caption: { alignItems: 'center', gap: 2 },
   /** Occupies its space without showing it — see the comment at the usage. */
@@ -245,6 +299,6 @@ const styles = StyleSheet.create({
   fieldDisabled: { opacity: 0.45 },
   // flex so a long catalogue make ellipsizes instead of shoving the chevron out.
   fieldLabel: { flex: 1 },
-  fieldPlaceholder: { color: color.text3 },
+  fieldPlaceholder: { color: color.text2 },
   chevron: { color: color.text3, fontSize: 20, lineHeight: 25, marginTop: -8 },
 });

@@ -13,12 +13,13 @@
  * account; ghosts and samples are visually and semantically distinct kinds.
  */
 
+import { countryByCode } from '@/data/countries';
 import { listDrives } from '@/drive/wal';
-import { supabase } from '@/lib/supabase';
+import { ensureUserId, supabase } from '@/lib/supabase';
 import { DriveSummary } from '@/drive/types';
 import { MS_PER_MPH } from '@/drive/units';
 import { count, metres, mps, raw, seconds } from '@/types/units';
-import { BoardMetric, BoardQuery, BoardRow, BoardValue } from './types';
+import { BoardMetric, BoardPeriod, BoardQuery, BoardRow, BoardValue } from './types';
 
 /** Published manufacturer 0-60 mph figures — benchmark ghosts, not people. */
 const ZERO_TO_60_BENCHMARKS: { name: string; seconds: number }[] = [
@@ -37,6 +38,13 @@ const SAMPLE_ROWS: { username: string; vehicle: string; mph: number }[] = [
   { username: 'sample_driver_5', vehicle: 'GR Yaris', mph: 64 },
 ];
 
+/**
+ * Periods are rolling windows counted back from now, on both the local board
+ * and the server's board_top: a drive at 22:00 yesterday is inside 'day' at
+ * 09:00 today. A global board has no single midnight to count from, so the
+ * windows stay rolling and the words describing them say so — the pills read
+ * "24 hours", "7 days" and "30 days", not "Today", "Week" and "Month".
+ */
 function periodStart(period: BoardQuery['period'], now: number): number {
   const DAY = 86_400_000;
   switch (period) {
@@ -115,12 +123,121 @@ export type BoardResult = {
   /** Honest aggregate framing lines (spec §C3) — all derived, all true. */
   framing: string[];
   /**
-   * Where the rows came from. A local board holds only your own device's
-   * drives, so scope and verified-only cannot be applied to it — the screen
-   * disables those controls rather than leaving them inert.
+   * Whether the filters that produced this board were applied. 'local' means
+   * there is no backend, or it could not be reached, and the rows are this
+   * device's own drives: scope and verified-only cannot be applied to them, so
+   * the screen disables those controls rather than leaving them inert.
+   *
+   * 'server' means the board answers the query as asked — including when the
+   * answer is empty. It used to mean "the server returned rows", so an empty
+   * Friends or verified-only board came back 'local', disabled the very pill
+   * that would undo it, and trapped the screen on that filter until restart.
    */
   source: 'local' | 'server';
 };
+
+/** A vehicle class with drivers in it, as the class picker offers it. */
+export type Bracket = { key: string; drivers: number };
+
+/** How a period reads in a sentence. See periodStart: these are rolling windows. */
+export function periodPhrase(period: BoardPeriod): string {
+  switch (period) {
+    case 'day':
+      return 'in the last 24 hours';
+    case 'week':
+      return 'in the last 7 days';
+    case 'month':
+      return 'in the last 30 days';
+    case 'all':
+      return 'all-time';
+  }
+}
+
+/**
+ * Footer for a server board with nobody on it: says which slice is empty,
+ * because "No entries yet" alone cannot tell an empty friends list from a
+ * quiet week. Every clause is a filter the query really applied.
+ */
+export function emptyBoardFraming(query: BoardQuery, country: string | null): string[] {
+  const who =
+    query.scope === 'friends'
+      ? 'Neither you nor anyone you follow has'
+      : query.scope === 'country'
+        ? `Nobody in ${countryByCode(country)?.name ?? 'your country'} has`
+        : 'Nobody has';
+  const what = `${query.verifiedOnly ? 'a verified run' : 'a run'}${query.bracket ? ' in this class' : ''}`;
+  const when = query.period === 'all' ? 'yet' : periodPhrase(query.period);
+  const lines = [`${who} ${what} ${when}.`];
+  // The toggle that widens the board sits above it; on an empty board it is
+  // the one thing worth knowing about.
+  if (query.verifiedOnly) lines.push('Unverified runs are hidden while VERIFIED is on.');
+  return lines;
+}
+
+const emptyServerBoard = (framing: string[]): BoardResult => ({
+  rows: [],
+  isSample: false,
+  framing,
+  source: 'server',
+});
+
+/** Same rows, same order, same values — nothing a re-render would change. */
+function sameRows(a: BoardRow[], b: BoardRow[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((r, i) => {
+      const s = b[i];
+      return (
+        r.id === s.id &&
+        r.rank === s.rank &&
+        r.username === s.username &&
+        r.metric === s.metric &&
+        raw(r.value) === raw(s.value) &&
+        r.verification === s.verification &&
+        r.kind === s.kind &&
+        r.vehicle === s.vehicle &&
+        r.note === s.note
+      );
+    })
+  );
+}
+
+/**
+ * What a board fetch should leave on screen.
+ *
+ * `quiet` is a refetch of the slice already showing — the tab regaining focus
+ * — as opposed to a new filter, which clears to the skeleton first. Two
+ * things are different about a quiet refetch:
+ *
+ *  - An identical answer keeps the existing object, so the list does not
+ *    re-render and the row entrances do not replay on every tab switch.
+ *  - A server board is not swapped for this device's local history because
+ *    one refetch could not reach the server. The board on screen was a true
+ *    answer a moment ago; the local one would put this device's drives under
+ *    a World or Friends heading.
+ */
+export function settleBoard(
+  prev: BoardResult | null,
+  next: BoardResult,
+  quiet: boolean,
+): BoardResult {
+  if (!quiet || prev == null) return next;
+  if (prev.source === 'server' && next.source === 'local') return prev;
+  const same =
+    prev.source === next.source &&
+    prev.isSample === next.isSample &&
+    prev.framing.length === next.framing.length &&
+    prev.framing.every((f, i) => f === next.framing[i]) &&
+    sameRows(prev.rows, next.rows);
+  return same ? prev : next;
+}
+
+/** True when two class lists offer the same classes with the same counts. */
+export function sameBrackets(a: Bracket[], b: Bracket[]): boolean {
+  return (
+    a.length === b.length && a.every((x, i) => x.key === b[i].key && x.drivers === b[i].drivers)
+  );
+}
 
 /** Explains the controls the local board cannot honour. */
 const LOCAL_FILTER_NOTE =
@@ -251,9 +368,9 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
 
   const framing: string[] = [];
   framing.push(
-    `${inPeriod.length} drive${inPeriod.length === 1 ? '' : 's'} recorded on this device ${
-      query.period === 'all' ? 'all-time' : query.period === 'day' ? 'today' : `this ${query.period}`
-    }.`,
+    `${inPeriod.length} drive${inPeriod.length === 1 ? '' : 's'} recorded on this device ${periodPhrase(
+      query.period,
+    )}.`,
   );
   framing.push('Global boards go live once your account syncs — every entry a real drive.');
   framing.push(LOCAL_FILTER_NOTE);
@@ -262,7 +379,8 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
 }
 
 /**
- * Server board when Supabase is configured; falls back to local.
+ * Server board when Supabase is configured; falls back to local only when
+ * there is no backend or it could not be reached.
  *
  * Ranking is done by the `board_top` RPC rather than by selecting
  * leaderboard_entries directly: the board has to be one row per driver (their
@@ -279,9 +397,16 @@ export async function fetchBoard(
   if (!supabase) return buildLocalBoard(query, username, now);
 
   // A country board with no country is not a board — it would silently widen
-  // to every country, which is the bug this call replaced.
-  if (query.scope === 'country' && !country) return buildLocalBoard(query, username, now);
+  // to every country, which is the bug this call replaced. It is still an
+  // answer to the filter as chosen, so it stays a server result: falling back
+  // to local here disabled the scope pill and stranded the screen on Country.
+  if (query.scope === 'country' && !country) {
+    return emptyServerBoard(['Your profile has no country, so there is no country board to show.']);
+  }
 
+  // The friends scope resolves against auth.uid(): asked before the anonymous
+  // session exists, it answered as nobody. The id also marks your own rows.
+  const userId = await ensureUserId();
   const { data, error } = await supabase.rpc('board_top', {
     p_metric: query.metric,
     p_scope: query.scope,
@@ -295,6 +420,7 @@ export async function fetchBoard(
 
   type EntryRow = {
     id: string;
+    profile_id: string | null;
     username: string | null;
     country: string | null;
     value: number;
@@ -311,37 +437,53 @@ export async function fetchBoard(
     // is fixed by the metric we asked for, so it is tagged here on the way in.
     ...boardValue(query.metric, e.value),
     verification: e.verification === 'verified' ? 'verified' : 'unverified',
-    kind: e.username != null && e.username === username ? 'you' : 'user',
+    // By account, not by name: a username match highlighted another driver's
+    // rows as yours whenever they held the name you have locally.
+    kind:
+      userId != null
+        ? e.profile_id === userId
+          ? 'you'
+          : 'user'
+        : e.username != null && e.username === username
+          ? 'you'
+          : 'user',
     bracketKey: e.bracket_key,
   }));
 
-  // A bracket board with nobody in it is a true answer, not a failure. Falling
-  // back to the local board here would swap a real empty class for this
-  // device's own history under a heading that says otherwise.
-  if (rows.length === 0 && query.bracket) {
-    return {
-      rows: [],
-      isSample: false,
-      framing: ['Nobody has a verified run in this class yet.'],
-      source: 'server',
-    };
-  }
-
-  if (rows.length === 0) return buildLocalBoard(query, username, now);
+  // An empty board is a true answer, not a failure — for every slice, not
+  // only a bracket. Falling back to the local board here swapped a real empty
+  // Friends, Country or verified-only board for this device's own history
+  // under a heading that said otherwise, and marked it 'local', which disabled
+  // the scope pill and VERIFIED toggle needed to leave that slice.
+  if (rows.length === 0) return emptyServerBoard(emptyBoardFraming(query, country));
   return { rows, isSample: false, framing: [], source: 'server' };
 }
 
-/** Brackets that actually have entries, so the picker offers only real classes. */
+/**
+ * Classes with drivers on the board this query would show, so the picker
+ * offers only classes that lead somewhere. Takes the board's own filters —
+ * window, scope, verified-only — because a count taken over a wider slice
+ * than the board offered classes that then opened empty (migration 0016).
+ *
+ * Null when the server could not be asked, which is not the same as "no
+ * classes": the screen keeps what it already offers rather than hiding the
+ * picker, and dropping the chosen class, over a blip in signal.
+ */
 export async function fetchBrackets(
-  metric: BoardQuery['metric'],
-  period: BoardQuery['period'],
-): Promise<{ key: string; drivers: number }[]> {
+  query: Omit<BoardQuery, 'bracket'>,
+  country: string | null = null,
+): Promise<Bracket[] | null> {
   if (!supabase) return [];
+  // Same rule as fetchBoard: no country, no country board, so no classes on it.
+  if (query.scope === 'country' && !country) return [];
   const { data, error } = await supabase.rpc('board_brackets', {
-    p_metric: metric,
-    p_period: period,
+    p_metric: query.metric,
+    p_period: query.period,
+    p_scope: query.scope,
+    p_country: country,
+    p_verified_only: query.verifiedOnly,
   });
-  if (error || !data) return [];
+  if (error || !data) return null;
   return (data as { bracket_key: string; entries: number }[]).map((b) => ({
     key: b.bracket_key,
     drivers: Number(b.entries),

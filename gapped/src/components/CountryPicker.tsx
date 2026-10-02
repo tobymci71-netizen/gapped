@@ -1,14 +1,14 @@
 import { FlashList } from '@shopify/flash-list';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import { COUNTRIES, type Country, type CountryCode } from '@/data/countries';
+import { type Country, type CountryCode } from '@/data/countries';
+import { searchCountries } from '@/data/countrySearch';
 import { Entrance } from '@/components/Entrance';
-import { STAGGER_CAP } from '@/theme/motion';
 import { PressableScale } from '@/components/PressableScale';
 import { useFooterHeight } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
-import { color, font, radius, space, type, textStyle } from '@/theme/tokens';
+import { color, font, glyph, radius, space, type, textStyle } from '@/theme/tokens';
 
 /**
  * Sheet-style searchable country picker — the pattern from TripRank's
@@ -23,10 +23,9 @@ import { color, font, radius, space, type, textStyle } from '@/theme/tokens';
  * national boards with nothing to show which was real.
  *
  * Aliases such as UK, SU and ZR are absent deliberately. They are handled on
- * the way in by `canonicaliseCountry`, not offered on the way out.
+ * the way in by `canonicaliseCountry`, not offered on the way out. Typing "uk"
+ * still finds the United Kingdom row: see src/data/countrySearch.ts.
  */
-
-const ALL = COUNTRIES;
 
 export function CountryPicker({
   selected,
@@ -38,13 +37,7 @@ export function CountryPicker({
   const [query, setQuery] = useState('');
   const footerHeight = useFooterHeight();
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return ALL;
-    return ALL.filter(
-      (c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase() === q,
-    );
-  }, [query]);
+  const results = useMemo(() => searchCountries(query), [query]);
 
   return (
     <View style={styles.sheet}>
@@ -55,17 +48,26 @@ export function CountryPicker({
       <TextInput
         style={styles.search}
         placeholder="Search countries…"
-        placeholderTextColor={color.text3}
+        placeholderTextColor={color.text2}
         value={query}
         onChangeText={setQuery}
         autoCapitalize="none"
         autoCorrect={false}
       />
-      <View style={styles.list}>
+      {/*
+        The list fades in once, as a whole. Per-row entrances replayed: FlashList
+        recycles cells across indices, and wrapping only the first rows changed
+        a recycled cell's root element, so scrolling back to the top or typing
+        a query remounted rows that then faded in again.
+      */}
+      <Entrance style={styles.list}>
         <FlashList
           data={results}
           keyExtractor={(c: Country) => c.code}
           keyboardShouldPersistTaps="handled"
+          // Searching leaves little room above the keyboard; a drag says the
+          // typing is done and the list wants the space back.
+          keyboardDismissMode="on-drag"
           /*
            * The screen's footer is opaque and sits over the bottom of the
            * list, so without this the final entry — Zimbabwe — could never be
@@ -74,31 +76,35 @@ export function CountryPicker({
            * past it rather than stopping underneath it.
            */
           contentContainerStyle={{ paddingBottom: footerHeight }}
-          renderItem={({ item, index }: { item: Country; index: number }) => {
-            const row = (
+          renderItem={({ item }: { item: Country }) => {
+            const isSelected = selected === item.code;
+            return (
               <PressableScale
                 silent
                 onPress={() => {
                   haptic.selection();
                   onSelect(item.code);
                 }}
-                style={[styles.row, selected === item.code && styles.rowSelected]}
+                // The name alone: the flag would otherwise be read out first
+                // ("flag: United Kingdom, United Kingdom"), and the selected
+                // state was only ever a colour, which VoiceOver cannot see.
+                accessibilityRole="button"
+                accessibilityLabel={item.name}
+                accessibilityState={{ selected: isSelected }}
+                style={styles.row}
               >
                 <Text style={styles.flag}>{item.flag}</Text>
                 <Text
                   variant="bodyMedium"
                   numberOfLines={1}
-                  style={selected === item.code ? { color: color.accent } : undefined}
+                  style={[styles.name, isSelected ? { color: color.accent } : null]}
                 >
                   {item.name}
                 </Text>
+                {/* Selection shown by a mark as well as by colour. */}
+                {isSelected ? <Text style={styles.check}>✓</Text> : null}
               </PressableScale>
             );
-            // Only the first screenful staggers in. This list is 258 countries
-            // and FlashList recycles cells, so an entrance on every row replays
-            // the animation on every scroll — the same guard, and the same
-            // reason, as SearchableListSheet.
-            return index < STAGGER_CAP ? <Entrance index={index}>{row}</Entrance> : row;
           }}
           ListEmptyComponent={
             <Text variant="body" style={styles.empty}>
@@ -106,7 +112,7 @@ export function CountryPicker({
             </Text>
           }
         />
-      </View>
+      </Entrance>
     </View>
   );
 }
@@ -150,7 +156,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: color.surface2,
   },
-  rowSelected: {},
   flag: { fontSize: 22, lineHeight: 28 },
+  // flex so a long name ellipsizes before it can push the check mark out.
+  name: { flex: 1 },
+  check: { ...textStyle(glyph.xl), color: color.accent },
   empty: { padding: space.lg, textAlign: 'center' },
 });

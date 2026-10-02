@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '@/components/Text';
 import { contributionGrid, currentStreak } from '@/state/records';
@@ -7,17 +7,19 @@ import { color, space } from '@/theme/tokens';
 /**
  * Contribution-grid streak calendar (spec §B4 / Phase 1 table stakes #10) —
  * 12 weeks, GitHub-style, driven entirely from real local drive days.
+ *
+ * `now` is required and owned by the caller. Date.now() in the render body
+ * made this non-idempotent (two renders either side of midnight drew different
+ * grids); freezing it at mount fixed that and broke something worse, because
+ * the You tab stays mounted for days: the grid kept ending on the day it was
+ * first opened, new days never lit, and a dead streak stayed alive. The
+ * screen knows when "today" should move — focus, foreground, a finished
+ * drive — so it holds the clock.
  */
-export function StreakGrid({ driveDays, now }: { driveDays: string[]; now?: number }) {
-  // Date.now() in the render body made this component non-idempotent: two
-  // renders in the same frame could land either side of a day boundary and
-  // draw different grids. Frozen at mount instead, so the grid is stable for
-  // as long as the screen is on it; `now` stays injectable for tests.
-  const [mountedAt] = useState(() => Date.now());
-  const t = now ?? mountedAt;
+export function StreakGrid({ driveDays, now }: { driveDays: string[]; now: number }) {
   const days = new Set(driveDays);
-  const grid = contributionGrid(days, t, 84);
-  const streak = currentStreak(days, t);
+  const grid = contributionGrid(days, now, 84);
+  const streak = currentStreak(days, now);
 
   // 12 columns of 7 (weeks), oldest first.
   const weeks: (typeof grid)[] = [];
@@ -46,7 +48,12 @@ export function StreakGrid({ driveDays, now }: { driveDays: string[]; now?: numb
           </View>
         ))}
       </View>
-      <Text variant="caption">Any drive counts. Streaks survive reinstalls once synced.</Text>
+      {/*
+        Streak days live only in this device's storage — nothing reads them
+        back from the server — so a reinstall starts the grid empty. The
+        caption used to promise otherwise.
+      */}
+      <Text variant="caption">Any drive counts. Streaks are kept on this device.</Text>
     </View>
   );
 }

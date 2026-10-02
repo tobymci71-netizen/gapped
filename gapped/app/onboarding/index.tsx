@@ -38,8 +38,8 @@ export default function Welcome() {
   // the metric branch as 87 m/s and put 313 km/h on the first screen.
   const demo = speedForDisplay(demoSpeed, unitPref);
 
-  // The dial sizes to the viewport: a fixed 280 overflowed the non-scrolling
-  // hero on a 667pt device, so the bottom of the pitch went under the footer.
+  // The dial sizes to the viewport: a fixed 280 overflowed the hero on a 667pt
+  // device, so the bottom of the pitch went under the footer.
   const { width, height } = useWindowDimensions();
   const dial = Math.min(280, Math.round(width * 0.62), Math.round(height * 0.34));
 
@@ -54,12 +54,19 @@ export default function Welcome() {
   }, [reduced]);
 
   return (
+    // Scrolls, centred. The dial shrinks with the screen but the copy grows
+    // with Dynamic Type, and in a fixed View that overflow split both ways:
+    // the wordmark under the status bar, the end of the pitch under the
+    // footer, nothing able to scroll. flexGrow keeps short content centred in
+    // the viewport and lets long content scroll.
     <Screen
-      scroll={false}
-      footer={<Button label="Get started" onPress={() => router.push('/onboarding/unit')} />}
+      style={styles.fill}
+      footer={<Button label="Get started" onPress={() => router.navigate('/onboarding/unit')} />}
     >
       <View style={styles.center}>
-        <Numeral size={44} color={color.accent}>
+        {/* A logo, not copy: capped so it cannot break mid-word at the
+            largest accessibility sizes. */}
+        <Numeral size={44} color={color.accent} maxFontSizeMultiplier={1.3}>
           GAPPED
         </Numeral>
         <View style={styles.dial}>
@@ -84,6 +91,7 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
+  fill: { flexGrow: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   dial: { marginVertical: space.lg },
   headline: { alignSelf: 'stretch' },

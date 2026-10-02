@@ -26,20 +26,51 @@ export type VersionGate =
   | { status: 'blocked'; message: string | null };
 
 /**
- * The running build number.
+ * Which build number to compare, from what the platform reports. Pure — tested.
  *
- * EAS owns this under `appVersionSource: remote` and injects the resolved value
- * into the manifest at build time; `app.json` deliberately has no
- * `ios.buildNumber` for it to disagree with. In a dev client there is nothing
- * to inject, so this returns null and the gate stands down.
+ * Read from the NATIVE binary, never from `Constants.expoConfig`. expoConfig is
+ * app.json as it stood at build time, embedded by expo-constants, and under
+ * `appVersionSource: remote` EAS writes the resolved number into Info.plist /
+ * build.gradle after prebuild — never into app.json, which deliberately has no
+ * `ios.buildNumber` for it to disagree with. Reading expoConfig therefore gave
+ * null on every EAS build, and the gate stood down for exactly the builds it
+ * exists to stop.
+ *
+ * - iOS: `Constants.platform.ios.buildNumber` is CFBundleVersion, the number
+ *   EAS set. Null in Expo Go.
+ * - Android: expo-constants exposes no versionCode (its Android service returns
+ *   an empty platform map), and expo-application, which does, is not a
+ *   dependency. Null, so the gate stands down on Android rather than compare
+ *   against a number that is not this binary's. Never fall back to the iOS
+ *   value: the two counters are independent under remote versioning, and a
+ *   cross-platform comparison is how a false block happens.
+ * - Debug builds (a dev client): null. Their CFBundleVersion is prebuild's
+ *   default "1", which says nothing about which release they are, and a dev
+ *   client blocked by production's min_build is a developer locked out of
+ *   their own app.
+ *
+ * Anything that is not a plain positive integer is null too. CFBundleVersion
+ * may legally be "1.0.3"; parseInt would read that as 1 and block it.
  */
-export function currentBuildNumber(): number | null {
-  const ios = Constants.expoConfig?.ios?.buildNumber;
-  const android = Constants.expoConfig?.android?.versionCode;
-  const raw = ios ?? (android != null ? String(android) : undefined);
-  if (raw == null) return null;
-  const n = Number.parseInt(raw, 10);
-  return Number.isFinite(n) ? n : null;
+export function resolveBuildNumber(input: {
+  platform: 'ios' | 'android';
+  isDev: boolean;
+  iosBuildNumber: string | null | undefined;
+}): number | null {
+  if (input.isDev || input.platform !== 'ios') return null;
+  const raw = input.iosBuildNumber?.trim();
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+/** The running binary's build number, or null when it cannot be known. */
+export function currentBuildNumber(platform: 'ios' | 'android'): number | null {
+  return resolveBuildNumber({
+    platform,
+    isDev: __DEV__,
+    iosBuildNumber: Constants.platform?.ios?.buildNumber,
+  });
 }
 
 export async function checkVersionGate(
@@ -47,7 +78,7 @@ export async function checkVersionGate(
 ): Promise<VersionGate> {
   if (!supabase) return { status: 'ok' };
 
-  const build = currentBuildNumber();
+  const build = currentBuildNumber(platform);
   if (build == null) return { status: 'ok' };
 
   const { data, error } = await supabase

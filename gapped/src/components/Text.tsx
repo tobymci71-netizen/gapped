@@ -1,6 +1,22 @@
-import React from 'react';
+import React, { createContext, useContext } from 'react';
 import { Text as RNText, TextProps, TextStyle } from 'react-native';
 import { color, font, type, textStyle } from '@/theme/tokens';
+
+/**
+ * True below a raised surface — a Card or a sheet, both surface1.
+ *
+ * text3 is the muted grey of fine print, and it clears WCAG AA's 4.5:1 on the
+ * canvas (4.63) but not on surface1 (4.30) or surface2 (3.98). So `legal`,
+ * the one variant that defaults to text3, steps up to text2 on a surface. The
+ * surfaces publish this rather than each call site picking a colour, because
+ * the call site is exactly where "which background am I on?" gets forgotten.
+ */
+const OnSurfaceContext = createContext(false);
+
+/** Wrap the children of anything that paints a surface1/surface2 background. */
+export function OnSurface({ children }: { children?: React.ReactNode }) {
+  return <OnSurfaceContext.Provider value>{children}</OnSurfaceContext.Provider>;
+}
 
 type Variant = 'headline' | 'cardTitle' | 'body' | 'bodyMedium' | 'caption' | 'legal';
 
@@ -21,12 +37,16 @@ const variants: Record<Variant, TextStyle> = {
   legal: { fontFamily: font.body, ...textStyle(type.legal), color: color.text3 },
 };
 
+const legalOnSurface: TextStyle = { ...variants.legal, color: color.text2 };
+
 export function Text({
   variant = 'body',
   style,
   ...rest
 }: TextProps & { variant?: Variant }) {
-  return <RNText {...rest} style={[variants[variant], style]} />;
+  const onSurface = useContext(OnSurfaceContext);
+  const base = variant === 'legal' && onSurface ? legalOnSurface : variants[variant];
+  return <RNText {...rest} style={[base, style]} />;
 }
 
 /**

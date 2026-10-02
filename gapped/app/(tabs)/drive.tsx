@@ -1,8 +1,16 @@
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/Button';
 import { CarSilhouette } from '@/components/CarSilhouette';
 import { DriveMap, DriveMapHandle } from '@/components/DriveMap';
@@ -11,15 +19,15 @@ import { PressableScale } from '@/components/PressableScale';
 import { Speedometer } from '@/components/Speedometer';
 import { Text } from '@/components/Text';
 import { sanitiseHeading } from '@/drive/heading';
+import { HUD_MAX_FONT_SCALE, hudDialSize } from '@/drive/hud';
 import { useDriveStore } from '@/drive/recorder';
 import { DriveSummary } from '@/drive/types';
 import {
   formatDistance,
   formatDuration,
   formatSpeed,
-  msToKmh,
-  msToMph,
   speedForDisplay,
+  UnitPref,
 } from '@/drive/units';
 import { LocalDrive, listDrives, readFixesSince } from '@/drive/wal';
 import { haptic } from '@/lib/haptics';
@@ -48,7 +56,9 @@ const POSITION_POLL_MS = 2000;
 const MAX_ROUTE_POINTS = 1500;
 const AVATAR = 44;
 const CONTROL = 44;
-const HUD_SIZE = 200;
+const PANEL_RADIUS = radius.card + 8;
+const DISCARDED_NOTE = "That drive wasn't saved — no usable GPS fix was recorded.";
+const ACTION_NOTE_MAX_FONT_SCALE = 1.3;
 
 type FinalizedDrive = LocalDrive & { summary: DriveSummary };
 
@@ -77,39 +87,46 @@ const emptyBuffer = (): RouteBuffer => ({ points: [], stride: 1, seen: 0, lastSe
 export default function DriveScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const { height, fontScale } = useWindowDimensions();
   const { unitPref, vehicleKind, vehicleMake, vehicleModel, debugHud } = useProfile();
+  // Only what this screen renders. Without a selector every store write
+  // re-rendered the map and the whole drive list — each IMU sample (1 Hz
+  // parked, 10 Hz under hard acceleration) and each fix, on every tab, since
+  // tabs stay mounted. Speed, distance and the IMU readout are read by the
+  // small components that show them.
   const {
     engineState,
     driveId,
-    speedMs,
-    imuHz,
-    lastAccelG,
-    distanceM,
-    startedAt,
     lastSummary,
+    lastDiscardedAt,
     permission,
+    canAskAgain,
+    precise,
     requestPermissions,
     startDrive,
     stopDrive,
-  } = useDriveStore();
-  const { pbs, recordDrive } = useRecords();
+  } = useDriveStore(
+    useShallow((s) => ({
+      engineState: s.engineState,
+      driveId: s.driveId,
+      lastSummary: s.lastSummary,
+      lastDiscardedAt: s.lastDiscardedAt,
+      permission: s.permission,
+      canAskAgain: s.canAskAgain,
+      precise: s.precise,
+      requestPermissions: s.requestPermissions,
+      startDrive: s.startDrive,
+      stopDrive: s.stopDrive,
+    })),
+  );
+  const recordDrive = useRecords((s) => s.recordDrive);
 
   const recording = engineState === 'recording';
   const mapRef = useRef<DriveMapHandle>(null);
   const [hudVisible, setHudVisible] = useState(true);
   const [live, setLive] = useState<Live>(NO_LIVE);
   const [drives, setDrives] = useState<FinalizedDrive[]>([]);
-  const [now, setNow] = useState(() => Date.now());
-
-  const { value: speedValue, unit: speedUnit } = speedForDisplay(speedMs, unitPref);
-  const maxValue = unitPref === 'imperial' ? 160 : 260;
-  const pbDisplay =
-    pbs.topSpeedMs != null
-      ? unitPref === 'imperial'
-        ? msToMph(pbs.topSpeedMs)
-        : msToKmh(pbs.topSpeedMs)
-      : null;
+  const [sceneHeight, setSceneHeight] = useState(0);
 
   const bodyType: BodyType | null = useMemo(
     () =>
@@ -128,6 +145,12 @@ export default function DriveScreen() {
       if (imps.length > 0) haptic.personalBest();
     }
   }, [lastSummary, recordDrive]);
+
+  // The note appears above a button that has just swapped from End to Start,
+  // with no new row to explain it; VoiceOver would otherwise never reach it.
+  useEffect(() => {
+    if (lastDiscardedAt != null) AccessibilityInfo.announceForAccessibility(DISCARDED_NOTE);
+  }, [lastDiscardedAt]);
 
   // Identity is preserved when the list is unchanged, so re-focusing the tab
   // does not replay the row entrance animations.
@@ -213,24 +236,35 @@ export default function DriveScreen() {
     };
   }, [recording, permission]);
 
-  // The store only ticks on a fix, so the elapsed clock owns its own second hand.
-  useEffect(() => {
-    if (!recording) return;
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [recording]);
-
   const panelHeight = Math.max(300, Math.round(height * 0.46));
+  const hudTop = insets.top + space.md + CONTROL + space.md;
+  // The dial gives up height so the live line under it clears the panel.
+  const hudSize = hudDialSize({ sceneHeight, panelHeight, hudTop, fontScale });
+
+  const enableLocation = async () => {
+    // Every other rejection path in the app says so.
+    if (!(await requestPermissions().catch(() => false))) haptic.error();
+  };
+  const openSettings = () => {
+    Linking.openSettings().catch(() => undefined);
+  };
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} onLayout={(e) => setSceneHeight(e.nativeEvent.layout.height)}>
+      {/*
+        The map ends at the panel, not the bottom of the screen. Full-bleed, its
+        centre — where the camera puts the driver on the first fix, on Recentre
+        and every second while following — sat behind the opaque panel on every
+        iPhone, and so did Apple's Legal link. It still runs PANEL_RADIUS under
+        the panel so the map, not the canvas, shows in the rounded corners.
+      */}
       <DriveMap
         ref={mapRef}
         position={live.position}
         route={live.route}
         following={recording}
-        style={styles.map}
+        obscuredBottom={PANEL_RADIUS}
+        style={[styles.map, { bottom: panelHeight - PANEL_RADIUS }]}
       />
 
       <View style={[styles.controls, { top: insets.top + space.md }]}>
@@ -252,39 +286,14 @@ export default function DriveScreen() {
         >
           <Text
             variant="caption"
-            style={[styles.controlLabel, { color: hudVisible ? color.accent : color.text3 }]}
+            style={[styles.controlLabel, { color: hudVisible ? color.accent : color.text2 }]}
           >
             HUD
           </Text>
         </PressableScale>
       </View>
 
-      {recording && hudVisible ? (
-        <View
-          pointerEvents="none"
-          style={[styles.hud, { top: insets.top + space.md + CONTROL + space.md }]}
-        >
-          <Speedometer
-            value={speedValue}
-            maxValue={maxValue}
-            unit={speedUnit}
-            pb={pbDisplay}
-            size={HUD_SIZE}
-            active
-          />
-          <View style={styles.hudRow}>
-            {/* Tabular locally, not on the `caption` variant: these two tick
-                live, but most captions in the app are prose. */}
-            <Text variant="caption" style={styles.hudNumeral}>
-              {formatDistance(distanceM, unitPref)}
-            </Text>
-            <Text variant="caption">·</Text>
-            <Text variant="caption" style={styles.hudNumeral}>
-              {formatDuration(seconds(startedAt != null ? Math.max(0, now - startedAt) / 1000 : 0))}
-            </Text>
-          </View>
-        </View>
-      ) : null}
+      {recording && hudVisible ? <LiveHud top={hudTop} size={hudSize} unitPref={unitPref} /> : null}
 
       {/*
         IMU debug readout. Off by default; Settings → Debug HUD turns it on.
@@ -306,15 +315,7 @@ export default function DriveScreen() {
         happens. A `g` that idles near 1.00 means gravity is back in the signal,
         and Hz will be stuck at 10 as a consequence.
       */}
-      {debugHud ? (
-        <View pointerEvents="none" style={[styles.debugStrip, { top: insets.top + space.md }]}>
-          <Text variant="caption" style={styles.hudDebug}>
-            {`${engineState} · IMU ${imuHz} Hz · ${
-              lastAccelG != null ? raw(lastAccelG).toFixed(2) : '—'
-            } g`}
-          </Text>
-        </View>
-      ) : null}
+      {debugHud ? <DebugStrip top={insets.top + space.md} /> : null}
 
       <View style={[styles.panel, { height: panelHeight }]}>
         <View style={styles.panelHeader}>
@@ -345,54 +346,90 @@ export default function DriveScreen() {
               <Text variant="body" style={styles.emptyCopy}>
                 No drives recorded yet.
               </Text>
+              {/* Only claim automatic detection when it can actually run; it
+                  said so with location off, beside a button that did nothing. */}
               <Text variant="caption" style={styles.emptyCopy}>
-                Detection is automatic — sustained motion starts a recording. You can also
-                start one manually while safely parked.
+                {permission === 'granted' && precise
+                  ? 'Detection is automatic — sustained motion starts a recording. You can also start one manually while safely parked.'
+                  : 'Once precise location is on, sustained motion starts a recording automatically.'}
               </Text>
             </View>
           ) : (
-            drives.map((d, i) => (
-              <Entrance key={d.id} index={i}>
-                <PressableScale
-                  onPress={() => router.push(`/drive/${d.id}`)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Drive on ${new Date(d.startedAt).toLocaleString()}`}
-                  style={styles.row}
-                >
-                  <View style={styles.rowBody}>
-                    <Text variant="bodyMedium" numberOfLines={1}>
-                      {new Date(d.startedAt).toLocaleDateString()} ·{' '}
-                      {new Date(d.startedAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                    <Text variant="caption" numberOfLines={1}>
-                      {formatDistance(d.summary.distanceM, unitPref)} ·{' '}
-                      {formatDuration(d.summary.durationS)} · top{' '}
-                      {formatSpeed(d.summary.maxSpeedMs, unitPref)}
-                    </Text>
-                  </View>
-                  <Text style={styles.rowChevron}>›</Text>
-                </PressableScale>
-              </Entrance>
-            ))
+            drives.map((d, i) => {
+              const distance = formatDistance(d.summary.distanceM, unitPref);
+              const time = formatDuration(d.summary.durationS);
+              const top = formatSpeed(d.summary.maxSpeedMs, unitPref);
+              return (
+                <Entrance key={d.id} index={i}>
+                  <PressableScale
+                    onPress={() => router.push(`/drive/${d.id}`)}
+                    accessibilityRole="button"
+                    // The label replaces the row's text for VoiceOver, so it
+                    // carries the stats too — not just the date.
+                    accessibilityLabel={`Drive on ${new Date(d.startedAt).toLocaleString()}, ${distance}, ${time}, top speed ${top}`}
+                    style={styles.row}
+                  >
+                    <View style={styles.rowBody}>
+                      <Text variant="bodyMedium" numberOfLines={1}>
+                        {new Date(d.startedAt).toLocaleDateString()} ·{' '}
+                        {new Date(d.startedAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                      {/* Two lines: the top speed comes last, so at large text
+                          sizes a single line ellipsized exactly that figure. */}
+                      <Text variant="caption" numberOfLines={2}>
+                        {distance} · {time} · top {top}
+                      </Text>
+                    </View>
+                    <Text style={styles.rowChevron}>›</Text>
+                  </PressableScale>
+                </Entrance>
+              );
+            })
           )}
         </ScrollView>
 
         <View style={styles.action}>
-          {permission !== 'granted' ? (
-            <Button label="Enable location" onPress={requestPermissions} />
-          ) : recording ? (
+          {recording ? (
+            // First, whatever else is true: a drive can only be ended from here,
+            // and permission can now change underneath one.
             <Button label="End drive" variant="secondary" onPress={stopDrive} />
+          ) : permission !== 'granted' && !canAskAgain ? (
+            // Once denied, the OS will not show its prompt again, so "Enable
+            // location" would be permanently inert. Only Settings can fix it.
+            <>
+              <ActionNote>
+                Location is off for Gapped, so drives can&apos;t be recorded. Allow it in Settings.
+              </ActionNote>
+              <Button label="Open Settings" onPress={openSettings} />
+            </>
+          ) : permission !== 'granted' ? (
+            <Button label="Enable location" onPress={enableLocation} />
+          ) : !precise ? (
+            // Granted but approximate: every fix fails the accuracy gate, so a
+            // drive would save as all zeros. Say why instead of offering Start.
+            <>
+              <ActionNote>
+                Precise Location is off. Approximate positions are too coarse to measure a
+                drive — turn it on in Settings.
+              </ActionNote>
+              <Button label="Open Settings" onPress={openSettings} />
+            </>
           ) : (
-            <Button
-              label="Start drive"
-              onPress={() => {
-                haptic.driveStarted();
-                startDrive();
-              }}
-            />
+            <>
+              {lastDiscardedAt != null ? (
+                <ActionNote>{DISCARDED_NOTE}</ActionNote>
+              ) : null}
+              <Button
+                label="Start drive"
+                onPress={() => {
+                  haptic.driveStarted();
+                  startDrive();
+                }}
+              />
+            </>
           )}
         </View>
       </View>
@@ -400,9 +437,105 @@ export default function DriveScreen() {
   );
 }
 
+/**
+ * The live dial and the distance · elapsed line under it.
+ *
+ * Its own subscriber, so speed and distance (every fix) and the elapsed clock
+ * (every second) re-render this alone rather than the map and the drive list.
+ * Mounted only while recording with the HUD shown, so the clock starts fresh.
+ */
+function LiveHud({ top, size, unitPref }: { top: number; size: number; unitPref: UnitPref }) {
+  const { speedMs, distanceM, startedAt } = useDriveStore(
+    useShallow((s) => ({ speedMs: s.speedMs, distanceM: s.distanceM, startedAt: s.startedAt })),
+  );
+  // The store only ticks on a fix, so the elapsed clock owns its own second hand.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const { value, unit } = speedForDisplay(speedMs, unitPref);
+  return (
+    <View pointerEvents="none" style={[styles.hud, { top }]}>
+      {/*
+        No `pb` here, deliberately. The dial's NEW PB badge springs in the moment
+        live speed passes the stored best — a reward for a number going up while
+        driving, which NO_IN_DRIVE_SPEED_NUDGES (src/config/flags.ts) forbids.
+        A record is celebrated when the drive finalises (the lastSummary effect).
+      */}
+      <Speedometer
+        value={value}
+        maxValue={unitPref === 'imperial' ? 160 : 260}
+        unit={unit}
+        size={size}
+        active
+      />
+      <View style={styles.hudRow}>
+        {/* Tabular locally, not on the `caption` variant: these two tick
+            live, but most captions in the app are prose. */}
+        <Text
+          variant="caption"
+          style={styles.hudNumeral}
+          maxFontSizeMultiplier={HUD_MAX_FONT_SCALE}
+        >
+          {formatDistance(distanceM, unitPref)}
+        </Text>
+        <Text variant="caption" maxFontSizeMultiplier={HUD_MAX_FONT_SCALE}>
+          ·
+        </Text>
+        <Text
+          variant="caption"
+          style={styles.hudNumeral}
+          maxFontSizeMultiplier={HUD_MAX_FONT_SCALE}
+        >
+          {formatDuration(seconds(startedAt != null ? Math.max(0, now - startedAt) / 1000 : 0))}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * The line above the panel's button: why it is not "Start drive", or why the
+ * last drive left no row.
+ *
+ * Capped like the HUD line. The panel is a fixed height and only the list
+ * above can give up room, so at accessibility sizes on a 375×667 SE an
+ * uncapped note grew to four or five lines and pushed the very button it
+ * explains out of the bottom of the panel, under the tab bar.
+ */
+function ActionNote({ children }: { children: React.ReactNode }) {
+  return (
+    <Text
+      variant="caption"
+      style={styles.actionNote}
+      maxFontSizeMultiplier={ACTION_NOTE_MAX_FONT_SCALE}
+    >
+      {children}
+    </Text>
+  );
+}
+
+/** The IMU debug readout (see the note where it is mounted). */
+function DebugStrip({ top }: { top: number }) {
+  const { engineState, imuHz, lastAccelG } = useDriveStore(
+    useShallow((s) => ({ engineState: s.engineState, imuHz: s.imuHz, lastAccelG: s.lastAccelG })),
+  );
+  return (
+    <View pointerEvents="none" style={[styles.debugStrip, { top }]}>
+      <Text variant="caption" style={styles.hudDebug}>
+        {`${engineState} · IMU ${imuHz} Hz · ${
+          lastAccelG != null ? raw(lastAccelG).toFixed(2) : '—'
+        } g`}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.canvas },
-  map: { ...StyleSheet.absoluteFill },
+  map: { position: 'absolute', top: 0, left: 0, right: 0 },
   controls: { position: 'absolute', right: gutter, gap: space.md },
   control: {
     width: CONTROL,
@@ -433,8 +566,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: color.surface1,
-    borderTopLeftRadius: radius.card + 8,
-    borderTopRightRadius: radius.card + 8,
+    borderTopLeftRadius: PANEL_RADIUS,
+    borderTopRightRadius: PANEL_RADIUS,
     borderTopWidth: 1,
     borderColor: color.hairline,
     paddingHorizontal: gutter,
@@ -472,5 +605,6 @@ const styles = StyleSheet.create({
   },
   rowBody: { flex: 1, gap: 2 },
   rowChevron: { fontSize: 20, lineHeight: 22, color: color.text3 },
-  action: { paddingTop: space.sm },
+  action: { paddingTop: space.sm, gap: space.sm },
+  actionNote: { textAlign: 'center' },
 });

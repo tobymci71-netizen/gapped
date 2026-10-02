@@ -26,12 +26,31 @@ export const AUTO_END_HOLD_MS = 3 * 60_000;
 /** |accel| (g) above which we want 10 Hz IMU sampling (0-60 capture). */
 export const HIGH_RATE_ACCEL_G = 0.25;
 
+/**
+ * How much history from BEFORE sustained motion an auto-started drive keeps.
+ *
+ * The arming buffer used to hold only fixes above 15 km/h, and any slower fix
+ * emptied it — so the standstill and the 0-15 km/h part of the launch that
+ * triggered the recording never reached the WAL, and that launch could never
+ * produce a 0-60 (detection needs a ≥2 s standstill hold, then the whole
+ * pull). 10 s covers the hold plus even a gentle pull to 15 km/h; there is no
+ * value in keeping a long parked dwell.
+ */
+export const PRE_ROLL_MS = 10_000;
+
+/** Hard cap on buffered fixes while not recording, whatever the fix rate. */
+const MAX_BUFFERED_FIXES = 600;
+
 export class DriveEngine {
   private state: EngineState = 'idle';
   private motionSince: EpochMs | null = null;
   private stationarySince: EpochMs | null = null;
-  /** Fixes seen while arming, so the drive includes the run-up. */
-  private armingBuffer: Fix[] = [];
+  /**
+   * Every fix seen while not recording, trimmed to the run since motion began
+   * plus PRE_ROLL_MS before it — so an auto-started drive includes its run-up
+   * AND the launch that led into it.
+   */
+  private recent: Fix[] = [];
 
   getState(): EngineState {
     return this.state;
@@ -40,11 +59,17 @@ export class DriveEngine {
   /** Manual start — user pressed the button while safely parked. */
   startManual(at: EpochMs): EngineEvent[] {
     if (this.state === 'recording') return [];
+    // Only the run-up of a drive that was already arming comes along — not
+    // the pre-roll. Parked, the standstill before a launch is recorded live
+    // from here on, and the drive should not start before the button press.
+    const since = this.motionSince;
+    const runUp = since != null ? this.recent.filter((f) => f.t >= since) : [];
     this.state = 'recording';
     this.stationarySince = null;
+    this.motionSince = null;
+    this.recent = [];
     const events: EngineEvent[] = [{ type: 'start', at }];
-    for (const f of this.armingBuffer) events.push({ type: 'fix', fix: f });
-    this.armingBuffer = [];
+    for (const f of runUp) events.push({ type: 'fix', fix: f });
     return events;
   }
 
@@ -68,26 +93,36 @@ export class DriveEngine {
     switch (this.state) {
       case 'idle':
       case 'arming': {
+        this.recent.push(fix);
         if (speed > AUTO_START_SPEED_MS) {
           if (this.motionSince == null) this.motionSince = fix.t;
           this.state = 'arming';
-          this.armingBuffer.push(fix);
-          // cap the buffer so a long slow crawl can't grow it unboundedly
-          if (this.armingBuffer.length > 600) this.armingBuffer.shift();
           if (fix.t - this.motionSince >= AUTO_START_HOLD_MS) {
+            const from = this.motionSince - PRE_ROLL_MS;
+            const drive = this.recent.filter((f) => f.t >= from);
             this.state = 'recording';
             this.stationarySince = null;
-            events.push({ type: 'start', at: this.motionSince });
-            for (const f of this.armingBuffer) events.push({ type: 'fix', fix: f });
-            this.armingBuffer = [];
             this.motionSince = null;
+            this.recent = [];
+            // The drive starts at its first recorded fix, which is now in the
+            // pre-roll — so the WAL's started_at agrees with the summary's.
+            events.push({ type: 'start', at: drive[0].t });
+            for (const f of drive) events.push({ type: 'fix', fix: f });
+            break;
           }
         } else {
-          // motion lapsed before the hold completed
+          // Motion lapsed before the hold completed. The fixes stay: they
+          // are the pre-roll for the next attempt, which may be a launch.
           this.state = 'idle';
           this.motionSince = null;
-          this.armingBuffer = [];
         }
+        // Keep the run since motion began (or nothing, idle) plus the
+        // pre-roll before it; cap so a long slow crawl can't grow it unboundedly.
+        const keepFrom = (this.motionSince ?? fix.t) - PRE_ROLL_MS;
+        let drop = 0;
+        while (drop < this.recent.length && this.recent[drop].t < keepFrom) drop++;
+        drop = Math.max(drop, this.recent.length - MAX_BUFFERED_FIXES);
+        if (drop > 0) this.recent.splice(0, drop);
         break;
       }
       case 'recording': {

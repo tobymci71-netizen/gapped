@@ -71,3 +71,19 @@ export function toCsv(fixes: Fix[]): string {
   );
   return [CSV_HEADER, ...rows].join('\n') + '\n';
 }
+
+/**
+ * The human-facing stamp for an export's file name and GPX track name, e.g.
+ * `2026-10-02T2130`, in the device's LOCAL time.
+ *
+ * It was `toISOString()` with the `Z` sliced off, which is UTC wearing a local
+ * time's clothes: the drive the app lists at 21:30 on 2 Oct in New York was
+ * exported as `…10-03T0130`, a different hour and day from the one the user
+ * picked. Only the label is local — every `<time>` and `time_iso` cell stays
+ * UTC ISO, which is what GPX and anything parsing the CSV expect.
+ */
+export function exportStamp(t: number): string {
+  const d = new Date(t);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}`;
+}

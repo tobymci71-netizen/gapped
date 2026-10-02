@@ -63,7 +63,7 @@ export default function VehicleTypeStep() {
         <Button
           label="Continue"
           disabled={!vehicleKind}
-          onPress={() => router.push('/onboarding/vehicle')}
+          onPress={() => router.navigate('/onboarding/vehicle')}
         />
       }
     >

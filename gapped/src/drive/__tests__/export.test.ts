@@ -1,4 +1,4 @@
-import { CSV_HEADER, toCsv, toGpx } from '../export';
+import { CSV_HEADER, exportStamp, toCsv, toGpx } from '../export';
 import { cleanCruise } from './fixtures';
 
 describe('GPX export', () => {
@@ -50,5 +50,18 @@ describe('CSV export', () => {
     for (const line of csv.trim().split('\n')) {
       expect(line.split(',').length).toBe(cols);
     }
+  });
+});
+
+describe('export stamp', () => {
+  test('is the local wall-clock time the app shows, not UTC', () => {
+    // Built from local parts, so this holds in any zone — and on any machine
+    // not on UTC the old toISOString() stamp fails it.
+    const t = new Date(2026, 9, 2, 21, 30, 45).getTime(); // 21:30 on 2 Oct, local
+    expect(exportStamp(t)).toBe('2026-10-02T2130');
+  });
+
+  test('pads single-digit months, days, hours and minutes', () => {
+    expect(exportStamp(new Date(2026, 0, 5, 7, 4).getTime())).toBe('2026-01-05T0704');
   });
 });

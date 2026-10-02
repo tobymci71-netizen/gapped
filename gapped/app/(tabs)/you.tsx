@@ -1,7 +1,8 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, TextInput, View } from 'react-native';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
+import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
@@ -20,13 +21,17 @@ import {
   speedBins,
 } from '@/drive/distribution';
 import { aggregateManeuvers, countManeuvers, ManeuverCounts } from '@/drive/maneuvers';
+import { useDriveStore } from '@/drive/recorder';
 import { DriveSummary } from '@/drive/types';
 import { LocalDrive, listDrives, readFixes } from '@/drive/wal';
-import { distanceForDisplay, formatDuration, formatSpeed, UnitPref } from '@/drive/units';
+import { distanceForDisplay, formatDistance, formatDuration, formatSpeed, UnitPref } from '@/drive/units';
+import { haptic } from '@/lib/haptics';
+import { isUsernameAvailable } from '@/lib/sync';
+import { isValidUsername, normaliseUsername } from '@/lib/username';
 import { metres, mps, seconds } from '@/types/units';
 import { useProfile } from '@/state/profile';
 import { useRecords } from '@/state/records';
-import { color, space } from '@/theme/tokens';
+import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
 
 /** Glyph-tile tints: palette colours at low alpha, matching the Settings screen. */
 const tint = {
@@ -121,15 +126,104 @@ function ManeuverTile({
   );
 }
 
+/**
+ * Shown when the server refused the username because another driver holds it.
+ *
+ * Onboarding never checked, and the refusal used to be swallowed: the runs
+ * went up with no name while this screen kept showing the one picked. The
+ * onboarding step is behind the onboarding guard once onboarded, so the way
+ * out has to live here.
+ */
+function UsernameTakenCard({ taken }: { taken: string | null }): React.JSX.Element {
+  const setUsername = useProfile((s) => s.setUsername);
+  const [value, setValue] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const name = normaliseUsername(value);
+  const valid = isValidUsername(name);
+
+  const save = async () => {
+    if (!valid || checking) return;
+    setChecking(true);
+    setProblem(null);
+    const free = await isUsernameAvailable(name);
+    setChecking(false);
+    if (free !== true) {
+      haptic.error();
+      setProblem(
+        free === false
+          ? `@${name} is taken too. Try another.`
+          : 'Could not check that name. Check your connection and try again.',
+      );
+      return;
+    }
+    // Clears the flag; the root layout's profile subscription pushes the new
+    // name, and the server is still the judge if someone takes it first.
+    setUsername(name);
+  };
+
+  return (
+    <Card style={styles.takenCard}>
+      <Text variant="caption" style={{ color: color.danger }}>
+        USERNAME TAKEN
+      </Text>
+      <Text variant="body">
+        {taken ? `@${taken} already belongs to another driver, ` : 'Your username is taken, '}
+        so your runs appear on the boards without a name. Pick another.
+      </Text>
+      <View style={styles.takenRow}>
+        <Text variant="bodyMedium" style={{ color: color.text3 }}>
+          @
+        </Text>
+        <TextInput
+          style={styles.takenInput}
+          placeholder="username"
+          placeholderTextColor={color.text2}
+          value={value}
+          onChangeText={(t) => {
+            setValue(t);
+            setProblem(null);
+          }}
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={20}
+          editable={!checking}
+          accessibilityLabel="New username"
+        />
+      </View>
+      {problem ? (
+        <Text variant="caption" style={{ color: color.danger }}>
+          {problem}
+        </Text>
+      ) : value.length > 0 && !valid ? (
+        <Text variant="caption" style={{ color: color.danger }}>
+          3–20 characters: lowercase letters, numbers, underscores.
+        </Text>
+      ) : null}
+      <Button
+        label={checking ? 'Checking…' : 'Use this name'}
+        onPress={save}
+        disabled={!valid || checking}
+      />
+    </Card>
+  );
+}
+
 export default function YouScreen() {
   const router = useRouter();
-  const { username, country, vehicleMake, vehicleModel, unitPref } = useProfile();
+  const { username, usernameTaken, country, vehicleMake, vehicleModel, unitPref } = useProfile();
   const { pbs, driveDays } = useRecords();
   const [drives, setDrives] = useState<FinalizedDrive[]>([]);
+  // "Today" for the streak. The tab stays mounted for the life of the process
+  // — often days, with background recording — so a time frozen at mount kept
+  // the grid ending on the day the tab was first opened. Refreshed on focus,
+  // on return to the foreground, when a drive finishes, and at midnight.
+  const [now, setNow] = useState(Date.now);
 
   // Identity is preserved when the list is unchanged, so re-focusing the tab
   // does not re-read every drive's fixes for the manoeuvre counts below.
   const refresh = useCallback(() => {
+    setNow(Date.now());
     setDrives((prev) => {
       const next = listDrives().filter(isFinalized);
       return prev.length === next.length && prev.every((d, i) => d.id === next[i].id)
@@ -138,6 +232,35 @@ export default function YouScreen() {
     });
   }, []);
   useFocusEffect(refresh);
+
+  // Focus is not the only time the list changes. A drive that auto-ends while
+  // this tab is showing — or while the phone is locked on it — finalizes
+  // without any navigation, so the totals and history waited for a tab switch.
+  // Subscribed rather than an effect on lastSummary: the store calls back,
+  // and the update happens in the same JS runtime even in the background.
+  useEffect(
+    () =>
+      useDriveStore.subscribe((s, prev) => {
+        if (s.lastSummary !== prev.lastSummary) refresh();
+      }),
+    [refresh],
+  );
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') refresh();
+    });
+    return () => sub.remove();
+  }, [refresh]);
+  // And midnight, which none of those events marks when the app sits open on
+  // this tab across it: re-armed for each new day, just past the boundary.
+  // A timer suspended in the background fires late on return, which is fine —
+  // the foreground refresh above has already moved the day.
+  useEffect(() => {
+    const nextDay = new Date(now);
+    nextDay.setHours(24, 0, 1, 0);
+    const t = setTimeout(() => setNow(Date.now()), Math.max(nextDay.getTime() - Date.now(), 0));
+    return () => clearTimeout(t);
+  }, [now]);
 
   // Server-granted, so they are fetched rather than derived: the app has no
   // way to award one and must not appear to.
@@ -224,6 +347,7 @@ export default function YouScreen() {
       <Text variant="headline" style={styles.identity} numberOfLines={1}>
         {username ? `@${username}` : 'Driver'}
       </Text>
+      {usernameTaken ? <UsernameTakenCard taken={username} /> : null}
       {country || vehicleMake ? (
         <Text variant="caption" style={styles.meta}>
           {[country, vehicleMake && `${vehicleMake} ${vehicleModel ?? ''}`.trim()]
@@ -247,7 +371,7 @@ export default function YouScreen() {
       </View>
 
       <Card style={styles.streakCard}>
-        <StreakGrid driveDays={driveDays} />
+        <StreakGrid driveDays={driveDays} now={now} />
       </Card>
 
       {achievements.length > 0 ? (
@@ -424,7 +548,9 @@ export default function YouScreen() {
             key={d.id}
             onPress={() => router.push(`/drive/${d.id}`)}
             accessibilityRole="button"
-            accessibilityLabel={`Drive on ${new Date(d.startedAt).toLocaleString()}`}
+            // The label replaces the card's text for VoiceOver, so it carries
+            // the stats too — not just the date (matches the Drive tab rows).
+            accessibilityLabel={`Drive on ${new Date(d.startedAt).toLocaleString()}, ${formatDistance(d.summary.distanceM, unitPref)}, ${formatDuration(d.summary.durationS)}, top speed ${formatSpeed(d.summary.maxSpeedMs, unitPref)}`}
           >
             <Card style={styles.historyCard}>
               <Text variant="bodyMedium">{new Date(d.startedAt).toLocaleString()}</Text>
@@ -456,6 +582,25 @@ const styles = StyleSheet.create({
   gearGlyph: { fontSize: 20, lineHeight: 24, color: color.text1 },
   identity: { marginTop: space.lg },
   meta: { marginTop: space.xs },
+  takenCard: { marginTop: space.md, gap: space.sm },
+  takenRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 48,
+    borderRadius: radius.pill,
+    backgroundColor: color.surface2,
+    borderWidth: 1,
+    borderColor: color.hairline,
+    paddingHorizontal: space.lg,
+    gap: space.xs,
+  },
+  takenInput: {
+    flex: 1,
+    color: color.text1,
+    fontFamily: font.body,
+    ...textStyle(type.body),
+    paddingVertical: space.sm,
+  },
   grid: { flexDirection: 'row', gap: space.md, marginTop: space.md },
   achievements: { marginTop: space.xl, gap: space.sm },
   achievementCard: { flexDirection: 'row', alignItems: 'center', gap: space.md },
@@ -484,7 +629,7 @@ const styles = StyleSheet.create({
   barSkeleton: { height: 40 },
   distList: { gap: 6 },
   distRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  distLabel: { minWidth: 56, color: color.text3, fontSize: 12, lineHeight: 15 },
+  distLabel: { minWidth: 56, color: color.text2, fontSize: 12, lineHeight: 15 },
   distTrack: {
     flex: 1,
     flexDirection: 'row',
@@ -494,7 +639,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.surface3,
   },
   distFill: { backgroundColor: color.accent },
-  distCount: { minWidth: 40, textAlign: 'right', color: color.text3, fontSize: 12, lineHeight: 15 },
+  distCount: { minWidth: 40, textAlign: 'right', color: color.text2, fontSize: 12, lineHeight: 15 },
   note: { marginTop: space.md },
   plansLink: { marginTop: space.xl, gap: space.xs },
   historyCard: { marginTop: space.md, gap: space.xs },

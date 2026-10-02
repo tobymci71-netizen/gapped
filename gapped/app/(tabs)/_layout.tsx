@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { TabIcon } from '@/components/TabIcon';
+import { TAB_TINT, TabIcon } from '@/components/TabIcon';
 import { haptic } from '@/lib/haptics';
 import { color, font } from '@/theme/tokens';
 
@@ -21,8 +21,8 @@ export default function TabsLayout() {
           backgroundColor: color.surface1,
           borderTopColor: color.hairline,
         },
-        tabBarActiveTintColor: color.accent,
-        tabBarInactiveTintColor: color.text3,
+        tabBarActiveTintColor: TAB_TINT.active,
+        tabBarInactiveTintColor: TAB_TINT.inactive,
         tabBarLabelStyle: { fontFamily: font.bodyMedium, fontSize: 11, lineHeight: 14 },
       }}
     >

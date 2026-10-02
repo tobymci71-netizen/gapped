@@ -77,34 +77,54 @@ export function dayKey(t: number): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
+/**
+ * A cursor on the local calendar day `t` falls on, parked at noon.
+ *
+ * Days are walked with setDate, never by subtracting 86 400 000 ms: a local day
+ * is 23 or 25 hours long across a DST change, so fixed-length steps taken at
+ * 23:30 or 00:30 land on the wrong date — counting the 25-hour day twice, or
+ * skipping the 23-hour one, for the 84 days the grid looks back over. Noon is
+ * hours clear of any transition, so a one-day step cannot cross midnight.
+ */
+function dayCursor(t: number): Date {
+  const d = new Date(t);
+  d.setHours(12, 0, 0, 0);
+  return d;
+}
+
+function stepDays(d: Date, n: number): void {
+  d.setDate(d.getDate() + n);
+}
+
 /** Current consecutive-day streak ending today or yesterday. Pure — tested. */
 export function currentStreak(driveDays: Set<string>, now: number): number {
-  const DAY = 86_400_000;
   let streak = 0;
-  let cursor = now;
+  const cursor = dayCursor(now);
   // A streak survives if the most recent drive was today or yesterday.
-  if (!driveDays.has(dayKey(cursor))) {
-    cursor -= DAY;
-    if (!driveDays.has(dayKey(cursor))) return 0;
+  if (!driveDays.has(dayKey(cursor.getTime()))) {
+    stepDays(cursor, -1);
+    if (!driveDays.has(dayKey(cursor.getTime()))) return 0;
   }
-  while (driveDays.has(dayKey(cursor))) {
+  while (driveDays.has(dayKey(cursor.getTime()))) {
     streak++;
-    cursor -= DAY;
+    stepDays(cursor, -1);
   }
   return streak;
 }
 
-/** Last N days as a contribution grid, oldest first. */
+/** Last N calendar days as a contribution grid, oldest first. One cell per day. */
 export function contributionGrid(
   driveDays: Set<string>,
   now: number,
   days = 84,
 ): { key: string; drove: boolean }[] {
-  const DAY = 86_400_000;
   const out: { key: string; drove: boolean }[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const key = dayKey(now - i * DAY);
+  const cursor = dayCursor(now);
+  stepDays(cursor, -(days - 1));
+  for (let i = 0; i < days; i++) {
+    const key = dayKey(cursor.getTime());
     out.push({ key, drove: driveDays.has(key) });
+    stepDays(cursor, 1);
   }
   return out;
 }

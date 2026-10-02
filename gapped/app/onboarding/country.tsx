@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Keyboard, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { CountryPicker } from '@/components/CountryPicker';
 import { OnboardingStep } from '@/components/OnboardingStep';
@@ -17,11 +17,18 @@ export default function CountryStep() {
       title="Select your country"
       subtitle="This decides which boards you appear on."
       scroll={false}
+      collapseHeadingWithKeyboard
       footer={
         <Button
           label="Continue"
           disabled={!country}
-          onPress={() => router.push('/onboarding/location')}
+          onPress={() => {
+            // The search field keeps focus when the next step is pushed over
+            // it, so a keyboard opened here stayed up on the location step,
+            // which has nothing to type into.
+            Keyboard.dismiss();
+            router.navigate('/onboarding/location');
+          }}
         />
       }
     >

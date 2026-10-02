@@ -103,7 +103,10 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: radius.card / 2,
     borderWidth: 2,
-    borderColor: color.hairline,
+    // text3, not hairline: hairline is a divider colour, 1.39:1 on the canvas,
+    // and this box is the one control the step cannot be finished without.
+    // text3 is 4.6:1, clear of the 3:1 WCAG asks of a control's boundary.
+    borderColor: color.text3,
     alignItems: 'center',
     justifyContent: 'center',
   },

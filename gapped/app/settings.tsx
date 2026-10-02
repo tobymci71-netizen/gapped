@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { Alert, Linking, StyleSheet, View } from 'react-native';
 import { countryByCode } from '@/data/countries';
 import { PressableScale } from '@/components/PressableScale';
@@ -9,6 +9,7 @@ import { SettingsRow, SettingsSection } from '@/components/SettingsRow';
 import { Text } from '@/components/Text';
 import { speedForDisplay } from '@/drive/units';
 import { mps } from '@/types/units';
+import { useDriveStore } from '@/drive/recorder';
 import { clearAll } from '@/drive/wal';
 import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
@@ -42,12 +43,21 @@ function openURL(url: string): void {
  * on our servers while the app told them the account was gone — the one
  * outcome this flow must never produce.
  *
- * With no backend configured (anonymous, offline-only), there is nothing on a
- * server to remove and the local wipe is the whole operation.
+ * With no backend configured (anonymous, offline-only), or no session ever
+ * created on this device, there is nothing on a server to remove and the local
+ * wipe is the whole operation.
+ *
+ * "No session" has to be a clean answer, though. getSession refreshes an
+ * expired access token, and when that refresh fails offline it returns
+ * `{ session: null, error }` while the session stays stored. Reading that as
+ * "no server account" skipped the server delete, wiped the device and reported
+ * success — and the next online launch restored the very account the user had
+ * just deleted. So an error is a failure like any other: nothing is touched.
  */
 async function deleteAccount(): Promise<void> {
   if (supabase) {
-    const { data } = await supabase.auth.getSession();
+    const { data, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
     if (data.session) {
       const { error } = await supabase.rpc('delete_account');
       if (error) throw error;
@@ -81,6 +91,14 @@ async function deleteAccount(): Promise<void> {
     useRecords.getState().reset();
     useRecords.persist.clearStorage();
   });
+  // The recorder's last finished drive outlives the screens. Left in place,
+  // the fresh Drive tab mounted after re-onboarding saw it as new and wrote
+  // the deleted account's PB and streak day into the just-reset records.
+  // Only the session fields: confirmDelete refuses while a drive is open, so
+  // there is no live recording here to tear down.
+  step('drive', () => {
+    useDriveStore.setState({ lastSummary: null, recovered: [], lastDiscardedAt: null });
+  });
 
   if (localFailures.length > 0) {
     // The account IS deleted; only this device's leftovers remain, and a
@@ -105,6 +123,10 @@ export class LocalWipeError extends Error {
 export default function SettingsScreen() {
   const router = useRouter();
   const { unitPref, country, setUnitPref, debugHud, toggleDebugHud } = useProfile();
+  // A deletion can sit for up to ~30 s while auth-js retries a token refresh,
+  // with nothing on screen; a second confirm in that window would start a
+  // second deletion over the first.
+  const [deleting, setDeleting] = useState(false);
 
   // From units.ts so a unit rename cannot leave this label behind.
   const unitLabel = speedForDisplay(mps(0), unitPref).unit;
@@ -119,6 +141,17 @@ export default function SettingsScreen() {
   };
 
   const confirmDelete = () => {
+    if (deleting) return;
+    // Wiping the WAL under an open drive would leave the recorder appending
+    // fixes to a row that no longer exists.
+    if (useDriveStore.getState().driveId != null) {
+      haptic.error();
+      Alert.alert(
+        'Finish this drive first',
+        'A drive is still recording. Stop it, then delete your account.',
+      );
+      return;
+    }
     haptic.press();
     // Says exactly what the code does. delete_account() removes the auth user
     // and every row that cascades from it, verified by pgTAP against an orphan
@@ -132,29 +165,45 @@ export default function SettingsScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            deleteAccount()
-              .then(() => router.replace('/onboarding'))
-              .catch(() => {
-                haptic.error();
-                // Say plainly that nothing was deleted. A silent failure here
-                // reads as success and is exactly how someone ends up
-                // believing their data is gone when it is not.
+            setDeleting(true);
+            // No navigation on success: resetting the profile flips the
+            // onboarding guard in app/_layout.tsx, which replaces the whole
+            // stack with onboarding — nothing left behind it to go back to.
+            deleteAccount().catch((e: unknown) => {
+              setDeleting(false);
+              if (e instanceof LocalWipeError) {
+                // The opposite of the case below: the account IS gone, so
+                // "nothing was deleted" would be the false statement.
                 Alert.alert(
-                  'Account not deleted',
-                  'We could not reach the server, so nothing was deleted. Check your connection and try again.',
+                  'Account deleted',
+                  'Your account was deleted, but some data on this device could not be cleared. Deleting and reinstalling the app removes it.',
                 );
-              });
+                return;
+              }
+              haptic.error();
+              // Say plainly that nothing was deleted. A silent failure here
+              // reads as success and is exactly how someone ends up
+              // believing their data is gone when it is not.
+              Alert.alert(
+                'Account not deleted',
+                'We could not reach the server, so nothing was deleted. Check your connection and try again.',
+              );
+            });
           },
         },
       ],
     );
   };
 
+  // Settings can be the only screen in the stack (opened by a link on a cold
+  // start), and back with nothing to go back to is silently dropped.
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/drive'));
+
   return (
     <Screen>
       <View style={styles.header}>
         <PressableScale
-          onPress={() => router.back()}
+          onPress={goBack}
           accessibilityRole="button"
           accessibilityLabel="Back"
           style={styles.back}
@@ -285,6 +334,7 @@ export default function SettingsScreen() {
           glyph="🗑️"
           tint={tint.danger}
           label="Delete account"
+          value={deleting ? 'Deleting…' : undefined}
           destructive
           onPress={confirmDelete}
         />

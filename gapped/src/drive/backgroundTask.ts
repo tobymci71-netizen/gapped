@@ -70,7 +70,9 @@ export async function startBackgroundUpdates(): Promise<void> {
   });
 }
 
-export async function stopBackgroundUpdates(): Promise<void> {
+/** Resolves true when a running session was stopped, false when none was. */
+export async function stopBackgroundUpdates(): Promise<boolean> {
   const started = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
   if (started) await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+  return started;
 }

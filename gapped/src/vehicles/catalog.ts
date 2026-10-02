@@ -87,3 +87,17 @@ export function searchModels(
     .slice(0, limit)
     .map((x) => x.m);
 }
+
+/**
+ * The candidate `typed` names exactly — ignoring case and surrounding space —
+ * or null.
+ *
+ * What the picker's Return key commits. "golf" with Golf in the list is a
+ * choice of the catalogue's Golf, spelled the catalogue's way, not a
+ * free-text "golf" that would then never match anything else.
+ */
+export function exactEntry(candidates: readonly string[], typed: string): string | null {
+  const t = typed.trim().toLowerCase();
+  if (!t) return null;
+  return candidates.find((c) => c.toLowerCase() === t) ?? null;
+}

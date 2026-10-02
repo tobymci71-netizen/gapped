@@ -40,6 +40,11 @@ export function Screen({ children, scroll = true, style, footer }: Props) {
       style={styles.flex}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }, style]}
       showsVerticalScrollIndicator={false}
+      // The default ('never') spends the first tap with the keyboard up on
+      // dismissing it, so a button beside its field — Decode VIN, Friends' Add
+      // — took two taps. 'handled' lets a tap on a control through and still
+      // dismisses on a tap on empty space; 'always' would lose the latter.
+      keyboardShouldPersistTaps="handled"
     >
       {children}
     </ScrollView>

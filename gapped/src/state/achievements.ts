@@ -6,7 +6,7 @@
  * meaning less than the verified run behind it.
  */
 
-import { supabase } from '@/lib/supabase';
+import { ensureUserId, supabase } from '@/lib/supabase';
 
 export type Achievement = {
   kind: string;
@@ -55,8 +55,9 @@ type Payload = Record<string, unknown> & {
 
 export async function listAchievements(): Promise<Achievement[]> {
   if (!supabase) return [];
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
+  // Ensures rather than reads the session: after an offline first launch or
+  // an account deletion there is none until something signs in again.
+  const uid = await ensureUserId();
   if (!uid) return [];
 
   const { data, error } = await supabase

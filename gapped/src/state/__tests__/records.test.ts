@@ -82,3 +82,5 @@ describe('streaks', () => {
     expect(grid[5].drove).toBe(false); // yesterday
   });
 });
+
+// Daylight-saving behaviour of the same functions: records-dst.test.ts.

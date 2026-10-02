@@ -29,10 +29,15 @@ const MATRIX: { feature: string; free: boolean; pro: boolean }[] = [
   { feature: 'Cloud sync across devices', free: false, pro: true },
 ];
 
+const included = (yes: boolean) => (yes ? 'included' : 'not included');
+
 export default function PlansScreen() {
   const router = useRouter();
+  // Plans can be the only screen in the stack (opened by a link on a cold
+  // start), and back with nothing to go back to is silently dropped.
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/drive'));
   return (
-    <Screen footer={<Button label="Back" variant="secondary" onPress={() => router.back()} />}>
+    <Screen footer={<Button label="Back" variant="secondary" onPress={goBack} />}>
       <Text variant="headline">Free vs Pro</Text>
       <Text variant="body" style={styles.sub}>
         The whole matrix, published. Recording and viewing your own drives is free forever —
@@ -40,7 +45,16 @@ export default function PlansScreen() {
       </Text>
 
       <Card style={styles.table}>
-        <View style={styles.row}>
+        {/*
+          The column headings are for the eye only. Each row below speaks its
+          own columns, so VoiceOver reading "FREE", "PRO" once at the top of a
+          thirteen-row table would only be noise.
+        */}
+        <View
+          style={styles.row}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
           <Text variant="caption" style={styles.featureCol} />
           <Text variant="caption" style={styles.tierCol}>
             FREE
@@ -49,8 +63,19 @@ export default function PlansScreen() {
             PRO
           </Text>
         </View>
+        {/*
+          One accessible element per row. As three bare Texts, VoiceOver read
+          the feature, then "em dash", then "check mark", with nothing saying
+          which glyph was Free and which was Pro — the one fact the table is
+          here to state.
+        */}
         {MATRIX.map((r) => (
-          <View key={r.feature} style={styles.row}>
+          <View
+            key={r.feature}
+            style={styles.row}
+            accessible
+            accessibilityLabel={`${r.feature}. Free: ${included(r.free)}. Pro: ${included(r.pro)}.`}
+          >
             <Text variant="caption" style={[styles.featureCol, { color: color.text1 }]}>
               {r.feature}
             </Text>

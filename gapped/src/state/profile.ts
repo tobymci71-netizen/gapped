@@ -32,6 +32,14 @@ type ProfileData = {
    */
   vehicleId: string | null;
   username: string | null;
+  /**
+   * The server refused `username` because another driver already holds it.
+   * Usernames are unique server-side and nothing checked that before this
+   * flag existed, so the refusal used to vanish: the user's runs went up with
+   * no name while the app kept showing them the one they picked. Set by sync,
+   * cleared by choosing a new name or by the server accepting this one.
+   */
+  usernameTaken: boolean;
   safetyAccepted: boolean;
   /**
    * Shows the IMU debug readout on the drive HUD. Off by default. Exists
@@ -49,6 +57,12 @@ type ProfileState = ProfileData & {
   setVehicleKind: (k: VehicleKind) => void;
   setVehicle: (make: string, model: string) => void;
   setUsername: (u: string) => void;
+  /**
+   * Sync's verdict on the current username: true when the server refused it
+   * as taken, false once it accepts it (a name refused at one launch can be
+   * accepted at a later one, after its holder lets it go).
+   */
+  setUsernameTaken: (taken: boolean) => void;
   acceptSafety: () => void;
   toggleDebugHud: () => void;
   completeOnboarding: () => void;
@@ -71,6 +85,7 @@ const INITIAL: ProfileData = {
   vehicleModel: null,
   vehicleId: null,
   username: null,
+  usernameTaken: false,
   safetyAccepted: false,
   debugHud: false,
 };
@@ -103,7 +118,13 @@ export const useProfile = create<ProfileState>()(
             ? s
             : { vehicleMake, vehicleModel, vehicleId: uuid() },
         ),
-      setUsername: (username) => set({ username }),
+      // A new name has not been refused yet; whether it is free is the
+      // server's call on the next sync, not something to carry over.
+      setUsername: (username) => set({ username, usernameTaken: false }),
+      // Every successful sync reports false; unchanged, it must not wake
+      // every screen subscribed to the profile.
+      setUsernameTaken: (usernameTaken) =>
+        set((s) => (s.usernameTaken === usernameTaken ? s : { usernameTaken })),
       acceptSafety: () => set({ safetyAccepted: true }),
       toggleDebugHud: () => set((st) => ({ debugHud: !st.debugHud })),
       completeOnboarding: () => set({ onboarded: true }),

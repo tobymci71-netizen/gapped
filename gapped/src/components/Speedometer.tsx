@@ -44,7 +44,11 @@ type Props = {
   /** Dial maximum in display units (e.g. 160 mph / 260 km/h). */
   maxValue: number;
   unit: string;
-  /** Personal best in display units; null when none yet. */
+  /**
+   * Personal best in display units; null when none yet. Breaking it shows the
+   * NEW PB badge — so never pass it to a live drive's dial: rewarding speed
+   * mid-drive is what NO_IN_DRIVE_SPEED_NUDGES (src/config/flags.ts) forbids.
+   */
   pb?: number | null;
   size?: number;
   active?: boolean;
@@ -56,18 +60,26 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
 
   // Spring-followed speed (the "needle"), then a 40ms-lagged follower for
   // tick illumination so the sweep feels liquid rather than snapping.
+  //
+  // Both hold the FRACTION of the dial, not the display-unit speed. They held
+  // the speed, and the worklets divided by `maxValue` from their closure — so a
+  // unit change swapped the divisor on the next frame while the value was still
+  // in the old unit: 109 km/h of 260 read as 109 of 160, the needle leapt ~70°
+  // and sprang back, though the physical speed never moved. The fraction is
+  // the same in either unit, so now the dial barely twitches.
+  const frac = maxValue > 0 ? clamped / maxValue : 0;
   const speed = useSharedValue(0);
   const lit = useSharedValue(0);
 
   useEffect(() => {
     speed.value = reduced
-      ? withTiming(clamped, { duration: duration.instant })
-      : withSpring(clamped, spring.needle);
-    lit.value = withTiming(clamped, {
+      ? withTiming(frac, { duration: duration.instant })
+      : withSpring(frac, spring.needle);
+    lit.value = withTiming(frac, {
       duration: reduced ? duration.instant : duration.fast,
       easing: easing.standard,
     });
-  }, [clamped, reduced, speed, lit]);
+  }, [frac, reduced, speed, lit]);
 
   // Idle breathe: at 0 the ring scales 1.0→1.015 over 3s so the screen is
   // never static. Killed when moving or when reduced motion is on.
@@ -141,16 +153,14 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
     return { ringPath: ring, glowPath: glow };
   }, [c, strokeR]);
 
-  const litEnd = useDerivedValue(() => lit.value / maxValue);
-  const glowEnd = useDerivedValue(() => speed.value / maxValue);
   // Glow ramps in above 30% of dial max (spec: below 30% of tier max, no glow)
   const glowOpacity = useDerivedValue(() => {
-    const frac = speed.value / maxValue;
-    return frac < 0.3 ? 0 : Math.min(1, ((frac - 0.3) / 0.7) * 0.85);
+    const f = speed.value;
+    return f < 0.3 ? 0 : Math.min(1, ((f - 0.3) / 0.7) * 0.85);
   });
 
   const needleAngle = useDerivedValue(
-    () => ((START_ANGLE + (speed.value / maxValue) * SWEEP) * Math.PI) / 180,
+    () => ((START_ANGLE + speed.value * SWEEP) * Math.PI) / 180,
   );
   const needleTransform = useDerivedValue(() => [{ rotate: needleAngle.value }]);
 
@@ -179,7 +189,7 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
           strokeWidth={20}
           color={isPb ? color.text1 : color.accent}
           start={0}
-          end={glowEnd}
+          end={speed}
           opacity={glowOpacity}
         >
           <BlurMask blur={18} style="outer" />
@@ -200,7 +210,7 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
           strokeWidth={18}
           color={color.accent}
           start={0}
-          end={litEnd}
+          end={lit}
         >
           <DashPathEffect intervals={[3.5, 6.5]} />
         </Path>
@@ -213,7 +223,9 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
       <View style={styles.center} pointerEvents="none">
         <AnimatedNumber value={String(Math.round(active ? value : 0))} size={readoutSize} />
         <Text style={styles.unit}>{unit}</Text>
-        <Animated.View style={[styles.pbBadge, pbStyle]}>
+        {/* Below the unit at any dial size: a fixed `bottom: 48` cleared it at
+            300pt but sat over the lower half of "mph" on the 200pt HUD. */}
+        <Animated.View style={[styles.pbBadge, { bottom: Math.round(size * 0.16) }, pbStyle]}>
           <Text style={styles.pbText}>NEW PB</Text>
         </Animated.View>
       </View>
@@ -239,7 +251,6 @@ const styles = StyleSheet.create({
   },
   pbBadge: {
     position: 'absolute',
-    bottom: 48,
     backgroundColor: color.accent,
     borderRadius: radius.pill,
     paddingHorizontal: space.md,

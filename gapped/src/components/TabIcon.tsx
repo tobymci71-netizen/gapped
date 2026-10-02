@@ -11,6 +11,14 @@ import { color } from '@/theme/tokens';
 
 export type TabIconName = 'driving' | 'ranks' | 'garage' | 'you';
 
+/**
+ * Tab tints, shared with the navigator's label tints so icon and label cannot
+ * drift apart. Inactive is text2, not text3: the bar is surface1, where text3's
+ * 4.30:1 fails AA for the 11pt labels, and an unselected tab is still a live
+ * control rather than a disabled one.
+ */
+export const TAB_TINT = { active: color.accent, inactive: color.text2 } as const;
+
 const SIZE = 24;
 const STROKE = 1.8;
 
@@ -118,7 +126,7 @@ export function TabIcon({
 }): React.JSX.Element {
   return (
     <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} fill="none">
-      {shape(name, focused ? color.accent : color.text3)}
+      {shape(name, focused ? TAB_TINT.active : TAB_TINT.inactive)}
     </Svg>
   );
 }

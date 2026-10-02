@@ -23,6 +23,9 @@ import { color, radius, space, type, textStyle } from '@/theme/tokens';
  */
 export default function FriendsScreen() {
   const router = useRouter();
+  // A cold-start deep link (gapped://friends, gapped://drive/<id>) opens this
+  // screen with nothing beneath it, so Back must have somewhere to go.
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/drive'));
   const unitPref = useProfile((s) => s.unitPref);
   const [friends, setFriends] = useState<Friend[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -67,9 +70,21 @@ export default function FriendsScreen() {
       {
         text: 'Remove',
         style: 'destructive',
+        // Feedback follows the outcome rather than the tap. A press haptic
+        // fired before the request read as success, and a failure (offline,
+        // expired session) then closed the alert onto an unchanged list with
+        // nothing to say the removal had not happened.
         onPress: async () => {
-          haptic.press();
-          if (await removeFriend(friend.friendId)) refresh();
+          if (await removeFriend(friend.friendId)) {
+            haptic.selection();
+            refresh();
+            return;
+          }
+          haptic.error();
+          Alert.alert(
+            `Could not remove ${friend.username}`,
+            'Check your connection and try again.',
+          );
         },
       },
     ]);
@@ -79,7 +94,7 @@ export default function FriendsScreen() {
   // an input that silently cannot work.
   if (!supabase) {
     return (
-      <Screen footer={<Button label="Back" variant="secondary" onPress={() => router.back()} />}>
+      <Screen footer={<Button label="Back" variant="secondary" onPress={goBack} />}>
         <Text variant="headline">Friends</Text>
         <Card style={styles.note}>
           <Text variant="body">
@@ -92,7 +107,7 @@ export default function FriendsScreen() {
   }
 
   return (
-    <Screen footer={<Button label="Back" variant="secondary" onPress={() => router.back()} />}>
+    <Screen footer={<Button label="Back" variant="secondary" onPress={goBack} />}>
       <Text variant="headline">Friends</Text>
       <Text variant="body" style={styles.sub}>
         Add someone by username and their verified runs join your friends board. They are not
@@ -108,7 +123,7 @@ export default function FriendsScreen() {
               setError(null);
             }}
             placeholder="username"
-            placeholderTextColor={color.text3}
+            placeholderTextColor={color.text2}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="done"
@@ -196,7 +211,11 @@ const styles = StyleSheet.create({
     color: color.text1,
     ...textStyle(type.body),
   },
-  addBtn: { width: 96 },
+  // Wide enough for "Adding…" at default text size, so swapping the label
+  // mid-request changes neither the width nor the height; at 96 the busy label
+  // broke mid-word onto a second line. minWidth, not width, so at larger text
+  // sizes the pill grows instead of wrapping.
+  addBtn: { minWidth: 112 },
   error: { marginTop: space.md, color: color.danger },
   loading: { marginTop: space.lg, gap: space.md },
   loadingRow: { height: 72, borderRadius: radius.card },

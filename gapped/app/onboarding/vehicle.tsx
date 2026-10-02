@@ -23,7 +23,12 @@ export default function VehicleStep() {
           ? 'Select the bike you ride the most.'
           : 'Select the car you drive the most.'
       }
-      scroll={false}
+      /* Scrolls (the default). This step was `scroll={false}` from when it
+         hosted an inline FlashList; the pickers now live in a Modal sheet, and
+         a fixed body meant whatever did not fit sat under the opaque footer —
+         on a 667pt phone, both fields, so onboarding could not be finished.
+         VehicleChooser sizes its circle to the room left, so at default text
+         sizes it still fits without scrolling. */
       footer={
         <Button
           label="Continue"
@@ -31,7 +36,7 @@ export default function VehicleStep() {
           onPress={() => {
             if (!make || !model) return;
             setVehicle(make, model);
-            router.push('/onboarding/username');
+            router.navigate('/onboarding/username');
           }}
         />
       }

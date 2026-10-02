@@ -47,9 +47,9 @@ export function SettingsRow({
         {label}
       </Text>
       {value != null ? (
-        <Text variant="caption" style={styles.value}>
-          {value}
-        </Text>
+        // caption's own text2, not text3: the row sits on a surface1 card,
+        // where text3 measures 4.30:1 — under AA for a value people read.
+        <Text variant="caption">{value}</Text>
       ) : onPress ? (
         <Text style={styles.chevron}>›</Text>
       ) : null}
@@ -59,14 +59,16 @@ export function SettingsRow({
   if (!onPress) return body;
 
   // The wrapper's label replaces the child text for screen readers, so the
-  // value has to be folded in — a Units row that never announces mph or km/h
-  // is unusable with VoiceOver.
+  // value must still be announced — a Units row that never says mph or km/h is
+  // unusable with VoiceOver. accessibilityValue carries it: VoiceOver reads it
+  // after the label and Android appends it to the content description. Folding
+  // it into the label as well read it twice ("Units, km/h, km/h, button").
   return (
     <PressableScale
       onPress={onPress}
       silent
       accessibilityRole="button"
-      accessibilityLabel={value != null ? `${label}, ${value}` : label}
+      accessibilityLabel={label}
       accessibilityValue={value != null ? { text: value } : undefined}
     >
       {body}
@@ -116,7 +118,7 @@ const styles = StyleSheet.create({
   },
   glyph: { fontSize: 15, lineHeight: 20, color: color.text1, textAlign: 'center' },
   label: { flex: 1 },
-  value: { color: color.text3 },
+  // A decorative glyph, so text3 only needs the 3:1 of a graphic; 4.30 clears it.
   chevron: { fontSize: 20, lineHeight: 22, color: color.text3 },
   section: { marginTop: space.xl },
   sectionTitle: { color: color.text3, letterSpacing: 1, marginBottom: space.sm },

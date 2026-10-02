@@ -26,11 +26,53 @@ export const supabase: SupabaseClient | null =
       })
     : null;
 
-/** Sign in anonymously so drives can sync before any explicit account exists. */
-export async function ensureSession(): Promise<void> {
-  if (!supabase) return;
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) {
-    await supabase.auth.signInAnonymously().catch(() => undefined);
+let inFlight: Promise<string | null> | null = null;
+
+/**
+ * The signed-in user's id, signing in anonymously first when there is no
+ * session. Null when there is no backend, or no session could be had (offline).
+ * Never throws.
+ *
+ * Safe to call as often as needed, and it has to be: this used to run once, at
+ * cold start. An offline first launch, or the signOut at the end of account
+ * deletion, then left the app sessionless — sync, friends and VIN decode all
+ * failing — until the process was killed, which for an app that records in the
+ * background can be days. It now runs before authenticated work, when the app
+ * returns to the foreground, and when onboarding completes.
+ *
+ * Single-flight, so a burst of callers cannot mint two anonymous users and
+ * strand drives on the first.
+ *
+ * Signs in only when getSession says cleanly that there is no session. An
+ * error means a stored session exists but could not be refreshed — typically
+ * offline with an expired access token — and signing in over it would replace
+ * that user with a new one, orphaning everything they uploaded. Waiting for
+ * the network costs nothing. (A revoked refresh token is the exception that
+ * proves it: auth-js removes that session itself, so the next call here sees
+ * no session and no error, and signs in.)
+ */
+export function ensureUserId(): Promise<string | null> {
+  const client = supabase;
+  if (!client) return Promise.resolve(null);
+  inFlight ??= establish(client).finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function establish(client: SupabaseClient): Promise<string | null> {
+  try {
+    const { data, error } = await client.auth.getSession();
+    if (data.session) return data.session.user.id;
+    if (error) return null;
+    const { data: signedIn, error: signInError } = await client.auth.signInAnonymously();
+    return signInError ? null : (signedIn.session?.user.id ?? null);
+  } catch {
+    return null;
   }
+}
+
+/** Sign in anonymously so drives can sync before any explicit account exists. */
+export async function ensureSession(): Promise<boolean> {
+  return (await ensureUserId()) != null;
 }
