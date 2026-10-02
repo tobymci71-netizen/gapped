@@ -9,7 +9,7 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0A0A0A",
     "ios": {
-      "bundleIdentifier": "app.gapped.drive",
+      "bundleIdentifier": "com.tobym.gapped",
       "supportsTablet": false,
       "infoPlist": {
         "UIBackgroundModes": [

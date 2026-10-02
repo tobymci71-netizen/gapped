@@ -4,8 +4,9 @@ GPS drive tracker with a leaderboard people can actually believe. Competitor to 
 Open Road; the thesis, phases, and gates live in `BUILD-PROMPT.md` (on the desktop, alongside
 `competitor-feature-spec.md` and `triprank-ui-teardown.md`).
 
-**Brand:** Gapped · **Bundle ID:** `app.gapped.drive` (both platforms — `com.gapped` is taken by
-GAPPED LTD) · **Store title:** "Gapped — Verified Speed Ranks" (differentiation required by
+**Brand:** Gapped · **Bundle ID:** iOS `com.tobym.gapped`, Android `app.gapped.drive` (`com.gapped` is taken by
+GAPPED LTD, and `app.gapped.drive` turned out to be registered by another Apple developer
+team) · **Store title:** "Gapped — Verified Speed Ranks" (differentiation required by
 Guideline 4.1; brand stays "Gapped" everywhere else).
 
 ## Stack
