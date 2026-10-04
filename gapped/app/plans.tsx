@@ -5,32 +5,16 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
+import { PLAN_MATRIX } from '@/config/plans';
 import { color, space } from '@/theme/tokens';
-
-/**
- * The published free-vs-Pro matrix — table stakes #13. Neither incumbent
- * publishes one anywhere and both get punished for it in reviews. This screen
- * ships before the paywall exists, and its contents are a product promise:
- * nothing moves from Free to Pro after launch.
- */
-const MATRIX: { feature: string; free: boolean; pro: boolean }[] = [
-  { feature: 'Record unlimited drives', free: true, pro: true },
-  { feature: 'View your own drive history', free: true, pro: true },
-  { feature: 'All your own stats (speed, G, 0–60)', free: true, pro: true },
-  { feature: 'GPX / CSV export', free: true, pro: true },
-  { feature: 'Share cards', free: true, pro: true },
-  { feature: 'Friends & friends board', free: true, pro: true },
-  { feature: 'Privacy zones & route trimming', free: true, pro: true },
-  { feature: 'Global & country leaderboard placement', free: false, pro: true },
-  { feature: 'Vehicle-class brackets', free: false, pro: true },
-  { feature: 'Advanced telemetry breakdowns', free: false, pro: true },
-  { feature: 'Telemetry overlay on your video', free: false, pro: true },
-  { feature: 'Unlimited garage vehicles', free: false, pro: true },
-  { feature: 'Cloud sync across devices', free: false, pro: true },
-];
 
 const included = (yes: boolean) => (yes ? 'included' : 'not included');
 
+/**
+ * The published free-vs-Pro matrix — table stakes #13. The rows live in
+ * src/config/plans.ts (PLAN_MATRIX), where the onboarding paywall's line about
+ * what Pro adds is tested against them; this screen only draws them.
+ */
 export default function PlansScreen() {
   const router = useRouter();
   // Plans can be the only screen in the stack (opened by a link on a cold
@@ -69,7 +53,7 @@ export default function PlansScreen() {
           which glyph was Free and which was Pro — the one fact the table is
           here to state.
         */}
-        {MATRIX.map((r) => (
+        {PLAN_MATRIX.map((r) => (
           <View
             key={r.feature}
             style={styles.row}

@@ -23,7 +23,7 @@ import Animated, {
 import { AnimatedNumber } from '@/components/AnimatedNumber';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { duration, easing, spring } from '@/theme/motion';
-import { color, font, radius, space } from '@/theme/tokens';
+import { color, font, glyph, radius, space, textStyle, type } from '@/theme/tokens';
 
 /**
  * The app's signature object (spec §A3). Skia tick ring with trailing
@@ -37,6 +37,27 @@ import { color, font, radius, space } from '@/theme/tokens';
 
 const START_ANGLE = 135;
 const SWEEP = 270;
+
+/**
+ * Room around the dial for the speed glow to fade out in.
+ *
+ * The glow is a 20pt stroke blurred at sigma 18, centred 24pt in from the
+ * dial's edge, so it reaches well past that edge. Drawn on a canvas exactly
+ * the dial's size it was cut off in straight lines there: a faint square
+ * round the dial whenever it lit, seen on the welcome carousel and the unit
+ * step. The canvas now overhangs the dial by this much on every side and
+ * draws everything shifted in by it; the dial's own box, and everything laid
+ * out around it, is unchanged. 40pt plus the 14pt inside the edge is three
+ * sigma, where the blur has all but gone.
+ */
+const GLOW_ROOM = 40;
+
+/**
+ * How far "mph" / "km/h" grows with Dynamic Type. The numeral above it is a
+ * fixed size (AnimatedNumber does not scale), and uncapped at the largest
+ * accessibility sizes the unit outgrew the ring it sits inside.
+ */
+const UNIT_MAX_SCALE = 1.3;
 
 type Props = {
   /** Current speed in DISPLAY units (already converted at render). */
@@ -181,52 +202,67 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
 
   return (
     <Animated.View style={[{ width: size, height: size }, breatheStyle]}>
-      <Canvas style={{ width: size, height: size }}>
-        {/* glow underlay — radius/opacity scale with speed */}
-        <Path
-          path={glowPath}
-          style="stroke"
-          strokeWidth={20}
-          color={isPb ? color.text1 : color.accent}
-          start={0}
-          end={speed}
-          opacity={glowOpacity}
-        >
-          <BlurMask blur={18} style="outer" />
-        </Path>
-        {/* unlit tick ring */}
-        <Path
-          path={ringPath}
-          style="stroke"
-          strokeWidth={18}
-          color={color.surface3}
-        >
-          <DashPathEffect intervals={[3.5, 6.5]} />
-        </Path>
-        {/* lit ticks — 40ms trailing follower */}
-        <Path
-          path={ringPath}
-          style="stroke"
-          strokeWidth={18}
-          color={color.accent}
-          start={0}
-          end={lit}
-        >
-          <DashPathEffect intervals={[3.5, 6.5]} />
-        </Path>
-        {/* needle head */}
-        <Group transform={needleTransform} origin={vec(c, c)}>
-          <Path path={needlePath} style="stroke" strokeWidth={3} color={color.text1} />
+      <Canvas
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: -GLOW_ROOM,
+          top: -GLOW_ROOM,
+          width: size + GLOW_ROOM * 2,
+          height: size + GLOW_ROOM * 2,
+        }}
+      >
+        <Group transform={[{ translateX: GLOW_ROOM }, { translateY: GLOW_ROOM }]}>
+          {/* glow underlay — radius/opacity scale with speed */}
+          <Path
+            path={glowPath}
+            style="stroke"
+            strokeWidth={20}
+            color={isPb ? color.text1 : color.accent}
+            start={0}
+            end={speed}
+            opacity={glowOpacity}
+          >
+            <BlurMask blur={18} style="outer" />
+          </Path>
+          {/* unlit tick ring */}
+          <Path
+            path={ringPath}
+            style="stroke"
+            strokeWidth={18}
+            color={color.surface3}
+          >
+            <DashPathEffect intervals={[3.5, 6.5]} />
+          </Path>
+          {/* lit ticks — 40ms trailing follower */}
+          <Path
+            path={ringPath}
+            style="stroke"
+            strokeWidth={18}
+            color={color.accent}
+            start={0}
+            end={lit}
+          >
+            <DashPathEffect intervals={[3.5, 6.5]} />
+          </Path>
+          {/* needle head */}
+          <Group transform={needleTransform} origin={vec(c, c)}>
+            <Path path={needlePath} style="stroke" strokeWidth={3} color={color.text1} />
+          </Group>
         </Group>
       </Canvas>
 
       <View style={styles.center} pointerEvents="none">
         <AnimatedNumber value={String(Math.round(active ? value : 0))} size={readoutSize} />
-        <Text style={styles.unit}>{unit}</Text>
+        <Text style={styles.unit} maxFontSizeMultiplier={UNIT_MAX_SCALE}>
+          {unit}
+        </Text>
         {/* Below the unit at any dial size: a fixed `bottom: 48` cleared it at
             300pt but sat over the lower half of "mph" on the 200pt HUD. */}
         <Animated.View style={[styles.pbBadge, { bottom: Math.round(size * 0.16) }, pbStyle]}>
-          <Text style={styles.pbText}>NEW PB</Text>
+          <Text style={styles.pbText} maxFontSizeMultiplier={UNIT_MAX_SCALE}>
+            NEW PB
+          </Text>
         </Animated.View>
       </View>
     </Animated.View>
@@ -245,9 +281,11 @@ const styles = StyleSheet.create({
   },
   unit: {
     fontFamily: font.bodyMedium,
-    fontSize: 17, lineHeight: 21,
+    ...textStyle(type.body),
     color: color.text2,
-    marginTop: -6,
+    // Was 17/21 with -6; the body token's line is 3pt taller, split above and
+    // below the glyphs, so the word itself sits where it did.
+    marginTop: -7.5,
   },
   pbBadge: {
     position: 'absolute',
@@ -258,7 +296,7 @@ const styles = StyleSheet.create({
   },
   pbText: {
     fontFamily: font.displayBlack,
-    fontSize: 13, lineHeight: 16,
+    ...textStyle(glyph.md),
     color: color.onAccent,
     letterSpacing: 1.5,
   },

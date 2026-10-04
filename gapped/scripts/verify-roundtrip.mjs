@@ -496,6 +496,143 @@ await app.rpc('remove_friend', { p_friend_id: buddyAuth.user.id });
 const { data: afterRemove } = await app.rpc('list_friends');
 check('remove_friend removes them', !afterRemove?.some((f) => f.username === buddyName), afterRemove);
 
+// ── 8b. onboarding (0017) ───────────────────────────────────────────────────
+section('8b. Onboarding proof, garage and answers (0017)');
+
+// The proof screens are a first launch's, often before any session exists —
+// and an anonymous sign-in can be refused (rate-limited per IP) on a network
+// that works. Both counts are granted to anon for exactly that.
+const signedOut = createClient(API, ANON_KEY, opts);
+const { data: popAnon, error: popAnonErr } = await signedOut.rpc('make_popularity', {
+  p_kind: 'car',
+});
+check(
+  'make_popularity answers with no session',
+  !popAnonErr && Array.isArray(popAnon),
+  popAnonErr?.message,
+);
+check(
+  'make_popularity never lists a make under 5 drivers',
+  (popAnon ?? []).every((r) => Number(r.drivers) >= 5),
+  popAnon,
+);
+const { data: actAnon, error: actAnonErr } = await signedOut.rpc('country_activity', {
+  p_country: 'GB',
+});
+check(
+  'country_activity answers exactly one row with no session',
+  !actAnonErr && Array.isArray(actAnon) && actAnon.length === 1,
+  actAnonErr?.message ?? actAnon,
+);
+check(
+  'country_activity withholds any count under 10 (null, never a small number)',
+  (actAnon ?? []).every(
+    (r) =>
+      (r.drivers === null || Number(r.drivers) >= 10) &&
+      (r.drove_yesterday === null || Number(r.drove_yesterday) >= 10),
+  ),
+  actAnon,
+);
+const { data: actSigned, error: actSignedErr } = await app.rpc('country_activity', {
+  p_country: 'gb',
+});
+check(
+  'country_activity answers a signed-in driver, lower-case code and all',
+  !actSignedErr && actSigned?.length === 1,
+  actSignedErr?.message ?? actSigned,
+);
+
+// A change of main car, exactly as sync.ts pushIdentity sends it: the new car
+// with DO NOTHING on conflict, then every other primary demoted. Without the
+// demotion a driver who changed cars kept several "main" cars, and
+// make_popularity could only guess which one to count.
+const newCarId = crypto.randomUUID();
+const { error: newCarErr } = await app.from('vehicles').upsert(
+  { id: newCarId, profile_id: uid, kind: 'car', make: 'Mazda', model: 'MX-5', is_primary: true },
+  { onConflict: 'id', ignoreDuplicates: true },
+);
+check('a new main car is created', !newCarErr, newCarErr?.message);
+const { error: demoteErr } = await app
+  .from('vehicles')
+  .update({ is_primary: false })
+  .eq('profile_id', uid)
+  .eq('is_primary', true)
+  .neq('id', newCarId);
+check('the old main car is demoted under own-row RLS', !demoteErr, demoteErr?.message);
+
+// The garage step's extra vehicles: one bulk statement, never primary, and a
+// second send (every sync pass until it lands) changes nothing.
+const extras = [
+  { id: crypto.randomUUID(), kind: 'motorbike', make: 'Ducati', model: 'Monster' },
+  { id: crypto.randomUUID(), kind: 'car', make: 'Honda', model: 'Civic Type R' },
+].map((v) => ({ ...v, profile_id: uid, is_primary: false }));
+for (const pass of ['first', 'second']) {
+  const { error } = await app
+    .from('vehicles')
+    .upsert(extras, { onConflict: 'id', ignoreDuplicates: true });
+  check(`garage extras upsert in one statement (${pass} send)`, !error, error?.message);
+}
+const { data: garage } = await app
+  .from('vehicles')
+  .select('id, is_primary')
+  .eq('profile_id', uid);
+check(
+  'both extras exist, neither is the main car',
+  extras.every((e) => garage?.some((g) => g.id === e.id && g.is_primary === false)),
+  garage,
+);
+check(
+  'exactly one main car remains, and it is the new one',
+  garage?.filter((g) => g.is_primary).map((g) => g.id).join() === newCarId,
+  garage,
+);
+
+// The onboarding answers: own row only, sent one answer at a time (as the
+// screens and sync.ts do), and a later answer never blanks an earlier one.
+const { error: focusErr } = await app
+  .from('onboarding_answers')
+  .upsert({ profile_id: uid, focus: 'topSpeed' }, { onConflict: 'profile_id' });
+check('focus answer saves', !focusErr, focusErr?.message);
+const { error: attrErr } = await app
+  .from('onboarding_answers')
+  .upsert({ profile_id: uid, attribution: 'friend' }, { onConflict: 'profile_id' });
+check('attribution answer saves', !attrErr, attrErr?.message);
+const { data: answers } = await app
+  .from('onboarding_answers')
+  .select('focus, attribution')
+  .eq('profile_id', uid)
+  .maybeSingle();
+check(
+  'the second answer kept the first',
+  answers?.focus === 'topSpeed' && answers?.attribution === 'friend',
+  answers,
+);
+const { error: badKeyErr } = await app
+  .from('onboarding_answers')
+  .upsert({ profile_id: uid, focus: 'fastest' }, { onConflict: 'profile_id' });
+check('an unknown focus key is refused (23514)', badKeyErr?.code === '23514', badKeyErr);
+const { error: foreignErr } = await buddy
+  .from('onboarding_answers')
+  .upsert({ profile_id: uid, focus: 'beatFriends' }, { onConflict: 'profile_id' });
+check(
+  "another driver cannot write someone's answers (42501)",
+  foreignErr?.code === '42501',
+  foreignErr,
+);
+const { data: peek } = await buddy
+  .from('onboarding_answers')
+  .select('focus')
+  .eq('profile_id', uid);
+check("another driver cannot read someone's answers", (peek ?? []).length === 0, peek);
+const { error: anonPeekErr } = await signedOut.from('onboarding_answers').select('focus');
+check('anon cannot read answers at all (42501)', anonPeekErr?.code === '42501', anonPeekErr);
+const { data: still } = await app
+  .from('onboarding_answers')
+  .select('focus')
+  .eq('profile_id', uid)
+  .maybeSingle();
+check('the refused writes changed nothing', still?.focus === 'topSpeed', still);
+
 // ── 9. account deletion ─────────────────────────────────────────────────────
 section('9. Account deletion');
 const { error: delErr } = await app.rpc('delete_account');

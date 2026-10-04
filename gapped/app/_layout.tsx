@@ -59,14 +59,21 @@ const GATE_OK: VersionGate = { status: 'ok' };
 
 type Profile = ReturnType<typeof useProfile.getState>;
 
-/** Fields the server keeps a copy of (sync.ts pushIdentity). */
+/**
+ * Fields the server keeps a copy of (sync.ts pushIdentity). The garage's extra
+ * vehicles are among them: without that, a car added after onboarding waited
+ * for the next drive upload or foreground to reach the server. The onboarding
+ * answers need no entry — flipping `onboarded` already pushes them, and every
+ * later pass retries them until they land (sync.ts pushAnswers).
+ */
 function identityChanged(next: Profile, prev: Profile): boolean {
   return (
     next.onboarded !== prev.onboarded ||
     next.username !== prev.username ||
     next.country !== prev.country ||
     next.unitPref !== prev.unitPref ||
-    next.vehicleId !== prev.vehicleId
+    next.vehicleId !== prev.vehicleId ||
+    next.extraVehicles !== prev.extraVehicles
   );
 }
 

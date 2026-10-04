@@ -17,8 +17,11 @@
  * refused with 42501, the DO NOTHING upserts on vehicles, drives and
  * drive_fixes succeed under the client grants (repeatedly, and with
  * overlapping fix batches), and a second driver's identical username is
- * refused with 23505. scripts/verify-roundtrip.mjs still uploads with plain
- * inserts, so it does not cover these statements.
+ * refused with 23505. Likewise for the onboarding additions: the bulk DO
+ * NOTHING upsert of extra vehicles (twice over), the is_primary demotion under
+ * 0009's column grant and own-row RLS, and the onboarding_answers upsert of one
+ * answer at a time keeping the other (0017). scripts/verify-roundtrip.mjs
+ * still uploads with plain inserts, so it does not cover these statements.
  */
 
 import { epochMs, gForce, metres, mps, seconds } from '@/types/units';
@@ -42,14 +45,25 @@ type Call = {
   payload: unknown;
   options: Record<string, unknown> | undefined;
   filters: [string, unknown][];
+  /** `.neq()` filters, kept apart so `filters` stays the plain equalities. */
+  not: [string, unknown][];
 };
 
 const mockCalls: Call[] = [];
-let mockRespond: (call: Call) => { error: Err; data?: unknown } = () => ({ error: null });
+type Reply = { error: Err; data?: unknown };
+/** May answer later, as a network does; the fake waits for it. */
+let mockRespond: (call: Call) => Reply | Promise<Reply> = () => ({ error: null });
 let mockVerify: () => { error: Err } = () => ({ error: null });
 
 function mockBuilder(table: string) {
-  const call: Call = { table, op: 'select', payload: undefined, options: undefined, filters: [] };
+  const call: Call = {
+    table,
+    op: 'select',
+    payload: undefined,
+    options: undefined,
+    filters: [],
+    not: [],
+  };
   const b = {
     update(payload: unknown) {
       call.op = 'update';
@@ -72,6 +86,10 @@ function mockBuilder(table: string) {
     },
     eq(col: string, val: unknown) {
       call.filters.push([col, val]);
+      return b;
+    },
+    neq(col: string, val: unknown) {
+      call.not.push([col, val]);
       return b;
     },
     limit() {
@@ -256,6 +274,254 @@ describe('identity', () => {
     useProfile.getState().setUnitPref('metric');
     await syncIdentity();
     expect(of('profiles', 'update').length).toBeGreaterThan(2);
+  });
+});
+
+describe('the main vehicle', () => {
+  test('every other row still marked primary is demoted, after the new one exists', async () => {
+    onboard();
+    await syncIdentity();
+
+    const vehicleWrites = mockCalls.filter((c) => c.table === 'vehicles');
+    expect(vehicleWrites.map((c) => c.op)).toEqual(['upsert', 'update']);
+    const [demote] = of('vehicles', 'update');
+    // Only is_primary, the one column of these 0009 lets a client update.
+    expect(demote.payload).toEqual({ is_primary: false });
+    expect(demote.filters).toEqual([
+      ['profile_id', 'user-1'],
+      ['is_primary', true],
+    ]);
+    expect(demote.not).toEqual([['id', 'veh-1']]);
+  });
+
+  test('no main vehicle yet, nothing to demote', async () => {
+    onboard();
+    useProfile.setState({ vehicleMake: null, vehicleModel: null, vehicleId: null });
+    await syncIdentity();
+    expect(mockCalls.filter((c) => c.table === 'vehicles')).toHaveLength(0);
+  });
+
+  test('a car changed mid-push still ends as the one main car: pushes never overlap', async () => {
+    onboard();
+    // A small model of the vehicles table, applying each statement as it is
+    // sent: DO NOTHING inserts, and the demotion's filters.
+    const primary = new Map<string, boolean>();
+    let second: Promise<boolean> | undefined;
+    mockRespond = (c) => {
+      if (c.table === 'vehicles' && c.op === 'upsert') {
+        for (const row of [c.payload].flat() as { id: string; is_primary: boolean }[]) {
+          if (!primary.has(row.id)) primary.set(row.id, row.is_primary);
+        }
+      }
+      if (c.table === 'vehicles' && c.op === 'update') {
+        const keep = c.not.find(([col]) => col === 'id')?.[1];
+        for (const [id, isPrimary] of primary) {
+          if (isPrimary && id !== keep) primary.set(id, false);
+        }
+      }
+      if (!second && c.table === 'profiles') {
+        // The driver corrects their car while the first push is in flight, and
+        // the change sets off a push of its own.
+        useProfile.getState().setVehicle('Honda', 'Civic');
+        second = syncIdentity();
+      }
+      // Every statement takes a moment, as over a network.
+      return new Promise<Reply>((resolve) => setTimeout(() => resolve({ error: null }), 0));
+    };
+
+    await syncIdentity();
+    await second;
+
+    const current = useProfile.getState().vehicleId;
+    expect(current).not.toBe('veh-1');
+    expect([...primary].filter(([, isPrimary]) => isPrimary).map(([id]) => id)).toEqual([current]);
+    // The second push started only once the first had finished.
+    expect(
+      mockCalls
+        .filter((c) => c.table === 'vehicles')
+        .map((c) => [c.op, c.op === 'upsert' ? (c.payload as { id: string }).id : c.not[0][1]]),
+    ).toEqual([
+      ['upsert', 'veh-1'],
+      ['update', 'veh-1'],
+      ['upsert', current],
+      ['update', current],
+    ]);
+  });
+
+  test('a failed demotion holds back no drive, and is tried again next pass', async () => {
+    onboard();
+    mockUnsynced.push(finalizedDrive('d1'));
+    mockRespond = (c) =>
+      c.table === 'vehicles' && c.op === 'update'
+        ? { error: { message: 'TypeError: Network request failed' } }
+        : { error: null };
+
+    expect(await syncFinalizedDrives()).toEqual({ uploaded: 1, failed: 0 });
+
+    mockRespond = () => ({ error: null });
+    await syncIdentity();
+    expect(of('vehicles', 'update')).toHaveLength(2);
+    // And once it has gone through, an unchanged identity is left alone.
+    await syncIdentity();
+    expect(of('vehicles', 'update')).toHaveLength(2);
+  });
+});
+
+describe('extra vehicles', () => {
+  function withExtras() {
+    onboard();
+    const { addExtraVehicle } = useProfile.getState();
+    const bike = addExtraVehicle({ kind: 'motorbike', make: 'Ducati', model: 'Monster' });
+    const car = addExtraVehicle({ kind: 'car', make: 'Porsche', model: '911' });
+    return { bike, car };
+  }
+
+  const extrasUpserts = () =>
+    of('vehicles', 'upsert').filter((c) => Array.isArray(c.payload));
+
+  test('go up as one DO NOTHING upsert, never primary, under the ids the store minted', async () => {
+    const { bike, car } = withExtras();
+    await syncIdentity();
+
+    const [extras] = extrasUpserts();
+    expect(extrasUpserts()).toHaveLength(1);
+    expect(extras.options).toEqual({ onConflict: 'id', ignoreDuplicates: true });
+    expect(extras.payload).toEqual([
+      { id: bike, profile_id: 'user-1', kind: 'motorbike', make: 'Ducati', model: 'Monster', is_primary: false },
+      { id: car, profile_id: 'user-1', kind: 'car', make: 'Porsche', model: '911', is_primary: false },
+    ]);
+    // The main vehicle is still its own row, and still the primary.
+    expect(of('vehicles', 'upsert')[0].payload).toMatchObject({ id: 'veh-1', is_primary: true });
+  });
+
+  test('none in the garage, no extra statement', async () => {
+    onboard();
+    await syncIdentity();
+    expect(extrasUpserts()).toHaveLength(0);
+  });
+
+  test('ids are stable: the same rows on every push, so the server keeps one each', async () => {
+    const { bike, car } = withExtras();
+    await syncIdentity();
+    // Something else about the identity changes; the extras are re-sent as
+    // the same ids, which DO NOTHING turns into no change at all.
+    useProfile.getState().setUnitPref('metric');
+    await syncIdentity();
+
+    const ids = extrasUpserts().map((c) => (c.payload as { id: string }[]).map((v) => v.id));
+    expect(ids).toEqual([
+      [bike, car],
+      [bike, car],
+    ]);
+  });
+
+  test('adding or removing one re-pushes the identity', async () => {
+    const { bike } = withExtras();
+    await syncIdentity();
+    expect(extrasUpserts()).toHaveLength(1);
+
+    useProfile.getState().removeExtraVehicle(bike);
+    await syncIdentity();
+    expect(extrasUpserts()).toHaveLength(2);
+    expect((extrasUpserts()[1].payload as { make: string }[]).map((v) => v.make)).toEqual(['Porsche']);
+  });
+
+  test('a refused extra holds back no drive, and is tried again next pass', async () => {
+    withExtras();
+    mockUnsynced.push(finalizedDrive('d1'));
+    mockRespond = (c) =>
+      c.table === 'vehicles' && Array.isArray(c.payload)
+        ? { error: { code: '23514', message: 'violates check constraint' } }
+        : { error: null };
+
+    expect(await syncFinalizedDrives()).toEqual({ uploaded: 1, failed: 0 });
+    expect(await syncIdentity()).toBe(true);
+    expect(extrasUpserts()).toHaveLength(2);
+  });
+});
+
+describe('onboarding answers', () => {
+  const answerWrites = () => of('onboarding_answers', 'upsert');
+
+  test('ride along with the identity, as an upsert of the own row', async () => {
+    onboard();
+    useProfile.getState().setFocus('zeroToSixty');
+    useProfile.getState().setAttribution('reddit');
+    await syncIdentity();
+
+    expect(answerWrites()).toHaveLength(1);
+    expect(answerWrites()[0].payload).toEqual({
+      profile_id: 'user-1',
+      focus: 'zeroToSixty',
+      attribution: 'reddit',
+    });
+    expect(answerWrites()[0].options).toEqual({ onConflict: 'profile_id' });
+  });
+
+  test('only the answers given are sent, so a missing one cannot blank a saved one', async () => {
+    onboard();
+    useProfile.getState().setAttribution('friend');
+    await syncIdentity();
+    expect(answerWrites()[0].payload).toEqual({ profile_id: 'user-1', attribution: 'friend' });
+  });
+
+  test('no answers yet, no write', async () => {
+    onboard();
+    await syncFinalizedDrives();
+    expect(answerWrites()).toHaveLength(0);
+  });
+
+  test('a missed write is sent again on the next pass, then not again', async () => {
+    onboard();
+    useProfile.getState().setFocus('topSpeed');
+    mockRespond = (c) =>
+      c.table === 'onboarding_answers'
+        ? { error: { message: 'TypeError: Network request failed' } }
+        : { error: null };
+    // The answers failing does not make the identity push fail.
+    expect(await syncIdentity()).toBe(true);
+
+    mockRespond = () => ({ error: null });
+    await syncFinalizedDrives();
+    await syncFinalizedDrives();
+    expect(answerWrites()).toHaveLength(2);
+  });
+
+  test('a changed answer is sent again', async () => {
+    onboard();
+    useProfile.getState().setFocus('topSpeed');
+    await syncIdentity();
+    useProfile.getState().setFocus('beatFriends');
+    await syncIdentity();
+    expect(answerWrites().map((c) => (c.payload as { focus: string }).focus)).toEqual([
+      'topSpeed',
+      'beatFriends',
+    ]);
+  });
+
+  test('are still sent when the profile write fails, and never hold back a drive', async () => {
+    onboard();
+    useProfile.getState().setFocus('localRanking');
+    mockUnsynced.push(finalizedDrive('d1'));
+
+    mockRespond = (c) =>
+      c.table === 'profiles' ? { error: { code: '42501', message: 'permission denied' } } : { error: null };
+    expect(await syncFinalizedDrives()).toEqual({ uploaded: 0, failed: 1 });
+    expect(answerWrites()).toHaveLength(1);
+
+    __resetSyncStateForTests();
+    mockRespond = (c) =>
+      c.table === 'onboarding_answers' ? { error: { message: 'relation does not exist' } } : { error: null };
+    expect(await syncFinalizedDrives()).toEqual({ uploaded: 1, failed: 0 });
+  });
+
+  test('a version-blocked build sends none', async () => {
+    onboard();
+    useProfile.getState().setFocus('topSpeed');
+    haltSync();
+    await syncIdentity();
+    await syncFinalizedDrives();
+    expect(answerWrites()).toHaveLength(0);
   });
 });
 

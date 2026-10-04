@@ -85,6 +85,10 @@ Expo SDK 57 (React Native 0.86, TypeScript strict) · expo-router · Supabase (P
       and the friends board wired to them. Following is one-way by design: adding someone changes
       your board and never theirs, so there is nothing to accept and no way onto a stranger's
       screen.
+- [x] **Onboarding v2** ([below](#onboarding), contract in `docs/ONBOARDING.md`): splash + sting,
+      carousel, 13 steps with server-backed proof screens, setup beat, flagged paywall.
+      **Needs:** a new dev build (two new native modules, see [Run it](#run-it)) and
+      `supabase db push` for migration 0017 before the proof screens can show real numbers.
 
 ### Remaining: Phase 3 IMU cross-correlation, Phase 7 (RevenueCat), Phase 8 (polish), plus
 ### attestation enforcement once validated on hardware — gates in order
@@ -94,10 +98,30 @@ Expo SDK 57 (React Native 0.86, TypeScript strict) · expo-router · Supabase (P
 ```sh
 npm install --legacy-peer-deps   # peer conflict deep in expo-router's optional @expo/ui chain
 npm run typecheck                # tsc --noEmit
-npm test                         # 218 tests, all maths
+npm test                         # 64 suites, ~900 tests: maths, onboarding rules, sync
 npm run lint                     # 0 errors; the remaining warnings are deliberate
 npx expo start                   # Expo Go: everything except background recording works
 ```
+
+### New native modules: rebuild the dev client
+
+Onboarding v2 added two native modules, **`expo-audio`** (the splash sting) and
+**`expo-image-picker`** (the car photo step). A development build made before them does not contain
+them, and JavaScript cannot add native code, so make a new one before testing on a device or
+simulator:
+
+```sh
+npx expo prebuild --clean        # regenerate ios/ and android/ from app.json
+npx expo run:ios                 # or: eas build --profile development
+```
+
+On an old dev client the app still runs: both are loaded only after
+`requireOptionalNativeModule` confirms they exist, so the splash is silent and the photo step says
+"Adding a photo needs the latest version of Gapped." Their config plugins in `app.json` are set so
+neither adds more than it needs: no microphone or camera usage strings, no `RECORD_AUDIO` or
+`CAMERA` on Android, no background audio mode (`UIBackgroundModes` stays `location`, `fetch`), and
+the only new Info.plist string is the photo-library one. The sting plays through iOS's `.ambient`
+session: the silent switch mutes it and it never pauses the person's music.
 
 `eslint.config.js` downgrades three React Compiler rules to warnings rather than switching them
 off, with the reasoning written down there: they fire on Reanimated worklet assignments (which
@@ -223,7 +247,7 @@ The whole stack runs locally — no cloud account needed, just Docker.
 cp .env.example .env             # then paste in the URL + anon key db:start prints
 npm run db:start                 # Postgres + PostGIS + auth, migrations applied
 npm run functions:serve          # edge functions, in a second terminal
-npm run verify:roundtrip         # 62 assertions over the full path
+npm run verify:roundtrip         # 81 assertions over the full path
 npm run test:edge                # 19 attestation tests (Deno)
 npm run verify:vin               # decode-vin against live NHTSA (needs network)
 ```
@@ -235,7 +259,8 @@ up, and a network wobble should not turn the main check red.
 `sync.ts`. It uploads the `zeroSixtyPull` fixture as a real drive and asserts the **server**
 independently recomputes its known ground truth (30 m/s top speed, 0-60 in 5.02 s, 13,590 m),
 then checks RLS isolation, the privacy invariant, board ranking, idempotent re-verification,
-authorisation, attestation recording, friends and account deletion. Unit tests cannot reach any
+authorisation, attestation recording, friends, the onboarding counts, garage vehicles and answers
+(0017), and account deletion. Unit tests cannot reach any
 of that — it needs real Postgres.
 
 Ports are 544xx rather than the CLI defaults, so this stack coexists with another project's.
@@ -257,6 +282,11 @@ inlined into the app bundle, so nothing secret can live there. The anon key is a
 key; RLS is the security boundary, not its secrecy.
 
 Redeploying: `supabase db push`, `supabase functions deploy verify-drive attest-device`.
+
+**`0017_onboarding_social_proof` is applied locally only.** Until it is pushed, the cloud project
+answers `make_popularity` / `country_activity` with PGRST202, so the onboarding proof screens show
+their early (no-number) variants, and onboarding-answer writes fail quietly and are retried on
+every sync pass. Nothing breaks; the numbers just stay hidden. `supabase db push` turns them on.
 
 ### Why 0007 exists — "the default ACL" is not one thing
 
@@ -332,9 +362,27 @@ Two things it needs from you:
 Secrets: `APPLE_APP_ID`, `APPLE_APP_ATTEST_ROOT_CA`, `ANDROID_PACKAGE_NAME`,
 `PLAY_INTEGRITY_SERVICE_ACCOUNT`, `TRIM_SALT`, and `ATTESTATION_REQUIRED` when you are ready.
 
-Onboarding (7 steps, vs TripRank's 29): unit → country → location priming → vehicle type →
-make/model → username → safety consent → straight into the Drive tab. No paywall exists yet;
-when it does, it comes **after** the first recorded drive.
+## Onboarding
+
+**`docs/ONBOARDING.md` is the contract**: every step, its route, copy, look, sound and data, and the
+rules that override the competitor flow it was modelled on (no invented numbers, no tracking
+prompt, the safety acknowledgement stays, the paywall behind a flag). In short: a splash with one
+sound and a four-page carousel, then 13 steps under a progress bar — ride, make proof, garage,
+photo, unit, country + proof, location, focus, focus proof, username, trust, attribution, safety —
+then a staged setup beat, then (only with `ONBOARDING_PAYWALL`, off) a dismissible paywall whose
+purchase is a stub.
+
+- **Order lives in one place**, `src/onboarding/flow.ts`. Screens call `useOnboardingAdvance`, never
+  name their successor; the flags (`SAFETY_ACKNOWLEDGEMENT`, `ONBOARDING_PAYWALL`) remove steps
+  there and the bar renumbers itself. A test fails if a file in `app/onboarding/` is not a step.
+- **Proof screens only print server numbers.** `make_popularity` and `country_activity`
+  (migration 0017) withhold anything under their thresholds; offline, slow or below them, the
+  screen shows an early variant with no number. Every other figure in the flow is labelled SAMPLE.
+- **Answers** (focus, attribution) live in the profile store and sync to `onboarding_answers`,
+  readable only by their owner. Extra garage vehicles sync as non-primary `vehicles` rows.
+- Generated assets: `npm run generate:sting` (`assets/sounds/launch-sting.wav`, Python standard
+  library only, byte-identical on re-run) and `npm run generate:country-dots`
+  (`src/data/countryDots.json` from a SHA-256-pinned Natural Earth download, public domain).
 
 ## Before launch (from the spec's naming constraints)
 

@@ -26,6 +26,11 @@ describe('useProfile.reset', () => {
     p.setVehicleKind('car');
     p.setVehicle('BMW', '1M');
     p.setUsername('tobym');
+    p.setNickname('Hachi');
+    p.addExtraVehicle({ kind: 'motorbike', make: 'Honda', model: 'CBR600RR' });
+    p.setVehiclePhotoUri('file:///car.jpg');
+    p.setFocus('zeroToSixty');
+    p.setAttribution('friend');
     p.acceptSafety();
     p.completeOnboarding();
 
@@ -45,6 +50,11 @@ describe('useProfile.reset', () => {
     expect(after.vehicleId).toBeNull();
     expect(after.username).toBeNull();
     expect(after.safetyAccepted).toBe(false);
+    expect(after.nickname).toBeNull();
+    expect(after.extraVehicles).toEqual([]);
+    expect(after.vehiclePhotoUri).toBeNull();
+    expect(after.focus).toBeNull();
+    expect(after.attribution).toBeNull();
   });
 
   test('no non-function field is left holding a value', () => {
@@ -54,12 +64,15 @@ describe('useProfile.reset', () => {
     const p = useProfile.getState();
     p.setUsername('tobym');
     p.setCountry('JE');
+    p.addExtraVehicle({ kind: 'car', make: 'Mazda', model: 'MX-5' });
     p.completeOnboarding();
     useProfile.getState().reset();
 
+    // An empty list is a first-run value too (extraVehicles).
     const leftovers = Object.entries(useProfile.getState())
       .filter(([, v]) => typeof v !== 'function')
-      .filter(([, v]) => v !== null && v !== false && v !== 'metric');
+      .filter(([, v]) => v !== null && v !== false && v !== 'metric')
+      .filter(([, v]) => !(Array.isArray(v) && v.length === 0));
 
     expect(leftovers).toEqual([]);
   });

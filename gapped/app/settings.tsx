@@ -15,6 +15,8 @@ import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { useRecords } from '@/state/records';
 import { triggerTestCrash } from '@/lib/observability';
+import { rearmLocaleUnitDefault } from '@/onboarding/vehicle/deviceUnits';
+import { discardVehiclePhoto } from '@/onboarding/vehicle/vehiclePhoto';
 import { useProfile } from '@/state/profile';
 import { color, space } from '@/theme/tokens';
 
@@ -79,13 +81,25 @@ async function deleteAccount(): Promise<void> {
 
   step('sqlite', clearAll);
 
+  // The car photo from onboarding is a file the profile only names
+  // (Documents/vehicle-photos, kept there so iOS cannot purge it), so reset()
+  // forgets the name and leaves the picture. Deleted first, while the profile
+  // still says which file it is. discardVehiclePhoto never throws and touches
+  // nothing outside that folder.
+  step('photo', () => discardVehiclePhoto(useProfile.getState().vehiclePhotoUri));
+
   // Reset in memory first, then drop the persisted copy — a pending persist
   // write can only ever re-persist first-run defaults. The field list lives on
   // the store (INITIAL) rather than here, so adding a field to the profile
   // cannot leave it surviving a "full" wipe.
+  //
+  // The guard then lands on onboarding in this same process, so the speed
+  // unit's locale default is armed again: reset() put it back to km/h, and the
+  // once-per-launch offer was spent on the account that has just gone.
   step('profile', () => {
     useProfile.getState().reset();
     useProfile.persist.clearStorage();
+    rearmLocaleUnitDefault();
   });
   step('records', () => {
     useRecords.getState().reset();

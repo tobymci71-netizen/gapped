@@ -6,26 +6,59 @@ import { button, color, font, radius, space, type, textStyle } from '@/theme/tok
 type Props = {
   label: string;
   onPress?: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'light';
   disabled?: boolean;
   style?: ViewStyle;
+  /**
+   * What VoiceOver says, when the visible label alone would read badly.
+   * Defaults to `label`.
+   */
+  accessibilityLabel?: string;
+  /**
+   * A glyph drawn after the label — onboarding's "Continue →" — given the
+   * label's ink so it follows the variant and the disabled state. It is
+   * decoration: VoiceOver hears the label, never the glyph, so draw it rather
+   * than typing "→" into `label` ("Continue, rightwards arrow").
+   */
+  trailing?: (ink: string) => React.ReactNode;
 };
 
 /**
  * Primary: full-width pill, acid fill, black label (contrast requires it).
  * Secondary: transparent fill, hairline stroke, white label.
+ * Light: white pill, black label — onboarding's primary action. The flow keeps
+ *   lime for progress, checks and the one Pro button (docs/ONBOARDING.md), so
+ *   a lime Continue on every step would spend the accent on the routine tap.
+ *   Disabled matches primary's: `disabled` fill, text3 label.
  * Press: 0.97 scale spring + light haptic via PressableScale.
  */
-export function Button({ label, onPress, variant = 'primary', disabled, style }: Props) {
+export function Button({
+  label,
+  onPress,
+  variant = 'primary',
+  disabled,
+  style,
+  accessibilityLabel,
+  trailing,
+}: Props) {
+  const ink =
+    variant === 'primary' || variant === 'light'
+      ? disabled
+        ? color.text3
+        : // onAccent is the canvas black, so the label on white reads 19.8:1.
+          color.onAccent
+      : color.text1;
   return (
     <PressableScale
       onPress={onPress}
       disabled={disabled}
       silent={disabled}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: !!disabled }}
       style={[
         styles.base,
+        trailing && styles.withTrailing,
         variant === 'primary' && {
           backgroundColor: disabled ? color.disabled : color.accent,
         },
@@ -33,18 +66,14 @@ export function Button({ label, onPress, variant = 'primary', disabled, style }:
         variant === 'danger' && {
           backgroundColor: disabled ? color.disabled : color.danger,
         },
+        variant === 'light' && {
+          backgroundColor: disabled ? color.disabled : color.text1,
+        },
         style,
       ]}
     >
-      <Text
-        style={[
-          styles.label,
-          variant === 'primary' && { color: disabled ? color.text3 : color.onAccent },
-          (variant === 'secondary' || variant === 'danger') && { color: color.text1 },
-        ]}
-      >
-        {label}
-      </Text>
+      <Text style={[styles.label, { color: ink }]}>{label}</Text>
+      {trailing ? trailing(ink) : null}
     </PressableScale>
   );
 }
@@ -62,6 +91,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignSelf: 'stretch',
   },
+  withTrailing: { flexDirection: 'row', gap: space.sm },
   secondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,

@@ -15,8 +15,9 @@
  * acknowledgement screen that costs one tap and can be removed by setting this
  * to false — no routes deleted, no state removed, nothing to unpick.
  *
- * Set false and the onboarding flow routes straight from username to the app,
- * `safetyAccepted` stays false, and nothing else changes.
+ * Set false and the onboarding flow (src/onboarding/flow.ts) goes straight from
+ * the attribution question to setup, the progress bar counts 12 steps instead
+ * of 13, `safetyAccepted` stays false, and nothing else changes.
  */
 export const SAFETY_ACKNOWLEDGEMENT = true;
 
@@ -38,3 +39,30 @@ export const SAFETY_ACKNOWLEDGEMENT = true;
  * search for it lands here.
  */
 export const NO_IN_DRIVE_SPEED_NUDGES = true;
+
+/**
+ * Show the Gapped Pro paywall at the end of onboarding.
+ *
+ * Off until RevenueCat is wired. The paywall's purchase and restore are stubs,
+ * and a TestFlight or App Store build must not ship a button that cannot
+ * charge — so with this false, "You're all set" finishes onboarding directly
+ * and the paywall route is never reached. Even when on, the paywall is always
+ * dismissible: closing it completes onboarding exactly as buying would
+ * (docs/ONBOARDING.md, rule 5).
+ */
+export const ONBOARDING_PAYWALL = false;
+
+/**
+ * Display strings for the paywall's plan cards, in GBP.
+ *
+ * PLACEHOLDERS. Nothing has been priced: these exist so the plan cards can be
+ * laid out, and they are replaced by RevenueCat's localised `priceString`s when
+ * purchases are wired. There is deliberately no reference or struck-through
+ * "was" price — Gapped's first screens must not invent a discount any more than
+ * a number (docs/ONBOARDING.md, rule 1). Only read when ONBOARDING_PAYWALL is
+ * true.
+ */
+export const PAYWALL_PLACEHOLDER_PRICES = {
+  yearly: '£29.99 / year',
+  weekly: '£2.99 / week',
+} as const;

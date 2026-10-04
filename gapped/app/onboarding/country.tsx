@@ -1,44 +1,73 @@
-import { useRouter } from 'expo-router';
-import React from 'react';
-import { Keyboard, StyleSheet, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
 import { Button } from '@/components/Button';
-import { CountryPicker } from '@/components/CountryPicker';
-import { OnboardingStep } from '@/components/OnboardingStep';
+import { OnboardingFrame } from '@/components/OnboardingFrame';
+import { countryByCode } from '@/data/countries';
+import { CountryProof } from '@/onboarding/place/CountryProof';
+import { CountrySheet } from '@/onboarding/place/CountrySheet';
+import { useArrival } from '@/onboarding/place/useArrival';
+import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
 import { useProfile } from '@/state/profile';
-import { space } from '@/theme/tokens';
 
+/**
+ * Country + proof (docs/ONBOARDING.md, step 6).
+ *
+ * The step is the proof screen; choosing happens in a sheet over it. On the
+ * first visit — no country yet — the sheet rises by itself once the screen has
+ * landed, so the question is asked straight away. Every later change goes
+ * through the lime country name, which reopens it. The proof underneath
+ * reacts to whatever is chosen: the map crossfades and the line swaps.
+ *
+ * The country decides which national board a driver is ranked on, so it is
+ * never guessed for them: the phone's region is offered as the sheet's first
+ * row, and Continue waits for a real choice.
+ */
 export default function CountryStep() {
-  const router = useRouter();
-  const { country, setCountry } = useProfile();
+  const advance = useOnboardingAdvance('/onboarding/country');
+  const country = useProfile((s) => s.country);
+  const setCountry = useProfile((s) => s.setCountry);
+  const arrived = useArrival();
+
+  /*
+   * Whether the sheet is up: the person's last word on it, or — until they
+   * have had one — whether this is the first visit and the screen has landed.
+   * Derived rather than set from an effect, so the sheet rises in the same
+   * commit that learns of the arrival. The first visit is frozen at mount:
+   * coming Back to a step that already has a country must not throw the sheet
+   * up again.
+   */
+  const [firstVisit] = useState(() => country === null);
+  const [sheetChoice, setSheetChoice] = useState<boolean | null>(null);
+  const sheetOpen = sheetChoice ?? (firstVisit && arrived);
+  const openSheet = useCallback(() => setSheetChoice(true), []);
+  const closeSheet = useCallback(() => setSheetChoice(false), []);
+
+  const chosen = countryByCode(country);
 
   return (
-    <OnboardingStep
-      step={2}
-      title="Select your country"
-      subtitle="This decides which boards you appear on."
-      scroll={false}
-      collapseHeadingWithKeyboard
-      footer={
-        <Button
-          label="Continue"
-          disabled={!country}
-          onPress={() => {
-            // The search field keeps focus when the next step is pushed over
-            // it, so a keyboard opened here stayed up on the location step,
-            // which has nothing to type into.
-            Keyboard.dismiss();
-            router.navigate('/onboarding/location');
-          }}
-        />
-      }
-    >
-      <View style={styles.sheetWrap}>
-        <CountryPicker selected={country} onSelect={setCountry} />
-      </View>
-    </OnboardingStep>
+    <>
+      <OnboardingFrame
+        route="/onboarding/country"
+        centered
+        title={chosen ? "You're in good company" : 'Where do you drive?'}
+        subtitle={chosen ? undefined : "Your country decides which national board you're ranked on."}
+        footer={
+          chosen ? (
+            <Button label="Continue" variant="light" onPress={advance} />
+          ) : (
+            // Closing the sheet without a pick leaves the way back in where
+            // Continue will be, rather than a dead grey button.
+            <Button label="Select country" variant="light" onPress={openSheet} />
+          )
+        }
+      >
+        <CountryProof country={chosen ?? null} onChange={openSheet} play={arrived} />
+      </OnboardingFrame>
+      <CountrySheet
+        visible={sheetOpen}
+        selected={country}
+        onSelect={setCountry}
+        onClose={closeSheet}
+      />
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  sheetWrap: { flex: 1, marginHorizontal: -space.xl, marginBottom: -space.xxl },
-});

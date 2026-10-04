@@ -19,6 +19,7 @@ import { ensureUserId, supabase } from '@/lib/supabase';
 import { DriveSummary } from '@/drive/types';
 import { MS_PER_MPH } from '@/drive/units';
 import { count, metres, mps, raw, seconds } from '@/types/units';
+import { SAMPLE_BOARD_ROWS } from './sampleRows';
 import { BoardMetric, BoardPeriod, BoardQuery, BoardRow, BoardValue } from './types';
 
 /** Published manufacturer 0-60 mph figures — benchmark ghosts, not people. */
@@ -30,13 +31,6 @@ const ZERO_TO_60_BENCHMARKS: { name: string; seconds: number }[] = [
   { name: 'Mazda MX-5 (ND 2.0) — manufacturer figure', seconds: 6.5 },
 ];
 
-const SAMPLE_ROWS: { username: string; vehicle: string; mph: number }[] = [
-  { username: 'sample_driver_1', vehicle: 'BMW M240i', mph: 82 },
-  { username: 'sample_driver_2', vehicle: 'Golf GTI', mph: 76 },
-  { username: 'sample_driver_3', vehicle: 'MX-5 ND', mph: 71 },
-  { username: 'sample_driver_4', vehicle: 'Civic Type R', mph: 69 },
-  { username: 'sample_driver_5', vehicle: 'GR Yaris', mph: 64 },
-];
 
 /**
  * Periods are rolling windows counted back from now, on both the local board
@@ -254,7 +248,7 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
   if (drives.length === 0) {
     // SAMPLE board — labelled, swapped for real data on first drive.
     if (query.metric === 'top_speed') {
-      SAMPLE_ROWS.forEach((s, i) =>
+      SAMPLE_BOARD_ROWS.forEach((s, i) =>
         rows.push({
           id: `sample-${i}`,
           rank: i + 1,

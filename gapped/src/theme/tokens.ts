@@ -30,6 +30,12 @@ export const color = {
   rank3: '#D2803A',
   danger: '#FF3B30',
   success: '#34C759',
+  /**
+   * A fixable input problem — a username that is taken or malformed. Orange,
+   * not danger red: nothing has failed or been lost, the person just has to
+   * change what they typed (docs/ONBOARDING.md, "Look and motion").
+   */
+  warning: '#FF9F0A',
 
   // Text on accent fills — contrast requires black, not white
   onAccent: '#0A0A0A',

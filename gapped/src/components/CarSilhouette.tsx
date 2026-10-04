@@ -15,11 +15,10 @@ import Animated, {
   useDerivedValue,
   useSharedValue,
   withDelay,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useReducedMotion } from '@/lib/useReducedMotion';
-import { duration, easing, spring } from '@/theme/motion';
+import { duration, easing } from '@/theme/motion';
 import { color } from '@/theme/tokens';
 import { BodyType } from '@/vehicles/bodyType';
 
@@ -791,7 +790,15 @@ export function CarSilhouette({
     progress.value = 0;
     progress.value = withTiming(1, { duration: duration.slow, easing: easing.decel });
     wheelIn.value = 0;
-    wheelIn.value = withDelay(Math.round(duration.slow * 0.42), withSpring(1, spring.bouncy));
+    // Eased in, not sprung. This was spring.bouncy, whose ~35% overshoot made
+    // the wheels pop past full size and back — the one bounce left in a flow
+    // whose rule is that nothing bounces (docs/ONBOARDING.md, "Look and
+    // motion"), on every screen that draws a vehicle. The wheels still land
+    // after the body, on the entering curve.
+    wheelIn.value = withDelay(
+      Math.round(duration.slow * 0.42),
+      withTiming(1, { duration: duration.base, easing: easing.decel }),
+    );
   }, [revealKey, bodyType, reduced, progress, wheelIn, fade]);
 
   // Body leads, glass follows into the tail of the same sweep.

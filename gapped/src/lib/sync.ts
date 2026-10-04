@@ -18,6 +18,7 @@ import { ensureUserId, supabase } from './supabase';
 import { attestationFor } from './attestation';
 import * as wal from '@/drive/wal';
 import { Fix } from '@/drive/types';
+import { upsertOnboardingAnswers } from '@/onboarding/socialProof';
 import { useProfile } from '@/state/profile';
 
 const FIX_BATCH = 500;
@@ -34,6 +35,38 @@ export type SyncResult = { uploaded: number; failed: number };
  * and it is what lets a taken username be retried once its holder lets it go.
  */
 let lastPushed: string | null = null;
+
+/**
+ * The onboarding answers the server last accepted in this process; see
+ * pushAnswers. Kept apart from `lastPushed` because the two succeed and fail
+ * independently.
+ */
+let lastAnswers: string | null = null;
+
+/** The last identity write queued in this process; see `inTurn`. */
+let identityTurn: Promise<unknown> = Promise.resolve();
+
+/**
+ * Runs `push` once every identity write queued before it has finished, so no
+ * two overlap.
+ *
+ * A profile change (syncIdentity), the startup or foreground pass and
+ * Garage's VIN decode can all push at once. With the main-car demotion in
+ * pushIdentity, two overlapping pushes either side of a car change can each
+ * demote the other's car: the old push's "every primary but the old car"
+ * lands after the new push has created the new one. The driver is then left
+ * with no main car on the server — counted nowhere by make_popularity — until
+ * they next change car, because the upsert that makes a row primary does
+ * nothing to a row that already exists. In turn, each push reads the profile
+ * when it starts, so the last one sends what is current and its demotion is
+ * the one that stands. The onboarding answers queue here too, for the same
+ * reason: an older answer must not land after a newer one.
+ */
+function inTurn<T>(push: () => Promise<T>): Promise<T> {
+  const turn = identityTurn.then(push);
+  identityTurn = turn.catch(() => undefined);
+  return turn;
+}
 
 /**
  * Set when the version gate blocks this build; never cleared in the process.
@@ -53,7 +86,8 @@ export function haltSync(): void {
 }
 
 /**
- * Push the local profile and its vehicle up before anything references them.
+ * Push the local profile and its vehicles up before anything references them:
+ * the main vehicle, and any extras from the garage step.
  *
  * A profiles row is created by a trigger on signup (migration 0002) but starts
  * empty — the app is anonymous-first and onboarding collects username and
@@ -61,7 +95,10 @@ export function haltSync(): void {
  * keys, so without this a drive upload fails outright; decode-vin looks the
  * vehicle up by id, and add_friend looks the driver up by username.
  *
- * Throws when something other than a taken username fails.
+ * Throws when something other than a taken username fails — except for the
+ * garage's extra vehicles and the bookkeeping of which car is the main one.
+ * No drive references either, so a failure there leaves the identity to be
+ * pushed again next time rather than holding back the drives.
  */
 async function pushIdentity(client: SupabaseClient, userId: string): Promise<void> {
   const p = useProfile.getState();
@@ -74,6 +111,7 @@ async function pushIdentity(client: SupabaseClient, userId: string): Promise<voi
     p.vehicleKind,
     p.vehicleMake,
     p.vehicleModel,
+    p.extraVehicles,
   ]);
   if (fingerprint === lastPushed) return;
 
@@ -113,6 +151,10 @@ async function pushIdentity(client: SupabaseClient, userId: string): Promise<voi
     }
   }
 
+  // Whether everything below reached the server. Only then is the identity
+  // recorded as pushed; otherwise the next pass sends it again.
+  let settled = true;
+
   if (p.vehicleId && p.vehicleKind && p.vehicleMake && p.vehicleModel) {
     // Specs stay null until a VIN is decoded; verify-drive then brackets the
     // drive as open class rather than guessing a power-to-weight.
@@ -138,9 +180,70 @@ async function pushIdentity(client: SupabaseClient, userId: string): Promise<voi
       { onConflict: 'id', ignoreDuplicates: true },
     );
     if (vehicleErr) throw vehicleErr;
+
+    // One main car per driver. A new make/model is a new row (see above), and
+    // the row it replaced used to stay is_primary too, so a driver who had
+    // changed cars had several "main" cars on the server. The onboarding make
+    // proof (make_popularity, 0017) counts each driver once, and with several
+    // to choose from it can only guess — a new car not yet driven loses to
+    // the old one. Demote the rest, after the new row exists so there is never
+    // a moment with none. The old rows themselves stay: their drives still
+    // point at them. Only safe one push at a time — see inTurn.
+    const { error: demoteErr } = await client
+      .from('vehicles')
+      .update({ is_primary: false })
+      .eq('profile_id', userId)
+      .eq('is_primary', true)
+      .neq('id', p.vehicleId);
+    if (demoteErr) settled = false;
   }
 
-  lastPushed = fingerprint;
+  // The garage step's extra cars and bikes, as rows that are never the main
+  // one. Same rules as the main vehicle: the id was minted locally and is the
+  // row's id, and DO NOTHING on conflict leaves a row the server already has —
+  // decode-vin's corrections included — exactly as it is. One statement for
+  // all of them. An extra removed from the garage keeps its row: a row that is
+  // not primary is counted nowhere, and Postgres refuses to delete a vehicle
+  // while any drive still points at it.
+  const extras = p.extraVehicles.filter((v) => v.id && v.kind && v.make && v.model);
+  if (extras.length > 0) {
+    const { error: extrasErr } = await client.from('vehicles').upsert(
+      extras.map((v) => ({
+        id: v.id,
+        profile_id: userId,
+        kind: v.kind,
+        make: v.make,
+        model: v.model,
+        is_primary: false,
+      })),
+      { onConflict: 'id', ignoreDuplicates: true },
+    );
+    if (extrasErr) settled = false;
+  }
+
+  if (settled) lastPushed = fingerprint;
+}
+
+/**
+ * Send the stored onboarding answers (focus, attribution) to the driver's own
+ * `onboarding_answers` row, until the server has them.
+ *
+ * The answer screens save them as they are given, but best effort: onboarding
+ * never waits for that write, so a first run offline, or one whose anonymous
+ * session had not been made yet, would lose them for good. The profile store
+ * keeps them, and this sends whatever it holds on every sync pass — once per
+ * process, and again whenever an answer changes — until a write succeeds.
+ *
+ * Never throws, and never holds anything else back: no other row depends on
+ * the answers.
+ */
+async function pushAnswers(client: SupabaseClient, userId: string): Promise<void> {
+  const { focus, attribution } = useProfile.getState();
+  const fingerprint = JSON.stringify([userId, focus, attribution]);
+  if (fingerprint === lastAnswers) return;
+  if (await upsertOnboardingAnswers(client, userId, { focus, attribution })) {
+    lastAnswers = fingerprint;
+  }
 }
 
 /**
@@ -151,20 +254,24 @@ async function pushIdentity(client: SupabaseClient, userId: string): Promise<voi
  * with "vehicle not found") and no username (nobody could add them as a
  * friend). Called when onboarding completes or the profile changes, at
  * startup via syncFinalizedDrives, and by Garage before it decodes a VIN.
+ * The stored onboarding answers ride along (pushAnswers).
  *
- * Resolves false when there is no session or the push failed. Never throws.
+ * Resolves false when there is no session or the identity push failed — the
+ * answers do not affect it. Never throws.
  */
 export async function syncIdentity(): Promise<boolean> {
   const client = supabase;
   if (!client || halted) return false;
   const userId = await ensureUserId();
   if (!userId) return false;
+  let pushed = true;
   try {
-    await pushIdentity(client, userId);
-    return true;
+    await inTurn(() => pushIdentity(client, userId));
   } catch {
-    return false;
+    pushed = false;
   }
+  await inTurn(() => pushAnswers(client, userId));
+  return pushed;
 }
 
 /**
@@ -248,9 +355,14 @@ async function syncOnce(): Promise<SyncResult> {
   if (!userId) return { uploaded: 0, failed: 0 };
 
   // Ahead of the "nothing to upload" return, not behind it: see syncIdentity.
+  let identityPushed = true;
   try {
-    await pushIdentity(client, userId);
+    await inTurn(() => pushIdentity(client, userId));
   } catch {
+    identityPushed = false;
+  }
+  await inTurn(() => pushAnswers(client, userId));
+  if (!identityPushed) {
     // Nothing can reference a profile that failed to save; retry next time
     // rather than burn attempts on drives that are certain to be rejected.
     return { uploaded: 0, failed: wal.listUnsynced().length };
@@ -348,9 +460,14 @@ async function syncOnce(): Promise<SyncResult> {
   return { uploaded, failed };
 }
 
-/** Test seam: forget this process's sync state (pushed identity, pass, halt). */
+/**
+ * Test seam: forget this process's sync state (pushed identity and answers,
+ * the identity queue, pass, halt).
+ */
 export function __resetSyncStateForTests(): void {
   lastPushed = null;
+  lastAnswers = null;
+  identityTurn = Promise.resolve();
   running = null;
   again = false;
   halted = false;

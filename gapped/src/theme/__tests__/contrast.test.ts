@@ -64,4 +64,12 @@ describe('text tokens against the backgrounds they are used on', () => {
   it('the label on an accent fill clears AA', () => {
     expect(contrast(color.onAccent, color.accent)).toBeGreaterThanOrEqual(AA);
   });
+
+  it('the label on a light (white) button clears AA', () => {
+    expect(contrast(color.onAccent, color.text1)).toBeGreaterThanOrEqual(AA);
+  });
+
+  it.each(Object.entries(surfaces))('warning copy and field borders clear AA on %s', (_, bg) => {
+    expect(contrast(color.warning, bg)).toBeGreaterThanOrEqual(AA);
+  });
 });
