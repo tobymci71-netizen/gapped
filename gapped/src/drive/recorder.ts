@@ -205,8 +205,18 @@ export const useDriveStore = create<LiveState & Actions>((set, get) => ({
     const access = readLocationAccess(fg);
     set(access);
     if (access.permission !== 'granted') return false;
+    // Motion & Fitness, asked for here and answered before this resolves.
+    // Left to the barometer starting below, iOS raised the dialog on its own
+    // schedule, after this had resolved: onboarding's location step had moved
+    // on, and the dialog landed on "Your focus" with nothing explaining it.
+    // A refusal only costs a run its motion check, so it never stops recording.
+    await requestMotionPermission();
     // Background is requested separately; recording works foreground-only
-    // without it (we say so rather than failing silently).
+    // without it (we say so rather than failing silently). It goes last:
+    // expo-location can resolve it while its dialog is still up (it infers
+    // the answer from app-state notifications and a 1.5 s timer), and a
+    // dialog asked for after it pushed it aside — iOS then showed it again on
+    // a later launch, over whatever screen that was.
     await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
     // The only arm that comes from a tap, so the only one allowed to show
     // Android's "turn on device location" dialog.
@@ -267,6 +277,30 @@ async function syncPermission(set: Set, get: Get): Promise<void> {
   set(access);
   if (access.permission === 'granted') await startWatching(set, get);
   else await stopWatching();
+}
+
+/**
+ * The Motion & Fitness dialog, settled. expo-sensors resolves only once the
+ * person has answered (it waits on a CMPedometer query), and on Android it
+ * resolves at once. Any failure is swallowed: motion is evidence for a run's
+ * verification, not a condition for recording one.
+ */
+async function requestMotionPermission(): Promise<void> {
+  try {
+    await DeviceMotion.requestPermissionsAsync();
+  } catch {
+    // Recording goes on without it; see above.
+  }
+}
+
+/** Whether the Motion & Fitness dialog has been answered, either way. */
+async function motionAnswered(): Promise<boolean> {
+  try {
+    const { status } = await DeviceMotion.getPermissionsAsync();
+    return status !== 'undetermined';
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -398,10 +432,19 @@ async function armWatchers(set: Set, get: Get, interactive: boolean): Promise<vo
       set({ lastAccelG: mag });
     }
   });
-  const barometer = Barometer.addListener((s) => {
-    latestPressure = s.pressure;
-  });
-  sensorSubs = [motion, barometer];
+  // The barometer is CoreMotion's altimeter, and starting it is what raises
+  // the Motion & Fitness dialog when nobody has asked yet. A passive arm (a
+  // launch, a return to the foreground) must not: the dialog lands on
+  // whatever screen is up, unexplained. requestPermissions asks first, from
+  // the location step that says why; until it has, fixes carry no pressure.
+  // DeviceMotion needs no permission and always runs.
+  const barometer =
+    interactive || (await motionAnswered())
+      ? Barometer.addListener((s) => {
+          latestPressure = s.pressure;
+        })
+      : null;
+  sensorSubs = barometer ? [motion, barometer] : [motion];
 
   try {
     watcher = await Location.watchPositionAsync(

@@ -36,7 +36,14 @@ const mockLocation = {
   /** mayShowUserSettingsDialog per watch, i.e. may Android show its dialog. */
   dialogs: [] as (boolean | undefined)[],
 };
-const mockSensors = { motion: [] as Fn[], baro: [] as Fn[], intervals: [] as number[] };
+const mockSensors = {
+  motion: [] as Fn[],
+  baro: [] as Fn[],
+  intervals: [] as number[],
+  motionPermissionFails: false,
+  /** CoreMotion's answer so far: 'undetermined' until the dialog is answered. */
+  motionStatus: 'granted' as 'granted' | 'denied' | 'undetermined',
+};
 const mockAppState = { listeners: [] as ((s: string) => void)[] };
 const mockTasks: Record<string, (body: { data: unknown; error: unknown }) => Promise<void>> = {};
 const mockRuns: { sql: string; params: unknown[] }[] = [];
@@ -46,7 +53,10 @@ jest.mock('expo-location', () => ({
   ActivityType: { AutomotiveNavigation: 2 },
   getForegroundPermissionsAsync: async () => mockLocation.fg,
   requestForegroundPermissionsAsync: async () => mockLocation.fg,
-  requestBackgroundPermissionsAsync: async () => ({ status: 'denied' }),
+  requestBackgroundPermissionsAsync: async () => {
+    mockLocation.calls.push('backgroundPermission');
+    return { status: 'denied' };
+  },
   getBackgroundPermissionsAsync: async () => ({ status: 'denied' }),
   hasStartedLocationUpdatesAsync: async () => mockLocation.bgRunning,
   stopLocationUpdatesAsync: async () => {
@@ -92,6 +102,13 @@ jest.mock('expo-sensors', () => {
     DeviceMotion: {
       setUpdateInterval: (ms: number) => mockSensors.intervals.push(ms),
       addListener: listen('motion'),
+      requestPermissionsAsync: async () => {
+        mockLocation.calls.push('motionPermission');
+        if (mockSensors.motionPermissionFails) throw new Error('no CoreMotion');
+        mockSensors.motionStatus = 'granted';
+        return { status: 'granted' };
+      },
+      getPermissionsAsync: async () => ({ status: mockSensors.motionStatus }),
     },
     Barometer: { addListener: listen('baro') },
   };
@@ -153,6 +170,8 @@ beforeEach(() => {
   mockSensors.motion = [];
   mockSensors.baro = [];
   mockSensors.intervals = [];
+  mockSensors.motionPermissionFails = false;
+  mockSensors.motionStatus = 'granted';
   mockAppState.listeners = [];
   mockRuns.length = 0;
 });
@@ -330,6 +349,69 @@ describe("Android's turn-on-location dialog", () => {
     await useDriveStore.getState().requestPermissions();
     await settle();
     expect(mockLocation.dialogs[mockLocation.dialogs.length - 1]).toBe(true);
+  });
+});
+
+describe('requestPermissions', () => {
+  // The Motion & Fitness dialog used to come from the barometer starting, after
+  // this had resolved, so it landed on whatever screen onboarding showed next.
+  // And nothing may be asked after background location: its request can
+  // resolve with the dialog still up, and a later dialog pushes it aside.
+  test('settles motion before resolving, and asks for background location last', async () => {
+    const { useDriveStore } = loadRecorder();
+    await useDriveStore.getState().requestPermissions();
+
+    expect(mockLocation.calls).toEqual(['motionPermission', 'backgroundPermission', 'watch']);
+    expect(mockSensors.motion).toHaveLength(1);
+  });
+
+  test('a motion permission failure still arms recording', async () => {
+    mockSensors.motionPermissionFails = true;
+    const { useDriveStore } = loadRecorder();
+
+    await expect(useDriveStore.getState().requestPermissions()).resolves.toBe(true);
+    expect(liveWatchers()).toHaveLength(1);
+  });
+
+  // Starting the barometer is what raises the Motion & Fitness dialog, so an
+  // arm nobody tapped for must leave it off until the question is answered.
+  test('a launch arm leaves the barometer off while motion is unanswered', async () => {
+    mockSensors.motionStatus = 'undetermined';
+    const { useDriveStore } = loadRecorder();
+    await useDriveStore.getState().init();
+    await settle();
+
+    expect(liveWatchers()).toHaveLength(1);
+    expect(mockSensors.motion).toHaveLength(1);
+    expect(mockSensors.baro).toHaveLength(0);
+  });
+
+  test('the tapped request asks, then arms the barometer too', async () => {
+    mockSensors.motionStatus = 'undetermined';
+    const { useDriveStore } = loadRecorder();
+    await useDriveStore.getState().requestPermissions();
+    await settle();
+
+    expect(mockSensors.baro).toHaveLength(1);
+  });
+
+  test('a launch arm keeps the barometer once motion was refused', async () => {
+    // Refused is answered: starting the altimeter raises nothing, it just
+    // reports no samples.
+    mockSensors.motionStatus = 'denied';
+    const { useDriveStore } = loadRecorder();
+    await useDriveStore.getState().init();
+    await settle();
+
+    expect(mockSensors.baro).toHaveLength(1);
+  });
+
+  test('a location refusal asks for nothing else', async () => {
+    mockLocation.fg = DENIED_FOR_GOOD;
+    const { useDriveStore } = loadRecorder();
+
+    await expect(useDriveStore.getState().requestPermissions()).resolves.toBe(false);
+    expect(mockLocation.calls).toEqual([]);
   });
 });
 

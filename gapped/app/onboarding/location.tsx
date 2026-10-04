@@ -1,6 +1,6 @@
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import { AppState, Linking, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Button } from '@/components/Button';
 import { Entrance } from '@/components/Entrance';
@@ -39,6 +39,23 @@ const ANSWER_BEAT_MS = duration.slow + duration.base;
  * breaks words in half. The copy under it scales freely.
  */
 const HEADLINE_MAX_SCALE = 1.5;
+
+/**
+ * Resolves once no system dialog covers the app. iOS makes the app 'inactive'
+ * while a permission dialog is up, and the AppState event reaches JS a beat
+ * after the dialog does, so this looks once more after that beat.
+ */
+async function untilNoSystemDialog(): Promise<void> {
+  await new Promise((r) => setTimeout(r, duration.fast));
+  if (AppState.currentState === 'active') return;
+  await new Promise<void>((resolve) => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s !== 'active') return;
+      sub.remove();
+      resolve();
+    });
+  });
+}
 
 /**
  * Location soft ask (docs/ONBOARDING.md, step 7). Explains before the OS
@@ -120,6 +137,9 @@ export default function LocationStep() {
     inFlight.current = true;
     try {
       await requestPermissions();
+      // The "Always" request can resolve with its dialog still up (see
+      // recorder.ts); moving on beneath it would leave it over "Your focus".
+      await untilNoSystemDialog();
       // The card now reads Allowed or Not allowed (the store took the answer
       // before resolving); let that land, then carry on either way.
       setLast('answered');
