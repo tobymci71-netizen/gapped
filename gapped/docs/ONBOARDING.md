@@ -90,7 +90,9 @@ drivers of the same kind (cars, or bikes), so the share line names the kind.
 
 **Add more cars?** / Optional. Your main car is set, so you can keep going and build your garage
 later. Card: silhouette, "{Make} {Model}" (or nickname), lime caption "Main car". Row: "+ Add
-another car". Continue.
+another car". Continue. A Free garage holds `FREE_GARAGE_VEHICLES` (3, main included; an
+unlimited garage is Pro), so at three the row becomes "Your garage holds up to 3 vehicles for
+now."
 
 **Add a car photo** / Make it yours, or keep the illustration. **Add photo** (white pill),
 **Keep current image** (dark pill). After a pick the photo replaces the silhouette and Continue
@@ -128,8 +130,10 @@ Local ranking — See where you rank · Beat friends — Compare real drive stat
   verified speed beside a car they own would be an invented figure for that car.
 - 0–60: *Measured, not guessed* / From a standstill of at least two seconds, with a one-foot
   rollout. No clean launch, no number. Visual: a sample timer running to 0–60, labelled sample.
-- Local ranking: *Your class, your country* / Boards split by car class and country, so you're
-  ranked against cars like yours. Visual: sample rank card.
+- Local ranking: *Your country, your board* / Every verified run places on your country's board
+  and the global one, so you can see where you and your car stand. Visual: sample rank card, "#7
+  of 48 drivers". Not class: class brackets are Pro in the published matrix, board placement is
+  Free.
 - Beat friends: *Friends make it a race* / Add friends by username and race their real drive stats.
   Following is one-way, so nobody lands on a stranger's screen. Visual: sample friends board.
 Three lime icons under every variant: Real drive data · Progress history · Ranking context.
@@ -164,16 +168,16 @@ here. "Ready to drive 100%" and **Continue**.
 
 **Paywall** (flagged). Wordmark, close button, a real `<ShareCard>` rendered from a sample drive
 (labelled sample) as the hero, "Share your best drives" / "Create clean share cards from your best
-drives and routes." Plan cards Yearly (preselected) and Weekly from `PAYWALL_PLACEHOLDER_PRICES`
-(no reference prices), lime **Unlock Gapped Pro**, then Terms of Use · Privacy Policy · Restore
+drives and routes." Plan cards Monthly (preselected) and Weekly (`PRO_PLANS`) with
+`PAYWALL_PLACEHOLDER_PRICES` (no reference prices, no trial), lime **Unlock Gapped Pro**, then Terms of Use · Privacy Policy · Restore
 Purchases. Purchase and restore are stubs.
 
 Deliberate departures from the reference, each for a stated reason:
 - A small close button (top right): rule 5, always dismissible. Android back and both stubs also
   finish onboarding.
-- One honesty line under the pitch, "Share cards stay free. Pro adds class brackets, board
-  placement and deeper telemetry." (`PAYWALL_PRO_NOTE` in `src/config/plans.ts`, tested against
-  the published matrix): share cards are free, so a paywall that only sold them would be selling
+- One honesty line under the pitch, "Share cards and the boards stay free. Pro adds class
+  brackets, deeper telemetry and a bigger garage." (`PAYWALL_PRO_NOTE` in `src/config/plans.ts`,
+  tested against the published matrix): share cards are free, so a paywall that only sold them would be selling
   something nobody pays for.
 - The plan cards sit side by side in the pinned footer, beside the button, so the price is never
   scrolled away from the thing that charges it (on a 667 pt phone they used to be). Past 1.3x text

@@ -7,7 +7,7 @@
  * app shows "improve up to 2.4x faster" under every answer; nothing like that
  * exists here, because Gapped has no study behind such a figure. What each
  * variant shows instead is the mechanism the copy describes — a verified row,
- * a timed launch, a rank in a class, a friends board — with the numbers
+ * a timed launch, a rank in your country, a friends board — with the numbers
  * plainly marked as an example.
  */
 
@@ -24,7 +24,7 @@ export type FocusProofCopy = { title: string; body: string };
 
 /**
  * docs/ONBOARDING.md, "Focus proof". `noun` is the vehicle the person chose
- * on the ride step: a motorbike rider is ranked against bikes like theirs.
+ * on the ride step.
  */
 export function focusProofCopy(focus: Focus, noun: 'car' | 'bike'): FocusProofCopy {
   switch (focus) {
@@ -38,10 +38,13 @@ export function focusProofCopy(focus: Focus, noun: 'car' | 'bike'): FocusProofCo
         title: 'Measured, not guessed',
         body: 'From a standstill of at least two seconds, with a one-foot rollout. No clean launch, no number.',
       };
+    // Country and global, not class: placement on those boards is Free, and
+    // class brackets are Pro in the published plans matrix, so this screen
+    // must not sell them as part of every drive.
     case 'localRanking':
       return {
-        title: 'Your class, your country',
-        body: `Boards split by ${noun} class and country, so you're ranked against ${noun}s like yours.`,
+        title: 'Your country, your board',
+        body: `Every verified run places on your country's board and the global one, so you can see where you and your ${noun} stand.`,
       };
     case 'beatFriends':
       return {

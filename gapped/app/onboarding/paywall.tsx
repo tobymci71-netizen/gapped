@@ -21,7 +21,7 @@ import { PressableScale } from '@/components/PressableScale';
 import { SHARE_CARD_RENDER, ShareCard } from '@/components/ShareCard';
 import { Text } from '@/components/Text';
 import { PAYWALL_PLACEHOLDER_PRICES } from '@/config/flags';
-import { PAYWALL_PRO_NOTE } from '@/config/plans';
+import { PAYWALL_PRO_NOTE, PRO_PLANS, type ProPlan } from '@/config/plans';
 import { haptic } from '@/lib/haptics';
 import { CheckGlyph, CloseGlyph } from '@/onboarding/identity/glyphs';
 import { SAMPLE_DRIVE } from '@/onboarding/identity/sampleDrive';
@@ -32,18 +32,20 @@ import { useProfile } from '@/state/profile';
 import { duration, easing } from '@/theme/motion';
 import { color, font, glyph, radius, space, textStyle } from '@/theme/tokens';
 
-type Plan = 'yearly' | 'weekly';
+type Plan = ProPlan;
 
 /**
- * The two plans, yearly first and preselected (docs/ONBOARDING.md). Prices are
+ * The two plans, monthly first and preselected (PRO_PLANS, the list the Plans
+ * screen's pricing line is checked against). Prices are
  * PAYWALL_PLACEHOLDER_PRICES until RevenueCat supplies localised ones, and
  * there is no "was" price, per-week breakdown or deal badge: nothing has been
  * priced, so nothing can be discounted.
  */
-const PLANS: readonly { key: Plan; title: string; price: string }[] = [
-  { key: 'yearly', title: 'Yearly', price: PAYWALL_PLACEHOLDER_PRICES.yearly },
-  { key: 'weekly', title: 'Weekly', price: PAYWALL_PLACEHOLDER_PRICES.weekly },
-];
+const PLANS: readonly { key: Plan; title: string; price: string }[] = PRO_PLANS.map((p) => ({
+  key: p.key,
+  title: p.title,
+  price: PAYWALL_PLACEHOLDER_PRICES[p.key],
+}));
 
 /** The same pages Settings links to. */
 const TERMS_URL = 'https://gapped.app/terms';
@@ -106,7 +108,7 @@ function heroSize(slot: { width: number; height: number }): number {
 export default function PaywallStep() {
   const finish = useOnboardingAdvance('/onboarding/paywall');
   useHardwareBack(finish);
-  const [plan, setPlan] = useState<Plan>('yearly');
+  const [plan, setPlan] = useState<Plan>(PLANS[0].key);
 
   // The plans live with the button, not above the fold: on a 667pt SE they
   // used to scroll out of sight, leaving a buy button with no price beside

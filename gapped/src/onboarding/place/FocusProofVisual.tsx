@@ -336,9 +336,10 @@ function RankCard({ context, play }: { context: ProofContext; play: boolean }) {
     transform: [{ translateX: trackWidth * (1 - (1 - target) * v.get()) }],
   }));
   const where = country ? countryInSentence(country) : 'your country';
+  const field = context.noun === 'bike' ? 'riders' : 'drivers';
   return (
     <Card
-      label={`Sample rank card: number ${SAMPLE_RANK.rank} of ${SAMPLE_RANK.of} in ${where}, among ${context.noun}s like yours.`}
+      label={`Sample rank card: number ${SAMPLE_RANK.rank} of ${SAMPLE_RANK.of} ${field} in ${where}.`}
       title={
         <Text variant="caption" style={styles.cardTitleText} numberOfLines={2}>
           {country ? `${country.flag} ${country.name}` : 'Your country'}
@@ -350,7 +351,7 @@ function RankCard({ context, play }: { context: ProofContext; play: boolean }) {
           #{SAMPLE_RANK.rank}
         </Numeral>
         <Text variant="body">
-          of {SAMPLE_RANK.of} {context.noun}s like yours
+          of {SAMPLE_RANK.of} {field}
         </Text>
       </View>
       <View

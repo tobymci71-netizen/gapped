@@ -5,7 +5,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
-import { PLAN_MATRIX } from '@/config/plans';
+import { PLAN_MATRIX, PRO_PRICING_NOTE } from '@/config/plans';
 import { color, space } from '@/theme/tokens';
 
 const included = (yes: boolean) => (yes ? 'included' : 'not included');
@@ -24,8 +24,8 @@ export default function PlansScreen() {
     <Screen footer={<Button label="Back" variant="secondary" onPress={goBack} />}>
       <Text variant="headline">Free vs Pro</Text>
       <Text variant="body" style={styles.sub}>
-        The whole matrix, published. Recording and viewing your own drives is free forever —
-        paying is for competing.
+        The whole matrix, published. Recording your drives and placing on the boards is free
+        forever — paying is for going deeper.
       </Text>
 
       <Card style={styles.table}>
@@ -74,9 +74,7 @@ export default function PlansScreen() {
       </Card>
 
       <Text variant="legal" style={styles.legal}>
-        Pro pricing lands after the first release: one monthly and one annual price, 3-day free
-        trial, no discount wheels, no one-time offers. The paywall only ever appears after your
-        first recorded drive.
+        {PRO_PRICING_NOTE}
       </Text>
     </Screen>
   );

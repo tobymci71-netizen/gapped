@@ -3,7 +3,13 @@
  * it: the onboarding paywall's "what Pro adds" line must stay true of it.
  */
 
-import { PAYWALL_PRO_NOTE, PLAN_MATRIX } from '../plans';
+import {
+  FREE_GARAGE_VEHICLES,
+  PAYWALL_PRO_NOTE,
+  PLAN_MATRIX,
+  PRO_PLANS,
+  PRO_PRICING_NOTE,
+} from '../plans';
 
 const row = (key: string) => PLAN_MATRIX.find((r) => r.key === key);
 
@@ -35,9 +41,39 @@ describe('PAYWALL_PRO_NOTE', () => {
   it('says what it claims', () => {
     // A light tie between the claims and the words, so the sentence cannot
     // be rewritten to say something else while the claims stand still.
-    expect(PAYWALL_PRO_NOTE.text).toMatch(/share cards stay free/i);
+    expect(PAYWALL_PRO_NOTE.text).toMatch(/share cards and the boards stay free/i);
     expect(PAYWALL_PRO_NOTE.text).toMatch(/class brackets/i);
-    expect(PAYWALL_PRO_NOTE.text).toMatch(/board placement/i);
     expect(PAYWALL_PRO_NOTE.text).toMatch(/telemetry/i);
+    expect(PAYWALL_PRO_NOTE.text).toMatch(/bigger garage/i);
+  });
+});
+
+describe('board placement', () => {
+  // Onboarding's proof screens promise that every verified run lands on the
+  // board and count the drivers already on it. Gating placement behind Pro
+  // would make those screens untrue for everyone on Free.
+  it('is free', () => {
+    expect(row('boardPlacement')?.free).toBe(true);
+  });
+});
+
+describe('garage', () => {
+  it('names the Free limit the garage step enforces', () => {
+    expect(row('garage')?.free).toBe(true);
+    expect(row('garage')?.feature).toContain(String(FREE_GARAGE_VEHICLES));
+    expect(row('unlimitedGarage')?.free).toBe(false);
+  });
+});
+
+describe('PRO_PRICING_NOTE', () => {
+  it('names every plan the paywall sells', () => {
+    for (const p of PRO_PLANS) expect(PRO_PRICING_NOTE).toMatch(new RegExp(p.period, 'i'));
+  });
+
+  it('promises nothing the paywall does not offer', () => {
+    // It once promised an annual price, a 3-day trial and a paywall that only
+    // appeared after a first drive; the paywall has none of them.
+    expect(PRO_PRICING_NOTE).not.toMatch(/annual|yearly|trial|first recorded drive/i);
+    expect(PRO_PLANS.map((p) => p.key)).toEqual(['monthly', 'weekly']);
   });
 });

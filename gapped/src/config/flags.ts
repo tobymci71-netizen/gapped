@@ -63,6 +63,6 @@ export const ONBOARDING_PAYWALL = false;
  * true.
  */
 export const PAYWALL_PLACEHOLDER_PRICES = {
-  yearly: '£29.99 / year',
+  monthly: '£7.99 / month',
   weekly: '£2.99 / week',
 } as const;

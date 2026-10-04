@@ -33,15 +33,19 @@ describe('focusProofCopy', () => {
     });
     expect(focusProofCopy('zeroToSixty', 'car').title).toBe('Measured, not guessed');
     expect(focusProofCopy('beatFriends', 'car').title).toBe('Friends make it a race');
-    expect(focusProofCopy('localRanking', 'car').body).toBe(
-      "Boards split by car class and country, so you're ranked against cars like yours.",
-    );
+    expect(focusProofCopy('localRanking', 'car')).toEqual({
+      title: 'Your country, your board',
+      body: "Every verified run places on your country's board and the global one, so you can see where you and your car stand.",
+    });
   });
 
-  test('a rider is ranked against bikes', () => {
-    expect(focusProofCopy('localRanking', 'bike').body).toBe(
-      "Boards split by bike class and country, so you're ranked against bikes like yours.",
-    );
+  test('a rider is told about their bike', () => {
+    expect(focusProofCopy('localRanking', 'bike').body).toMatch(/your bike stand\.$/);
+  });
+
+  test('local ranking does not sell class brackets, which are Pro', () => {
+    const { title, body } = focusProofCopy('localRanking', 'car');
+    expect(`${title} ${body}`).not.toMatch(/class|like yours/i);
   });
 
   test('no copy promises a multiplier or a made-up figure', () => {

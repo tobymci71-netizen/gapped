@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+import { StyleSheet } from 'react-native';
 import { LayoutAnimationConfig } from 'react-native-reanimated';
 import { Button } from '@/components/Button';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
+import { Text } from '@/components/Text';
+import { FREE_GARAGE_VEHICLES } from '@/config/plans';
 import { haptic } from '@/lib/haptics';
 import { vehicleNoun } from '@/onboarding/flow';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
@@ -15,6 +18,7 @@ import {
 } from '@/onboarding/vehicle/Garage';
 import { StepHeading, StepScroll } from '@/onboarding/vehicle/StepScroll';
 import { useProfile } from '@/state/profile';
+import { color, space } from '@/theme/tokens';
 
 /**
  * Step 3, "Add more cars?" (docs/ONBOARDING.md). The main vehicle as a card,
@@ -26,6 +30,10 @@ import { useProfile } from '@/state/profile';
  * Back and forward again finds them. They are for the person's garage, never
  * for ranking: the boards rank the main vehicle, and extras are to sync as
  * non-primary `vehicles` rows (docs/ONBOARDING.md, "Data").
+ *
+ * A Free garage holds FREE_GARAGE_VEHICLES, the main one included — the
+ * published plans matrix makes an unlimited garage Pro — so at that count the
+ * add row gives way to a line saying so.
  */
 export default function GarageStep() {
   const advance = useOnboardingAdvance('/onboarding/garage');
@@ -40,6 +48,7 @@ export default function GarageStep() {
   const noun = vehicleNoun(kind);
 
   const [composer, setComposer] = useState<ComposerState | null>(null);
+  const garageFull = 1 + extras.length >= FREE_GARAGE_VEHICLES;
 
   /** Saves the composer's vehicle if it is complete; reports whether it did. */
   const commitComposer = (): boolean => {
@@ -100,6 +109,10 @@ export default function GarageStep() {
               }}
               onCancel={() => setComposer(null)}
             />
+          ) : garageFull ? (
+            <Text variant="caption" style={styles.full}>
+              {`Your garage holds up to ${FREE_GARAGE_VEHICLES} vehicles for now.`}
+            </Text>
           ) : (
             <AddVehicleRow
               noun={noun}
@@ -113,3 +126,7 @@ export default function GarageStep() {
     </OnboardingFrame>
   );
 }
+
+const styles = StyleSheet.create({
+  full: { color: color.text2, textAlign: 'center', marginTop: space.sm },
+});
