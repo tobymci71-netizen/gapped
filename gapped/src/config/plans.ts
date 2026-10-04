@@ -11,57 +11,88 @@
  */
 
 export type PlanFeatureKey =
+  // Free (and Pro)
   | 'recordDrives'
-  | 'driveHistory'
-  | 'ownStats'
-  | 'export'
-  | 'shareCards'
-  | 'friends'
-  | 'privacy'
+  | 'coreStats'
   | 'boardPlacement'
-  | 'classBrackets'
-  | 'advancedTelemetry'
-  | 'videoOverlay'
+  | 'recentHistory'
+  | 'friends'
+  | 'shareCards'
+  | 'privacy'
   | 'garage'
+  // Pro only
+  | 'fullHistory'
+  | 'advancedTelemetry'
+  | 'classBrackets'
+  | 'unlimitedFriends'
+  | 'cleanShareCards'
+  | 'videoOverlay'
+  | 'export'
   | 'unlimitedGarage'
   | 'cloudSync';
 
 export type PlanFeature = { key: PlanFeatureKey; feature: string; free: boolean; pro: boolean };
 
 /**
- * How many vehicles a Free garage holds, the main one included. Onboarding's
- * "Add another car" stops here (app/onboarding/garage.tsx); Pro lifts it.
+ * What Free is limited to where it is limited rather than excluded. One
+ * source for the matrix's wording and for the checks that enforce it
+ * (src/lib/entitlements.ts), so the two cannot drift.
  */
-export const FREE_GARAGE_VEHICLES = 3;
+export const FREE_LIMITS = {
+  /** Drive history Free can open: the last this-many days. */
+  historyDays: 30,
+  /** People a Free account can follow on the friends board. */
+  friends: 5,
+  /** Vehicles in a Free garage, the main one included. */
+  garageVehicles: 1,
+} as const;
 
+/**
+ * Free keeps the habit loop — record, see your top speed and 0–60, place on
+ * the boards, share — and Pro is depth: the whole history, the telemetry,
+ * class brackets, more people and more cars. Privacy is never a Pro feature.
+ */
 export const PLAN_MATRIX: readonly PlanFeature[] = [
   { key: 'recordDrives', feature: 'Record unlimited drives', free: true, pro: true },
-  { key: 'driveHistory', feature: 'View your own drive history', free: true, pro: true },
-  { key: 'ownStats', feature: 'All your own stats (speed, G, 0–60)', free: true, pro: true },
-  { key: 'export', feature: 'GPX / CSV export', free: true, pro: true },
-  { key: 'shareCards', feature: 'Share cards', free: true, pro: true },
-  { key: 'friends', feature: 'Friends & friends board', free: true, pro: true },
-  { key: 'privacy', feature: 'Privacy zones & route trimming', free: true, pro: true },
+  { key: 'coreStats', feature: 'Top speed & 0–60, verified', free: true, pro: true },
   // Free: the board is the product. Onboarding sells it ("Every verified run
   // lands on the board", "{n} drivers from {Country} are on the board"), and
   // a Free run that never placed would make those screens untrue.
   {
     key: 'boardPlacement',
-    feature: 'Global & country leaderboard placement',
+    feature: 'Place on the global & country boards',
     free: true,
     pro: true,
   },
-  { key: 'classBrackets', feature: 'Vehicle-class brackets', free: false, pro: true },
-  { key: 'advancedTelemetry', feature: 'Advanced telemetry breakdowns', free: false, pro: true },
-  { key: 'videoOverlay', feature: 'Telemetry overlay on your video', free: false, pro: true },
+  {
+    key: 'recentHistory',
+    feature: `Last ${FREE_LIMITS.historyDays} days of drive history`,
+    free: true,
+    pro: true,
+  },
+  {
+    key: 'friends',
+    feature: `Friends board, up to ${FREE_LIMITS.friends} friends`,
+    free: true,
+    pro: true,
+  },
+  { key: 'shareCards', feature: 'Share cards (with Gapped badge)', free: true, pro: true },
+  { key: 'privacy', feature: 'Privacy zones & route trimming', free: true, pro: true },
   {
     key: 'garage',
-    feature: `Up to ${FREE_GARAGE_VEHICLES} garage vehicles`,
+    feature: FREE_LIMITS.garageVehicles === 1 ? '1 car' : `${FREE_LIMITS.garageVehicles} cars`,
     free: true,
     pro: true,
   },
-  { key: 'unlimitedGarage', feature: 'Unlimited garage vehicles', free: false, pro: true },
-  { key: 'cloudSync', feature: 'Cloud sync across devices', free: false, pro: true },
+  { key: 'fullHistory', feature: 'Full drive history', free: false, pro: true },
+  { key: 'advancedTelemetry', feature: 'Cornering G & full telemetry', free: false, pro: true },
+  { key: 'classBrackets', feature: 'Vehicle-class brackets', free: false, pro: true },
+  { key: 'unlimitedFriends', feature: 'Unlimited friends', free: false, pro: true },
+  { key: 'cleanShareCards', feature: 'Clean share cards', free: false, pro: true },
+  { key: 'videoOverlay', feature: 'Telemetry overlay on your video', free: false, pro: true },
+  { key: 'export', feature: 'GPX / CSV export', free: false, pro: true },
+  { key: 'unlimitedGarage', feature: 'Unlimited garage', free: false, pro: true },
+  { key: 'cloudSync', feature: 'Cloud sync & backup', free: false, pro: true },
 ];
 
 /**
@@ -74,10 +105,10 @@ export const PLAN_MATRIX: readonly PlanFeature[] = [
  * makes the sentence false fails a test rather than shipping.
  */
 export const PAYWALL_PRO_NOTE = {
-  text: 'Share cards and the boards stay free. Pro adds class brackets, deeper telemetry and a bigger garage.',
+  text: 'The boards stay free. Pro adds your full history, cornering G, class brackets and clean share cards.',
   claims: {
-    free: ['shareCards', 'boardPlacement'],
-    proOnly: ['classBrackets', 'advancedTelemetry', 'unlimitedGarage'],
+    free: ['boardPlacement'],
+    proOnly: ['fullHistory', 'advancedTelemetry', 'classBrackets', 'cleanShareCards'],
   },
 } as const satisfies {
   text: string;

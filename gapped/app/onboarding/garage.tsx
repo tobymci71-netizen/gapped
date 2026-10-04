@@ -3,8 +3,9 @@ import { StyleSheet } from 'react-native';
 import { LayoutAnimationConfig } from 'react-native-reanimated';
 import { Button } from '@/components/Button';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
+import { ProBadge, useGoPro } from '@/components/ProBadge';
 import { Text } from '@/components/Text';
-import { FREE_GARAGE_VEHICLES } from '@/config/plans';
+import { canAddVehicle, useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
 import { vehicleNoun } from '@/onboarding/flow';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
@@ -31,9 +32,9 @@ import { color, space } from '@/theme/tokens';
  * for ranking: the boards rank the main vehicle, and extras are to sync as
  * non-primary `vehicles` rows (docs/ONBOARDING.md, "Data").
  *
- * A Free garage holds FREE_GARAGE_VEHICLES, the main one included — the
- * published plans matrix makes an unlimited garage Pro — so at that count the
- * add row gives way to a line saying so.
+ * A Free garage holds FREE_LIMITS.garageVehicles (src/config/plans.ts). Once
+ * Free limits are enforced, a Free account that is full sees the add row
+ * replaced by a Pro line; until then (PRO_LIMITS_ENFORCED) nothing is capped.
  */
 export default function GarageStep() {
   const advance = useOnboardingAdvance('/onboarding/garage');
@@ -48,7 +49,9 @@ export default function GarageStep() {
   const noun = vehicleNoun(kind);
 
   const [composer, setComposer] = useState<ComposerState | null>(null);
-  const garageFull = 1 + extras.length >= FREE_GARAGE_VEHICLES;
+  const access = useAccess();
+  const goPro = useGoPro();
+  const garageFull = !canAddVehicle(1 + extras.length, access);
 
   /** Saves the composer's vehicle if it is complete; reports whether it did. */
   const commitComposer = (): boolean => {
@@ -110,8 +113,14 @@ export default function GarageStep() {
               onCancel={() => setComposer(null)}
             />
           ) : garageFull ? (
-            <Text variant="caption" style={styles.full}>
-              {`Your garage holds up to ${FREE_GARAGE_VEHICLES} vehicles for now.`}
+            <Text
+              variant="caption"
+              style={styles.full}
+              accessibilityRole="link"
+              accessibilityLabel={`More ${noun}s come with Gapped Pro.`}
+              onPress={goPro}
+            >
+              <ProBadge /> {`More ${noun}s come with Gapped Pro.`}
             </Text>
           ) : (
             <AddVehicleRow

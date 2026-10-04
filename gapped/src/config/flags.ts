@@ -53,6 +53,20 @@ export const NO_IN_DRIVE_SPEED_NUDGES = true;
 export const ONBOARDING_PAYWALL = false;
 
 /**
+ * Enforce the Free plan's limits (src/config/plans.ts, PLAN_MATRIX and
+ * FREE_LIMITS): history older than FREE_LIMITS.historyDays, cornering G and
+ * telemetry, class brackets, more than FREE_LIMITS.friends friends, clean
+ * share cards, export and extra cars show a Pro lock instead.
+ *
+ * Off until purchases work. A lock is a promise that paying opens it; with
+ * nothing to buy it would only take features away from TestFlight testers.
+ * Turn it on in the same build that wires RevenueCat (and the paywall), never
+ * before — a test holds the two together. Until then every account is treated
+ * as Pro and the limits are visible only in the published matrix.
+ */
+export const PRO_LIMITS_ENFORCED = false;
+
+/**
  * Display strings for the paywall's plan cards, in GBP.
  *
  * PLACEHOLDERS. Nothing has been priced: these exist so the plan cards can be

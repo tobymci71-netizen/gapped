@@ -4,7 +4,7 @@
  */
 
 import {
-  FREE_GARAGE_VEHICLES,
+  FREE_LIMITS,
   PAYWALL_PRO_NOTE,
   PLAN_MATRIX,
   PRO_PLANS,
@@ -41,10 +41,11 @@ describe('PAYWALL_PRO_NOTE', () => {
   it('says what it claims', () => {
     // A light tie between the claims and the words, so the sentence cannot
     // be rewritten to say something else while the claims stand still.
-    expect(PAYWALL_PRO_NOTE.text).toMatch(/share cards and the boards stay free/i);
+    expect(PAYWALL_PRO_NOTE.text).toMatch(/the boards stay free/i);
+    expect(PAYWALL_PRO_NOTE.text).toMatch(/full history/i);
+    expect(PAYWALL_PRO_NOTE.text).toMatch(/cornering G/i);
     expect(PAYWALL_PRO_NOTE.text).toMatch(/class brackets/i);
-    expect(PAYWALL_PRO_NOTE.text).toMatch(/telemetry/i);
-    expect(PAYWALL_PRO_NOTE.text).toMatch(/bigger garage/i);
+    expect(PAYWALL_PRO_NOTE.text).toMatch(/clean share cards/i);
   });
 });
 
@@ -57,11 +58,21 @@ describe('board placement', () => {
   });
 });
 
-describe('garage', () => {
-  it('names the Free limit the garage step enforces', () => {
-    expect(row('garage')?.free).toBe(true);
-    expect(row('garage')?.feature).toContain(String(FREE_GARAGE_VEHICLES));
-    expect(row('unlimitedGarage')?.free).toBe(false);
+describe('Free limits', () => {
+  it('are the numbers the matrix prints', () => {
+    expect(row('recentHistory')?.feature).toContain(String(FREE_LIMITS.historyDays));
+    expect(row('friends')?.feature).toContain(String(FREE_LIMITS.friends));
+    expect(row('garage')?.feature).toContain(String(FREE_LIMITS.garageVehicles));
+  });
+
+  it('each have a Pro row that lifts them', () => {
+    expect(row('fullHistory')).toMatchObject({ free: false, pro: true });
+    expect(row('unlimitedFriends')).toMatchObject({ free: false, pro: true });
+    expect(row('unlimitedGarage')).toMatchObject({ free: false, pro: true });
+  });
+
+  it('never put privacy behind Pro', () => {
+    expect(row('privacy')?.free).toBe(true);
   });
 });
 
