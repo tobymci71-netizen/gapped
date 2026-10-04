@@ -80,7 +80,10 @@ export const PLAN_MATRIX: readonly PlanFeature[] = [
   { key: 'privacy', feature: 'Privacy zones & route trimming', free: true, pro: true },
   {
     key: 'garage',
-    feature: FREE_LIMITS.garageVehicles === 1 ? '1 car' : `${FREE_LIMITS.garageVehicles} cars`,
+    feature:
+      FREE_LIMITS.garageVehicles === 1
+        ? '1 car in your garage'
+        : `${FREE_LIMITS.garageVehicles} cars in your garage`,
     free: true,
     pro: true,
   },
@@ -92,22 +95,28 @@ export const PLAN_MATRIX: readonly PlanFeature[] = [
   { key: 'videoOverlay', feature: 'Telemetry overlay on your video', free: false, pro: true },
   { key: 'export', feature: 'GPX / CSV export', free: false, pro: true },
   { key: 'unlimitedGarage', feature: 'Unlimited garage', free: false, pro: true },
-  { key: 'cloudSync', feature: 'Cloud sync & backup', free: false, pro: true },
+  // Getting your drives back, not getting them to the server. Every account's
+  // drives already upload (src/lib/sync.ts): that is how they are verified and
+  // ranked. "Cloud sync & backup" as a Pro row read as if a Free account's
+  // drives stayed on the phone, which is false the other way round.
+  { key: 'cloudSync', feature: 'Restore your drives on a new phone', free: false, pro: true },
 ];
 
 /**
- * The onboarding paywall's honesty line, under "Share your best drives".
+ * The onboarding paywall's pitch, under "See more in every drive": what Pro
+ * adds, then what stays free.
  *
- * Share cards are free in the matrix, so a paywall that led with them and
- * stopped there would be selling something nobody has to pay for; this says
- * what Pro actually adds. `claims` is what the sentence asserts, row by row,
- * and the test holds each one to PLAN_MATRIX — so a change to the matrix that
+ * It used to be a small print line under "Share your best drives", there to
+ * admit that share cards were free. Pro is depth now, so the depth is the
+ * pitch, and the sentence that sells it is the one that is checked. `claims`
+ * is what the sentence asserts, row by row, and the test holds each one to
+ * PLAN_MATRIX and to a word in the text — so a change to the matrix that
  * makes the sentence false fails a test rather than shipping.
  */
 export const PAYWALL_PRO_NOTE = {
-  text: 'The boards stay free. Pro adds your full history, cornering G, class brackets and clean share cards.',
+  text: 'Pro adds your full drive history, cornering G, class brackets and clean share cards. Recording and the boards stay free.',
   claims: {
-    free: ['boardPlacement'],
+    free: ['recordDrives', 'boardPlacement'],
     proOnly: ['fullHistory', 'advancedTelemetry', 'classBrackets', 'cleanShareCards'],
   },
 } as const satisfies {

@@ -6,13 +6,26 @@ import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { HideBadgeRow } from '@/components/HideBadgeRow';
+import { ProBadge, useGoPro } from '@/components/ProBadge';
+import { ProLockedStat } from '@/components/ProLockedStat';
 import { RoutePath } from '@/components/RoutePath';
 import { Screen } from '@/components/Screen';
 import { Stat } from '@/components/Stat';
 import { ShareCard, SHARE_CARD_SIZE } from '@/components/ShareCard';
 import { Text } from '@/components/Text';
+import {
+  cleanShareLocked,
+  driveLocked,
+  exportView,
+  lockedDriveCopy,
+  peakGView,
+  proLabel,
+  shareCardBranded,
+} from '@/drive/driveAccess';
 import { exportStamp, toCsv, toGpx } from '@/drive/export';
 import { trimRouteForSharing } from '@/drive/privacy';
+import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { checkPlausibility } from '@/drive/plausibility';
@@ -58,14 +71,28 @@ export default function DriveDetail() {
   // A cold-start deep link (gapped://friends, gapped://drive/<id>) opens this
   // screen with nothing beneath it, so Back must have somewhere to go.
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/drive'));
+  const goPro = useGoPro();
+  // Unrestricted while PRO_LIMITS_ENFORCED is off: every lock below is then
+  // open, and the screen is what it was plus a working "Hide Gapped badge".
+  const access = useAccess();
   const { unitPref, username, vehicleMake, vehicleModel } = useProfile();
   const { width } = useWindowDimensions();
   const cardRef = useRef<View>(null);
   const [sharing, setSharing] = useState(false);
+  // "Hide Gapped badge". Branded is the default for everyone, every time the
+  // screen opens.
+  const [hideBadge, setHideBadge] = useState(false);
   // The WAL does not store the server's verdict, and the card must never claim
   // a badge it cannot back up — so it stays unverified until the server says
   // otherwise, rather than assuming the happy case.
   const [verification, setVerification] = useState<Verification>(null);
+
+  // Free's history window is measured from when the screen opened, so a drive
+  // cannot lock under someone part-way through reading it.
+  const [openedAt] = useState(Date.now);
+  const drive = useMemo(() => listDrives().find((d) => d.id === id), [id]);
+  // A deep link can land on a drive the list would not open.
+  const locked = drive != null && driveLocked(drive.startedAt, openedAt, access);
 
   /*
    * Fetched on focus and re-asked while there is no verdict yet. A drive that
@@ -77,8 +104,9 @@ export default function DriveDetail() {
    */
   useFocusEffect(
     useCallback(() => {
-      // No backend configured: there is no verdict to wait for.
-      if (!id || !supabase) return;
+      // No backend configured: there is no verdict to wait for. A locked drive
+      // shows no card, so it has no badge to wait for either.
+      if (!id || !supabase || locked) return;
       let live = true;
       let tries = 0;
       let timer: ReturnType<typeof setTimeout> | null = null;
@@ -95,11 +123,10 @@ export default function DriveDetail() {
         live = false;
         if (timer) clearTimeout(timer);
       };
-    }, [id]),
+    }, [id, locked]),
   );
 
-  const drive = useMemo(() => listDrives().find((d) => d.id === id), [id]);
-  const fixes = useMemo(() => (id ? readFixes(id) : []), [id]);
+  const fixes = useMemo(() => (id && !locked ? readFixes(id) : []), [id, locked]);
   const plausibility = useMemo(
     () => (fixes.length > 1 ? checkPlausibility(fixes) : null),
     [fixes],
@@ -123,9 +150,43 @@ export default function DriveDetail() {
     );
   }
 
+  if (locked) {
+    const copy = lockedDriveCopy();
+    return (
+      <Screen
+        footer={
+          <View style={styles.lockedFooter}>
+            <Button label="See Gapped Pro" onPress={goPro} />
+            <Button label="Back" variant="secondary" onPress={goBack} />
+          </View>
+        }
+      >
+        <ProBadge />
+        <Text variant="headline" style={styles.lockedTitle}>
+          {copy.title}
+        </Text>
+        <Text variant="caption" style={styles.note}>
+          Drive on {new Date(drive.startedAt).toLocaleString()}
+        </Text>
+        <Text variant="body" style={styles.lockedBody}>
+          {copy.body}
+        </Text>
+      </Screen>
+    );
+  }
+
   const s = drive.summary;
   const dist = distanceForDisplay(s.distanceM, unitPref);
   const stamp = exportStamp(drive.startedAt);
+  const peakG = peakGView(s.maxG, access);
+  const exporting = exportView(access);
+  // Drawn after a locked export label. Wrapped because the chip pins itself
+  // to the top of a row, and this one should sit centred on the label.
+  const proChip = () => (
+    <View>
+      <ProBadge />
+    </View>
+  );
 
   /**
    * Capture the off-screen card and hand it to the share sheet.
@@ -216,7 +277,16 @@ export default function DriveDetail() {
         />
       </View>
       <View style={styles.grid}>
-        <Stat label="Peak G" value={s.maxG != null ? s.maxG.toFixed(2) : '—'} unit={s.maxG != null ? 'g' : undefined} />
+        {/* "Cornering G & full telemetry" is Pro; the figures around it are not. */}
+        {peakG.kind === 'locked' ? (
+          <ProLockedStat label="Peak G" onPress={goPro} />
+        ) : (
+          <Stat
+            label="Peak G"
+            value={peakG.kind === 'value' ? peakG.value : '—'}
+            unit={peakG.kind === 'value' ? peakG.unit : undefined}
+          />
+        )}
         <Stat
           label="0–60 mph"
           value={s.zeroTo60S != null ? s.zeroTo60S.toFixed(2) : '—'}
@@ -255,6 +325,13 @@ export default function DriveDetail() {
         </Card>
       ) : null}
 
+      <HideBadgeRow
+        hidden={hideBadge}
+        onChange={setHideBadge}
+        locked={cleanShareLocked(access)}
+        onGoPro={goPro}
+        style={styles.badgeRow}
+      />
       <Button
         label={sharing ? 'Preparing…' : 'Share card'}
         style={styles.shareBtn}
@@ -262,12 +339,29 @@ export default function DriveDetail() {
         onPress={shareCard}
       />
 
-      <View style={styles.exportRow}>
-        <Button label="Export GPX" variant="secondary" style={styles.exportBtn} onPress={() => shareFile('gpx')} />
-        <Button label="Export CSV" variant="secondary" style={styles.exportBtn} onPress={() => shareFile('csv')} />
+      {/*
+        Locked, each button carries the chip and leads to Pro instead of
+        exporting. Stacked then, because a label and a chip in half a row
+        overflow the pill on a small phone or at a large text size.
+      */}
+      <View style={exporting.locked ? styles.exportColumn : styles.exportRow}>
+        {(['gpx', 'csv'] as const).map((kind) => {
+          const label = `Export ${kind.toUpperCase()}`;
+          return (
+            <Button
+              key={kind}
+              label={label}
+              variant="secondary"
+              style={exporting.locked ? undefined : styles.exportBtn}
+              accessibilityLabel={exporting.locked ? proLabel(label) : undefined}
+              trailing={exporting.locked ? proChip : undefined}
+              onPress={exporting.locked ? goPro : () => shareFile(kind)}
+            />
+          );
+        })}
       </View>
       <Text variant="legal" style={styles.note}>
-        Your data is yours — full-resolution export, free, always.
+        {exporting.note}
       </Text>
 
       {/*
@@ -284,6 +378,7 @@ export default function DriveDetail() {
             username={username}
             vehicle={vehicleLabel}
             verification={verification}
+            branded={shareCardBranded(hideBadge, access)}
           />
         </View>
       </View>
@@ -298,8 +393,13 @@ const styles = StyleSheet.create({
   plausibility: { marginTop: space.xl, gap: space.sm },
   checkRow: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
   checkDetail: { flex: 1 },
-  shareBtn: { marginTop: space.xl },
+  badgeRow: { marginTop: space.xl },
+  shareBtn: { marginTop: space.md },
   exportRow: { flexDirection: 'row', gap: space.md, marginTop: space.md },
+  exportColumn: { gap: space.md, marginTop: space.md },
   offscreen: { position: 'absolute', left: -10000, top: 0, opacity: 0 },
   exportBtn: { flex: 1, alignSelf: 'auto' },
+  lockedTitle: { marginTop: space.md },
+  lockedBody: { marginTop: space.lg },
+  lockedFooter: { gap: space.md },
 });

@@ -16,8 +16,10 @@ import { CarSilhouette } from '@/components/CarSilhouette';
 import { DriveMap, DriveMapHandle } from '@/components/DriveMap';
 import { Entrance } from '@/components/Entrance';
 import { PressableScale } from '@/components/PressableScale';
+import { ProBadge, useGoPro } from '@/components/ProBadge';
 import { Speedometer } from '@/components/Speedometer';
 import { Text } from '@/components/Text';
+import { lockedHistoryRow, splitHistory } from '@/drive/driveAccess';
 import { sanitiseHeading } from '@/drive/heading';
 import { HUD_MAX_FONT_SCALE, hudDialSize } from '@/drive/hud';
 import { useDriveStore } from '@/drive/recorder';
@@ -30,11 +32,12 @@ import {
   UnitPref,
 } from '@/drive/units';
 import { LocalDrive, listDrives, readFixesSince } from '@/drive/wal';
+import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
 import { seconds, raw } from '@/types/units';
 import { useProfile } from '@/state/profile';
 import { useRecords } from '@/state/records';
-import { color, gutter, radius, space } from '@/theme/tokens';
+import { color, gutter, radius, space, textStyle, type } from '@/theme/tokens';
 import { BodyType, inferBodyType } from '@/vehicles/bodyType';
 
 /**
@@ -126,6 +129,12 @@ export default function DriveScreen() {
   const [hudVisible, setHudVisible] = useState(true);
   const [live, setLive] = useState<Live>(NO_LIVE);
   const [drives, setDrives] = useState<FinalizedDrive[]>([]);
+  // When the list was last read: Free's history window is measured from it,
+  // so a drive crossing the window locks on the next refresh, not mid-scroll.
+  const [listedAt, setListedAt] = useState(Date.now);
+  // Unrestricted while PRO_LIMITS_ENFORCED is off, and then every drive opens.
+  const access = useAccess();
+  const goPro = useGoPro();
   const [sceneHeight, setSceneHeight] = useState(0);
 
   const bodyType: BodyType | null = useMemo(
@@ -155,6 +164,7 @@ export default function DriveScreen() {
   // Identity is preserved when the list is unchanged, so re-focusing the tab
   // does not replay the row entrance animations.
   const refreshDrives = useCallback(() => {
+    setListedAt(Date.now());
     setDrives((prev) => {
       const next = listDrives().filter(isFinalized);
       return prev.length === next.length && prev.every((d, i) => d.id === next[i].id)
@@ -240,6 +250,11 @@ export default function DriveScreen() {
   const hudTop = insets.top + space.md + CONTROL + space.md;
   // The dial gives up height so the live line under it clears the panel.
   const hudSize = hudDialSize({ sceneHeight, panelHeight, hudTop, fontScale });
+
+  // Free opens the last FREE_LIMITS.historyDays of drives; older ones are
+  // kept and stand as one Pro row. With enforcement off, `open` is every drive.
+  const history = splitHistory(drives, listedAt, access);
+  const lockedRow = lockedHistoryRow(history.locked);
 
   const enableLocation = async () => {
     // Every other rejection path in the app says so.
@@ -355,7 +370,7 @@ export default function DriveScreen() {
               </Text>
             </View>
           ) : (
-            drives.map((d, i) => {
+            history.open.map((d, i) => {
               const distance = formatDistance(d.summary.distanceM, unitPref);
               const time = formatDuration(d.summary.durationS);
               const top = formatSpeed(d.summary.maxSpeedMs, unitPref);
@@ -389,6 +404,33 @@ export default function DriveScreen() {
               );
             })
           )}
+          {/*
+            Drives past Free's window, as one row under the rest, as on the You
+            tab: kept, counted, and leading to Pro rather than opening. Why one
+            row and not one per drive: lockedHistoryRow, src/drive/driveAccess.ts.
+          */}
+          {lockedRow ? (
+            <Entrance index={history.open.length}>
+              <PressableScale
+                onPress={goPro}
+                accessibilityRole="button"
+                accessibilityLabel={lockedRow.accessibilityLabel}
+                style={styles.row}
+              >
+                <View style={styles.rowBody}>
+                  <View style={styles.lockedTitle}>
+                    <Text variant="bodyMedium">{lockedRow.title}</Text>
+                    {/* Wrapped so the chip centres on the title instead of pinning to the top. */}
+                    <View>
+                      <ProBadge />
+                    </View>
+                  </View>
+                  <Text variant="caption">{lockedRow.detail}</Text>
+                </View>
+                <Text style={styles.rowChevron}>›</Text>
+              </PressableScale>
+            </Entrance>
+          ) : null}
         </ScrollView>
 
         <View style={styles.action}>
@@ -549,7 +591,7 @@ const styles = StyleSheet.create({
   },
   controlOff: { opacity: 0.45 },
   controlGlyph: { fontSize: 20, lineHeight: 24, color: color.text1 },
-  controlLabel: { fontSize: 12, lineHeight: 15, letterSpacing: 0.8 },
+  controlLabel: { ...textStyle(type.label), letterSpacing: 0.8 },
   hud: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   hudNumeral: { fontVariant: ['tabular-nums'] },
   debugStrip: {
@@ -604,6 +646,8 @@ const styles = StyleSheet.create({
     borderBottomColor: color.hairline,
   },
   rowBody: { flex: 1, gap: 2 },
+  // Wraps at large text sizes rather than pushing the chip out of the row.
+  lockedTitle: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm },
   rowChevron: { fontSize: 20, lineHeight: 22, color: color.text3 },
   action: { paddingTop: space.sm, gap: space.sm },
   actionNote: { textAlign: 'center' },

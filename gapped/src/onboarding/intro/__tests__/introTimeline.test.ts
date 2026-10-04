@@ -34,10 +34,12 @@ import {
   pageAnnouncement,
   pointOnGauge,
   rightPeakG,
+  spokenTitle,
   SPLASH_HOLD_MS,
   SPLASH_START_SCALE,
   wordmarkOpacity,
 } from '../introTimeline';
+import { PLAN_MATRIX } from '@/config/plans';
 
 /** Timeline progress from 0 to 1 in 1% steps. */
 const STEPS = Array.from({ length: 101 }, (_, i) => i / 100);
@@ -46,11 +48,7 @@ describe('carousel copy (docs/ONBOARDING.md, "Carousel")', () => {
   test('four pages, in order, with the documented titles and buttons', () => {
     expect(INTRO_PAGE_COUNT).toBe(4);
     expect(INTRO_PAGES.map((p) => [p.title, p.subtitle, p.cta])).toEqual([
-      [
-        'Track every drive',
-        'Top speed, 0–60 and every corner. Verified, then ranked.',
-        'Get started',
-      ],
+      ['Track every drive', 'Your top speed and 0–60 times. Verified, then ranked.', 'Get started'],
       ['See where you stack up', 'Your drives. Your friends. Your place on the board.', 'Next'],
       ['See more in every drive.', null, 'Next'],
       ['Built by drivers', 'From drivers. For drivers.', 'Set up my car'],
@@ -85,8 +83,44 @@ describe('carousel copy (docs/ONBOARDING.md, "Carousel")', () => {
 
   test('a button-driven page change is announced with its title and position', () => {
     expect(pageAnnouncement(1)).toBe('See where you stack up. Page 2 of 4.');
-    // The title's own full stop is not doubled.
-    expect(pageAnnouncement(2)).toBe('See more in every drive. Page 3 of 4.');
+    // The title's own full stop is not doubled, and the Pro page says so.
+    expect(pageAnnouncement(2)).toBe('Gapped Pro. See more in every drive. Page 3 of 4.');
+  });
+});
+
+describe('carousel and the plans (src/config/plans.ts)', () => {
+  const row = (key: string) => PLAN_MATRIX.find((r) => r.key === key);
+
+  test('the cornering demo is marked as the Pro feature it shows', () => {
+    const corner = INTRO_PAGES.find((p) => p.key === 'corner');
+    expect(corner?.proFeature).toBe('advancedTelemetry');
+    // Marked against the matrix: if cornering G ever became Free, the chip
+    // would be a false claim, and this fails first.
+    expect(row(corner?.proFeature ?? '')).toMatchObject({ free: false, pro: true });
+  });
+
+  test('every page marked Pro names a Pro-only row, and only those pages are marked', () => {
+    for (const p of INTRO_PAGES) {
+      if (p.proFeature) expect(row(p.proFeature)).toMatchObject({ free: false, pro: true });
+    }
+    expect(INTRO_PAGES.filter((p) => p.proFeature).map((p) => p.key)).toEqual(['corner']);
+  });
+
+  test('VoiceOver hears "Gapped Pro" where the chip is only seen', () => {
+    expect(spokenTitle(INTRO_PAGES[2])).toBe('Gapped Pro. See more in every drive.');
+    // Unmarked pages read their title as printed.
+    expect(spokenTitle(INTRO_PAGES[0])).toBe('Track every drive');
+  });
+
+  test('the free pages promise nothing that is Pro', () => {
+    // Page 1 used to say "every corner"; cornering G is Pro. What the
+    // unmarked pages say every drive gets has to be in Free.
+    for (const p of INTRO_PAGES.filter((q) => !q.proFeature)) {
+      const words = `${p.title} ${p.subtitle ?? ''} ${p.spokenSubtitle ?? ''}`;
+      expect(words).not.toMatch(/corner|\bG\b|telemetry|class|bracket|history|export/i);
+    }
+    expect(row('coreStats')?.free).toBe(true);
+    expect(row('boardPlacement')?.free).toBe(true);
   });
 });
 
@@ -263,8 +297,8 @@ describe('cornering demo', () => {
     expect(dialDemoLabel(87, 'mph')).not.toMatch(/mph|km\/h/);
   });
 
-  test('VoiceOver hears a demo, with the pose it holds', () => {
-    expect(CORNERING_DEMO_LABEL.startsWith('Demo.')).toBe(true);
+  test('VoiceOver hears a Pro demo, with the pose it holds', () => {
+    expect(CORNERING_DEMO_LABEL.startsWith('Gapped Pro demo.')).toBe(true);
     expect(CORNERING_DEMO_LABEL).toContain('0.94 g');
     expect(CORNERING_DEMO_LABEL).toContain('left 0.88 g');
     expect(CORNERING_DEMO_LABEL).toContain('right 0.94 g');

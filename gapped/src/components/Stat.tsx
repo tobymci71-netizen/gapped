@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Card } from '@/components/Card';
 import { Numeral, Text } from '@/components/Text';
-import { color, space } from '@/theme/tokens';
+import { color, space, textStyle, type } from '@/theme/tokens';
 
 type Props = {
   label: string;
@@ -45,7 +45,7 @@ export function Stat({ label, value, unit, accent }: Props) {
 
 const styles = StyleSheet.create({
   card: { flex: 1, gap: space.xs },
-  label: { textTransform: 'uppercase', letterSpacing: 0.6, fontSize: 12, lineHeight: 15 },
+  label: { textTransform: 'uppercase', letterSpacing: 0.6, ...textStyle(type.label) },
   row: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs },
   value: { flexShrink: 1 },
   unit: { color: color.text3, flexShrink: 0 },

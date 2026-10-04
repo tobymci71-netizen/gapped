@@ -7,6 +7,7 @@ import {
   FREE_LIMITS,
   PAYWALL_PRO_NOTE,
   PLAN_MATRIX,
+  type PlanFeatureKey,
   PRO_PLANS,
   PRO_PRICING_NOTE,
 } from '../plans';
@@ -39,13 +40,46 @@ describe('PAYWALL_PRO_NOTE', () => {
   });
 
   it('says what it claims', () => {
-    // A light tie between the claims and the words, so the sentence cannot
-    // be rewritten to say something else while the claims stand still.
-    expect(PAYWALL_PRO_NOTE.text).toMatch(/the boards stay free/i);
-    expect(PAYWALL_PRO_NOTE.text).toMatch(/full history/i);
-    expect(PAYWALL_PRO_NOTE.text).toMatch(/cornering G/i);
-    expect(PAYWALL_PRO_NOTE.text).toMatch(/class brackets/i);
-    expect(PAYWALL_PRO_NOTE.text).toMatch(/clean share cards/i);
+    // A tie between the claims and the words, so the sentence cannot be
+    // rewritten to say something else while the claims stand still. A claim
+    // with no words here fails too: add its words when you add the claim.
+    const words: Partial<Record<PlanFeatureKey, RegExp>> = {
+      recordDrives: /recording/i,
+      boardPlacement: /the boards/i,
+      fullHistory: /full (drive )?history/i,
+      advancedTelemetry: /cornering G/,
+      classBrackets: /class brackets/i,
+      cleanShareCards: /clean share cards/i,
+    };
+    const { free, proOnly } = PAYWALL_PRO_NOTE.claims;
+    for (const key of [...free, ...proOnly]) {
+      expect(words[key]).toBeDefined();
+      expect(PAYWALL_PRO_NOTE.text).toMatch(words[key] as RegExp);
+    }
+    expect(PAYWALL_PRO_NOTE.text).toMatch(/\bPro adds\b/);
+    expect(PAYWALL_PRO_NOTE.text).toMatch(/stay free/i);
+  });
+
+  it('does not sell the rows that are not built yet', () => {
+    // The pitch is what someone pays on. Rows that are promised but not built
+    // (the video overlay, restoring on a new phone) stay off it until they are.
+    const unbuilt: PlanFeatureKey[] = ['videoOverlay', 'cloudSync'];
+    for (const key of unbuilt) {
+      expect(PAYWALL_PRO_NOTE.claims.proOnly as readonly PlanFeatureKey[]).not.toContain(key);
+    }
+    expect(PAYWALL_PRO_NOTE.text).not.toMatch(/video|overlay|restore|sync|backup/i);
+  });
+});
+
+describe('the Pro restore row', () => {
+  // Every account's drives upload to the server to be verified and ranked
+  // (src/lib/sync.ts). A Pro row called "backup" or "cloud sync" read as if a
+  // Free account's drives never left the phone; what Pro adds is getting
+  // them back on another one.
+  it('is about restoring, not about drives reaching the server', () => {
+    expect(row('cloudSync')).toMatchObject({ free: false, pro: true });
+    expect(row('cloudSync')?.feature).toMatch(/restore/i);
+    expect(row('cloudSync')?.feature).not.toMatch(/back ?up|upload|cloud|sync/i);
   });
 });
 

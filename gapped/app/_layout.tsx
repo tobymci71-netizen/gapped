@@ -250,17 +250,23 @@ export default function RootLayout() {
           removed. index stays outside both groups — it is the cold-start
           redirect. Any new root screen that assumes a finished profile goes in
           the first group.
+
+          plans is in neither: it is the published matrix and assumes nothing
+          about the profile, and it is where every Pro lock leads (useGoPro),
+          onboarding's garage step included. Behind the onboarded guard, that
+          lock had nowhere to land. It is declared after both groups so it is
+          never the screen the stack falls back to.
         */}
         <Stack.Protected guard={onboarded}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="friends" />
-          <Stack.Screen name="plans" />
           <Stack.Screen name="drive/[id]" />
         </Stack.Protected>
         <Stack.Protected guard={!onboarded}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
+        <Stack.Screen name="plans" />
       </Stack>
     </>
   );

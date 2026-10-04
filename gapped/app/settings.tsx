@@ -304,9 +304,16 @@ export default function SettingsScreen() {
         />
         <SettingsRow glyph="🚫" tint={tint.neutral} label="No ads, no data resale" />
       </SettingsSection>
+      {/*
+        Says where drives go, on every plan. "Recorded on your device" alone,
+        under Privacy, read as if they stayed there; every account's drives
+        upload so the server can verify them (src/lib/sync.ts), and the Pro
+        row about drives is restoring them on a new phone, not keeping them.
+      */}
       <Text variant="legal" style={styles.note}>
-        Drives are recorded on your device. Routes are trimmed near your start and end points
-        before a drive is shared or ranked.
+        Drives are recorded on your device and sent to our servers, which verify them before they
+        count. Routes are trimmed near your start and end points before a drive is shared or
+        ranked.
       </Text>
 
       <SettingsSection title="About">

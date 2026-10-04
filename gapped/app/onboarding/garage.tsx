@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet } from 'react-native';
 import { LayoutAnimationConfig } from 'react-native-reanimated';
 import { Button } from '@/components/Button';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
-import { ProBadge, useGoPro } from '@/components/ProBadge';
-import { Text } from '@/components/Text';
-import { canAddVehicle, useAccess } from '@/lib/entitlements';
+import { useGoPro } from '@/components/ProBadge';
+import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
 import { vehicleNoun } from '@/onboarding/flow';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
@@ -15,11 +13,12 @@ import {
   type ComposerState,
   ExtraVehicleRow,
   MainVehicleCard,
+  ProVehicleRow,
   VehicleComposer,
 } from '@/onboarding/vehicle/Garage';
+import { garageStepSubtitle, vehicleAdd } from '@/onboarding/vehicle/garageAccess';
 import { StepHeading, StepScroll } from '@/onboarding/vehicle/StepScroll';
 import { useProfile } from '@/state/profile';
-import { color, space } from '@/theme/tokens';
 
 /**
  * Step 3, "Add more cars?" (docs/ONBOARDING.md). The main vehicle as a card,
@@ -32,9 +31,11 @@ import { color, space } from '@/theme/tokens';
  * for ranking: the boards rank the main vehicle, and extras are to sync as
  * non-primary `vehicles` rows (docs/ONBOARDING.md, "Data").
  *
- * A Free garage holds FREE_LIMITS.garageVehicles (src/config/plans.ts). Once
- * Free limits are enforced, a Free account that is full sees the add row
- * replaced by a Pro line; until then (PRO_LIMITS_ENFORCED) nothing is capped.
+ * A Free garage holds FREE_LIMITS.garageVehicles (src/config/plans.ts), the
+ * main one included. Once Free limits are enforced, a full Free garage sees
+ * the add row give way to a PRO row that leads to Gapped Pro, and extras
+ * already added stay; until then (PRO_LIMITS_ENFORCED) nothing is capped and
+ * the step is unchanged (src/onboarding/vehicle/garageAccess.ts).
  */
 export default function GarageStep() {
   const advance = useOnboardingAdvance('/onboarding/garage');
@@ -51,7 +52,7 @@ export default function GarageStep() {
   const [composer, setComposer] = useState<ComposerState | null>(null);
   const access = useAccess();
   const goPro = useGoPro();
-  const garageFull = !canAddVehicle(1 + extras.length, access);
+  const add = vehicleAdd(extras.length, noun, access);
 
   /** Saves the composer's vehicle if it is complete; reports whether it did. */
   const commitComposer = (): boolean => {
@@ -82,10 +83,7 @@ export default function GarageStep() {
       }
     >
       <StepScroll>
-        <StepHeading
-          title={`Add more ${noun}s?`}
-          subtitle={`Optional. Your main ${noun} is set, so you can keep going and build your garage later.`}
-        />
+        <StepHeading title={`Add more ${noun}s?`} subtitle={garageStepSubtitle(noun, add)} />
         <MainVehicleCard
           kind={kind}
           make={make}
@@ -112,16 +110,8 @@ export default function GarageStep() {
               }}
               onCancel={() => setComposer(null)}
             />
-          ) : garageFull ? (
-            <Text
-              variant="caption"
-              style={styles.full}
-              accessibilityRole="link"
-              accessibilityLabel={`More ${noun}s come with Gapped Pro.`}
-              onPress={goPro}
-            >
-              <ProBadge /> {`More ${noun}s come with Gapped Pro.`}
-            </Text>
+          ) : add.kind === 'locked' ? (
+            <ProVehicleRow line={add.line} onPress={goPro} />
           ) : (
             <AddVehicleRow
               noun={noun}
@@ -135,7 +125,3 @@ export default function GarageStep() {
     </OnboardingFrame>
   );
 }
-
-const styles = StyleSheet.create({
-  full: { color: color.text2, textAlign: 'center', marginTop: space.sm },
-});

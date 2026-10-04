@@ -3,9 +3,13 @@ import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { PressableScale } from '@/components/PressableScale';
+import { ProBadge, useGoPro } from '@/components/ProBadge';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
+import { bracketsLocked } from '@/board/bracketAccess';
 import { modifiedFromBracketKey } from '@/lib/bracket-flag';
+import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { syncIdentity } from '@/lib/sync';
@@ -44,8 +48,19 @@ const DRIVETRAIN_LABEL: Record<string, string> = {
 
 const OFFLINE = 'Could not reach our servers. Check your connection and try again.';
 
+/**
+ * The main vehicle, its class, and the VIN that sets it. Nothing here adds a
+ * vehicle yet, so the Free garage limit has nothing to lock on this tab. When
+ * garage editing ships here, its add control goes through vehicleAdd()
+ * (src/onboarding/vehicle/garageAccess.ts) as onboarding's garage step does:
+ * a full Free garage gets the PRO row and keeps every vehicle already in it.
+ */
 export default function GarageScreen() {
   const { vehicleKind, vehicleMake, vehicleModel, vehicleId } = useProfile();
+  // The class itself is Free (runs are recorded in it either way); the board
+  // that ranks them by class is Pro, so a locked account is told where it is.
+  const classBoardLocked = bracketsLocked(useAccess());
+  const goPro = useGoPro();
   // Specs are held with the vehicle they describe, so a vehicle change — or
   // the profile reset of an account deletion — cannot leave the previous
   // car's class on screen.
@@ -247,6 +262,19 @@ export default function GarageScreen() {
                   thumbColor={color.text1}
                 />
               </View>
+              {classBoardLocked ? (
+                <PressableScale
+                  onPress={goPro}
+                  accessibilityRole="button"
+                  accessibilityLabel="See your class board, Gapped Pro"
+                  style={styles.classLock}
+                >
+                  <Text variant="bodyMedium" style={styles.classLockText}>
+                    See your class board
+                  </Text>
+                  <ProBadge style={styles.classLockBadge} />
+                </PressableScale>
+              ) : null}
             </Card>
           ) : null}
 
@@ -316,6 +344,15 @@ const styles = StyleSheet.create({
   },
   modLabel: { flex: 1, gap: 2 },
   blurb: { marginTop: space.sm },
+  classLock: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginTop: space.sm,
+  },
+  classLockText: { flexShrink: 1 },
+  classLockBadge: { alignSelf: 'center' },
   input: {
     marginTop: space.md,
     minHeight: 48,

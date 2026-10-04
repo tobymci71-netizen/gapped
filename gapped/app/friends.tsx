@@ -4,12 +4,15 @@ import { Alert, StyleSheet, TextInput, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PressableScale } from '@/components/PressableScale';
+import { ProBadge, useGoPro } from '@/components/ProBadge';
 import { Screen } from '@/components/Screen';
 import { Skeleton } from '@/components/Skeleton';
 import { Text } from '@/components/Text';
 import { formatSpeed } from '@/drive/units';
+import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
+import { friendAdd } from '@/social/friendLimit';
 import { addFriend, Friend, listFriends, removeFriend } from '@/social/friends';
 import { useProfile } from '@/state/profile';
 import { color, radius, space, type, textStyle } from '@/theme/tokens';
@@ -32,6 +35,13 @@ export default function FriendsScreen() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const access = useAccess();
+  const goPro = useGoPro();
+  // Free follows up to FREE_LIMITS.friends (src/social/friendLimit.ts). A list
+  // that is loading or failed to load is not a count, so it locks nothing.
+  // Only adding is limited: everyone already followed stays listed below and
+  // on the friends board.
+  const add = friendAdd(friends === null || loadError ? null : friends.length, access);
 
   const refresh = useCallback(async () => {
     const result = await listFriends();
@@ -114,32 +124,52 @@ export default function FriendsScreen() {
         notified, and your board is not added to theirs.
       </Text>
 
-      <Card style={styles.addCard}>
-        <View style={styles.row}>
-          <TextInput
-            value={name}
-            onChangeText={(t) => {
-              setName(t);
-              setError(null);
-            }}
-            placeholder="username"
-            placeholderTextColor={color.text2}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="done"
-            onSubmitEditing={onAdd}
-            editable={!busy}
-            style={styles.input}
-            accessibilityLabel="Friend's username"
-          />
-          <Button label={busy ? 'Adding…' : 'Add'} onPress={onAdd} disabled={busy || !name.trim()} style={styles.addBtn} />
-        </View>
-        {error ? (
-          <Text variant="caption" style={styles.error}>
-            {error}
-          </Text>
-        ) : null}
-      </Card>
+      {add.kind === 'locked' ? (
+        // In place of the field, not a field that refuses: a disabled input
+        // gives no reason, and the reason is the useful part.
+        <PressableScale
+          onPress={goPro}
+          accessibilityRole="button"
+          accessibilityLabel={add.accessibilityLabel}
+          accessibilityHint="Shows what Gapped Pro adds."
+          style={styles.addCard}
+        >
+          <Card style={styles.locked}>
+            <ProBadge />
+            <Text variant="body">{add.line}</Text>
+            <Text variant="caption" style={styles.lockedLink}>
+              See Gapped Pro →
+            </Text>
+          </Card>
+        </PressableScale>
+      ) : (
+        <Card style={styles.addCard}>
+          <View style={styles.row}>
+            <TextInput
+              value={name}
+              onChangeText={(t) => {
+                setName(t);
+                setError(null);
+              }}
+              placeholder="username"
+              placeholderTextColor={color.text2}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={onAdd}
+              editable={!busy}
+              style={styles.input}
+              accessibilityLabel="Friend's username"
+            />
+            <Button label={busy ? 'Adding…' : 'Add'} onPress={onAdd} disabled={busy || !name.trim()} style={styles.addBtn} />
+          </View>
+          {error ? (
+            <Text variant="caption" style={styles.error}>
+              {error}
+            </Text>
+          ) : null}
+        </Card>
+      )}
 
       {friends === null ? (
         <View style={styles.loading}>
@@ -199,6 +229,11 @@ export default function FriendsScreen() {
 const styles = StyleSheet.create({
   sub: { marginTop: space.sm },
   addCard: { marginTop: space.lg },
+  // The card is the press target, and its padding alone clears 44pt. Its
+  // margin (addCard) sits on the pressable, outside the target, so a tap in
+  // the gap under the intro copy does not open Gapped Pro.
+  locked: { gap: space.sm },
+  lockedLink: { color: color.accent },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   input: {
     flex: 1,

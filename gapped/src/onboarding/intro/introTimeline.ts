@@ -12,6 +12,7 @@
  * allocate nothing.
  */
 
+import type { PlanFeatureKey } from '@/config/plans';
 import type { VehicleKind } from '@/state/profile';
 import { vehicleNoun } from '../flow';
 
@@ -71,15 +72,30 @@ export type IntroPageCopy = {
   spokenSubtitle?: string;
   /** The footer button's label on this page. */
   cta: string;
+  /**
+   * The Pro-only PLAN_MATRIX row this page demos, if any. The page wears the
+   * PRO chip over its title and VoiceOver hears "Gapped Pro" with it. This
+   * marks which plan the feature is in, as the Plans screen's PRO column
+   * does, not whether this account can use it, so it shows whether or not
+   * Free limits are enforced. The test holds it to the matrix.
+   */
+  proFeature?: PlanFeatureKey;
 };
 
-/** docs/ONBOARDING.md, "Carousel". Gapped's words, in the reference's shape. */
+/**
+ * docs/ONBOARDING.md, "Carousel". Gapped's words, in the reference's shape.
+ *
+ * What these pages promise for every drive has to be in Free (PLAN_MATRIX,
+ * src/config/plans.ts): the first page used to say "Top speed, 0–60 and every
+ * corner", and cornering G is Pro. The cornering demo stays, as page 3, and
+ * says it is Pro.
+ */
 export const INTRO_PAGES: readonly IntroPageCopy[] = [
   {
     key: 'track',
     title: 'Track every drive',
-    subtitle: 'Top speed, 0–60 and every corner. Verified, then ranked.',
-    spokenSubtitle: 'Top speed, zero to sixty and every corner. Verified, then ranked.',
+    subtitle: 'Your top speed and 0–60 times. Verified, then ranked.',
+    spokenSubtitle: 'Your top speed and zero to sixty times. Verified, then ranked.',
     cta: 'Get started',
   },
   {
@@ -88,7 +104,13 @@ export const INTRO_PAGES: readonly IntroPageCopy[] = [
     subtitle: 'Your drives. Your friends. Your place on the board.',
     cta: 'Next',
   },
-  { key: 'corner', title: 'See more in every drive.', subtitle: null, cta: 'Next' },
+  {
+    key: 'corner',
+    title: 'See more in every drive.',
+    subtitle: null,
+    cta: 'Next',
+    proFeature: 'advancedTelemetry',
+  },
   {
     key: 'built',
     title: 'Built by drivers',
@@ -109,13 +131,25 @@ export function ctaFor(page: number, kind: VehicleKind | null | undefined): stri
   return copy.key === 'built' ? `Set up my ${vehicleNoun(kind)}` : copy.cta;
 }
 
+/** How a Pro page names the plan aloud, where the chip is only seen. */
+const PRO_SPOKEN = 'Gapped Pro';
+
+/**
+ * The page's title as VoiceOver reads it: a Pro page says so first, in the
+ * order the chip and the title are drawn. The PRO chip itself is hidden from
+ * VoiceOver (src/components/ProBadge.tsx), so this is where it is heard.
+ */
+export function spokenTitle(copy: IntroPageCopy): string {
+  return copy.proFeature ? `${PRO_SPOKEN}. ${copy.title}` : copy.title;
+}
+
 /**
  * What VoiceOver announces when the button, not a swipe, changes the page.
  * The button keeps focus, so without this the new page arrives in silence.
  */
 export function pageAnnouncement(page: number): string {
   const i = clampPage(page, INTRO_PAGE_COUNT);
-  const title = INTRO_PAGES[i].title.replace(/\.$/, '');
+  const title = spokenTitle(INTRO_PAGES[i]).replace(/\.$/, '');
   return `${title}. Page ${i + 1} of ${INTRO_PAGE_COUNT}.`;
 }
 
@@ -321,8 +355,10 @@ export function formatG(hundredths: number): string {
 /**
  * The demo as one VoiceOver label. The gauge is a picture of a reading, not a
  * reading, so it says so first, and gives the end state the animation holds.
+ * It names the plan too: someone who swipes straight onto the gauge has not
+ * heard the title's "Gapped Pro", and cornering G is Pro.
  */
 export const CORNERING_DEMO_LABEL =
-  `Demo. Cornering G: ${formatG(gHundredths(CORNERING_END_G))} g through a right-hand corner. ` +
+  `${PRO_SPOKEN} demo. Cornering G: ${formatG(gHundredths(CORNERING_END_G))} g through a right-hand corner. ` +
   `Peak cornering G: left ${formatG(gHundredths(CORNERING_LEFT_PEAK_G))} g, ` +
   `right ${formatG(gHundredths(CORNERING_END_G))} g.`;

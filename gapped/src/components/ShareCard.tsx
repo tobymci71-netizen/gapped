@@ -24,6 +24,14 @@ export type ShareCardProps = {
    * sight, so an unverified run must never wear a mark that implies otherwise.
    */
   verification: 'verified' | 'unverified' | 'pending' | null;
+  /**
+   * Draw the GAPPED wordmark, which the plans call the Gapped badge. On by
+   * default, so every caller that does not ask (the onboarding paywall's
+   * sample) renders exactly as before. Off is Pro's clean share card, and
+   * the caller decides it (shareCardBranded, src/drive/driveAccess.ts). The
+   * verification chip is not the brand and stays either way.
+   */
+  branded?: boolean;
 };
 
 /**
@@ -72,6 +80,7 @@ export function ShareCard({
   username,
   vehicle,
   verification,
+  branded = true,
 }: ShareCardProps) {
   const dist = distanceForDisplay(summary.distanceM, unitPref);
   const [topValue, topUnit] = formatSpeed(summary.maxSpeedMs, unitPref).split(' ');
@@ -79,8 +88,9 @@ export function ShareCard({
 
   return (
     <View style={styles.card}>
-      <View style={styles.header}>
-        <CardText style={styles.brand}>GAPPED</CardText>
+      {/* Without the wordmark the chip keeps its corner rather than sliding left. */}
+      <View style={branded ? styles.header : [styles.header, styles.headerClean]}>
+        {branded ? <CardText style={styles.brand}>GAPPED</CardText> : null}
         {verified ? (
           <View style={styles.badge}>
             <CardText style={styles.badgeText}>✓ VERIFIED</CardText>
@@ -144,6 +154,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerClean: { justifyContent: 'flex-end' },
   brand: {
     fontFamily: font.display,
     fontSize: 18, lineHeight: 22,

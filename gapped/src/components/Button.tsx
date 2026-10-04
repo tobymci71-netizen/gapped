@@ -72,7 +72,9 @@ export function Button({
         style,
       ]}
     >
-      <Text style={[styles.label, { color: ink }]}>{label}</Text>
+      {/* Beside a trailing glyph or chip the label gives way and wraps, rather
+          than pushing both past the pill at the largest text sizes. */}
+      <Text style={[styles.label, trailing && styles.labelBeside, { color: ink }]}>{label}</Text>
       {trailing ? trailing(ink) : null}
     </PressableScale>
   );
@@ -92,6 +94,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   withTrailing: { flexDirection: 'row', gap: space.sm },
+  labelBeside: { flexShrink: 1 },
   secondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,

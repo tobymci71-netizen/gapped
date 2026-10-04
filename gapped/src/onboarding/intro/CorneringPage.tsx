@@ -66,7 +66,11 @@ type Props = {
  * entirely and it rewinds out of sight, so it plays again on the way back.
  *
  * The numbers are a demo and VoiceOver says so: the block is one image whose
- * label starts "Demo". Reduced motion: the end pose, no count.
+ * label starts "Gapped Pro demo". Reduced motion: the end pose, no count.
+ *
+ * Cornering G is Pro (PLAN_MATRIX 'advancedTelemetry'), so this page's copy
+ * carries `proFeature` and IntroPage puts the PRO chip over the title. The
+ * demo is unchanged: it shows what Pro measures, and says whose it is.
  */
 export function CorneringPage({
   copy,

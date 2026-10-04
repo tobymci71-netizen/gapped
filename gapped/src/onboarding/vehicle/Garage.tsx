@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { Button } from '@/components/Button';
 import { PressableScale } from '@/components/PressableScale';
+import { ProBadge } from '@/components/ProBadge';
 import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
 import { useReducedMotion } from '@/lib/useReducedMotion';
@@ -178,6 +179,34 @@ export function AddVehicleRow({ noun, onPress }: { noun: 'car' | 'bike'; onPress
   );
 }
 
+/**
+ * In place of "+ Add another car" when a Free garage is full (garageAccess.ts):
+ * the PRO chip and the line saying more cars are Pro, leading to Gapped Pro.
+ * The add row's card and height, so the list does not jump between the two.
+ */
+export function ProVehicleRow({ line, onPress }: { line: string; onPress: () => void }) {
+  const motion = useRowMotion();
+  return (
+    <Animated.View {...motion}>
+      <PressableScale
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={line}
+        accessibilityHint="Shows what Gapped Pro adds."
+        style={[styles.card, styles.addRow]}
+      >
+        {/* The chip sits where the plus tile does, so the two lines align. */}
+        <View style={styles.badgeSlot}>
+          <ProBadge />
+        </View>
+        <Text variant="bodyMedium" style={styles.rowLabel}>
+          {line}
+        </Text>
+      </PressableScale>
+    </Animated.View>
+  );
+}
+
 export type ComposerState = { kind: VehicleKind; drafts: DraftsByKind };
 
 /**
@@ -269,6 +298,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // The plus tile's width at least; the chip grows past it with Dynamic Type.
+  badgeSlot: { minWidth: 32 },
+  // Wraps rather than running off the card at large Dynamic Type.
+  rowLabel: { flex: 1 },
   composer: {
     gap: space.md,
     padding: space.lg,

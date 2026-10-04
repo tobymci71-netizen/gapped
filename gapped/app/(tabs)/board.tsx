@@ -6,6 +6,7 @@ import { countryByCode } from '@/data/countries';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Entrance } from '@/components/Entrance';
 import { PressableScale } from '@/components/PressableScale';
+import { ProBadge, useGoPro } from '@/components/ProBadge';
 import { Screen } from '@/components/Screen';
 import { Skeleton } from '@/components/Skeleton';
 import { Text } from '@/components/Text';
@@ -17,10 +18,20 @@ import {
   sameBrackets,
   settleBoard,
 } from '@/board/boards';
+import {
+  ALL_CLASSES,
+  ALL_CLASSES_LABEL,
+  appliedBracket,
+  bracketOptions as classOptions,
+  bracketPillAccessibilityLabel,
+  bracketsLocked,
+  pickBracket,
+} from '@/board/bracketAccess';
 import { BoardMetric, BoardPeriod, BoardRow, BoardScope } from '@/board/types';
 import { useDriveStore } from '@/drive/recorder';
 import { formatDistance, formatSpeed } from '@/drive/units';
 import { bracketLabel } from '@/vehicles/brackets';
+import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
 import { useProfile } from '@/state/profile';
 import { color, glyph as glyphSize, radius, space, textStyle } from '@/theme/tokens';
@@ -28,9 +39,18 @@ import { color, glyph as glyphSize, radius, space, textStyle } from '@/theme/tok
 /**
  * `glyph` is the leading mark shown on the pill and beside the sheet row.
  * `detail` is a trailing note that must stay readable however long the label
- * runs — the class picker's driver count.
+ * runs — the class picker's driver count. `pro` marks a row the account's
+ * plan does not open (src/board/bracketAccess.ts), with an
+ * `accessibilityLabel` that says so; neither is set on an open row.
  */
-type Option<T extends string> = { key: T; label: string; glyph?: string; detail?: string };
+type Option<T extends string> = {
+  key: T;
+  label: string;
+  glyph?: string;
+  detail?: string;
+  pro?: boolean;
+  accessibilityLabel?: string;
+};
 
 const METRICS: Option<BoardMetric>[] = [
   { key: 'top_speed', label: 'Top speed' },
@@ -103,12 +123,18 @@ function Pill({
   label,
   onPress,
   disabled,
+  pro,
+  accessibilityLabel,
 }: {
   glyph: string;
   label: string;
   onPress: () => void;
   /** Dimmed and inert — a filter we cannot honour must not look live. */
   disabled?: boolean;
+  /** Carries the PRO chip: the choices behind this pill are Pro. */
+  pro?: boolean;
+  /** Defaults to `label`. */
+  accessibilityLabel?: string;
 }): React.JSX.Element {
   return (
     <PressableScale
@@ -119,7 +145,7 @@ function Pill({
         onPress();
       }}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: disabled === true }}
       style={[styles.pill, disabled === true && styles.pillOff]}
     >
@@ -127,6 +153,13 @@ function Pill({
       <Text variant="caption" style={styles.pillLabel} numberOfLines={1}>
         {label}
       </Text>
+      {/* Wrapped so the row centres the chip; the chip pins itself to the
+          start of its own box. */}
+      {pro ? (
+        <View>
+          <ProBadge />
+        </View>
+      ) : null}
       <Text style={styles.pillChevron}>▾</Text>
     </PressableScale>
   );
@@ -139,6 +172,7 @@ function OptionSheet<T extends string>({
   value,
   onSelect,
   onClose,
+  onHidden,
 }: {
   visible: boolean;
   title: string;
@@ -146,13 +180,20 @@ function OptionSheet<T extends string>({
   value: T;
   onSelect: (v: T) => void;
   onClose: () => void;
+  onHidden?: () => void;
 }): React.JSX.Element {
   // Past LARGE_TEXT a row's detail moves under its label. Beside it, the
   // driver count — which never shrinks — left the class name a few characters
   // a line at AX sizes on a small phone.
   const stacked = useWindowDimensions().fontScale >= LARGE_TEXT;
   return (
-    <BottomSheet visible={visible} onClose={onClose} title={title} heightFraction={0.5}>
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      onHidden={onHidden}
+      title={title}
+      heightFraction={0.5}
+    >
       {/* Scrolls, because the sheet is a fixed half-screen that clips: the
           class list has a row per class with drivers in it (up to sixty), and
           at accessibility text sizes even the four metrics outgrow it. The
@@ -173,6 +214,7 @@ function OptionSheet<T extends string>({
               onClose();
             }}
             accessibilityRole="button"
+            accessibilityLabel={o.accessibilityLabel}
             accessibilityState={{ selected: o.key === value }}
             style={styles.option}
           >
@@ -199,7 +241,15 @@ function OptionSheet<T extends string>({
                 ) : null}
               </View>
             </View>
-            {o.key === value ? <Text style={styles.tick}>✓</Text> : null}
+            {/* A Pro row is never the selected one, so the chip takes the
+                tick's place rather than crowding the label. */}
+            {o.key === value ? (
+              <Text style={styles.tick}>✓</Text>
+            ) : o.pro ? (
+              <View style={styles.optionPro}>
+                <ProBadge />
+              </View>
+            ) : null}
           </PressableScale>
         ))}
       </ScrollView>
@@ -322,6 +372,22 @@ export default function BoardScreen() {
   // null = open board across every class.
   const [bracket, setBracket] = useState<string | null>(null);
   const [brackets, setBrackets] = useState<Bracket[]>([]);
+  // Classes are Pro; placement is not (src/board/bracketAccess.ts). Held as a
+  // stable object: useAccess() returns a fresh one every render, and anything
+  // keyed on it — the class rows, and through `shownBracket` the board's own
+  // fetch — must not be rebuilt on each.
+  const { isPro, enforced } = useAccess();
+  const access = useMemo(() => ({ isPro, enforced }), [isPro, enforced]);
+  const goPro = useGoPro();
+  // A locked class leads to Pro, but only once its sheet is gone: a push made
+  // while the sheet's Modal is still up is dropped on iOS.
+  const proAfterSheet = useRef(false);
+  const classesLocked = bracketsLocked(access);
+  // The class the board answers. Without enforcement, and on Pro, this is
+  // `bracket` itself, so nothing about the open board changes. Memoised so
+  // the compiler can see it is as stable as `bracket` where `load` keys on it.
+  const shownBracket = useMemo(() => appliedBracket(bracket, access), [bracket, access]);
+  const classLabel = shownBracket ? bracketLabel(shownBracket) : ALL_CLASSES_LABEL;
   const [sheet, setSheet] = useState<'scope' | 'metric' | 'period' | 'bracket' | null>(null);
   // Refreshed on focus, not frozen at mount: the tab is never unmounted, so a
   // label computed once still read "Sep" in October.
@@ -347,18 +413,11 @@ export default function BoardScreen() {
   // Driver counts are shown because a class of two is a different claim than a
   // class of two hundred, and the label alone hides that. The count is its
   // own text rather than a suffix on the label: appended, it was the first
-  // thing the ellipsis took.
+  // thing the ellipsis took. Built in src/board/bracketAccess.ts, which marks
+  // each class PRO when the plan does not open it.
   const bracketOptions: Option<string>[] = useMemo(
-    () => [
-      { key: 'all', label: 'All classes', glyph: '🌐' },
-      ...brackets.map((b) => ({
-        key: b.key,
-        label: bracketLabel(b.key),
-        detail: `${b.drivers} driver${b.drivers === 1 ? '' : 's'}`,
-        glyph: '🏁',
-      })),
-    ],
-    [brackets],
+    () => classOptions(brackets, access),
+    [brackets, access],
   );
 
   // Only the newest request may commit, so a slow response for an earlier
@@ -382,12 +441,24 @@ export default function BoardScreen() {
   });
   const { result, live: filtersLive } = board;
   const load = useCallback(async () => {
-    const key = JSON.stringify([metric, scope, period, verifiedOnly, bracket, username, country]);
+    const key = JSON.stringify([
+      metric,
+      scope,
+      period,
+      verifiedOnly,
+      shownBracket,
+      username,
+      country,
+    ]);
     const quiet = key === shownQuery.current;
     shownQuery.current = key;
     const seq = ++requestId.current;
     if (!quiet) setBoard((b) => (b.result == null ? b : { ...b, result: null }));
-    const r = await fetchBoard({ metric, scope, period, verifiedOnly, bracket }, username, country);
+    const r = await fetchBoard(
+      { metric, scope, period, verifiedOnly, bracket: shownBracket },
+      username,
+      country,
+    );
     if (seq !== requestId.current) return;
     setBoard((b) => {
       const next = settleBoard(b.result, r, quiet);
@@ -395,7 +466,7 @@ export default function BoardScreen() {
     });
     // `country` is a real input now that it scopes the query — without it here
     // a country change would leave the previous country's board on screen.
-  }, [metric, scope, period, verifiedOnly, username, country, bracket]);
+  }, [metric, scope, period, verifiedOnly, username, country, shownBracket]);
 
   // On focus as well as on filter change. Tab screens stay mounted, so a
   // mount-only load kept the SAMPLE board up after the first drive, and a
@@ -531,12 +602,17 @@ export default function BoardScreen() {
         />
         <Pill glyph="⚡" label={labelFor(METRICS, metric)} onPress={() => setSheet('metric')} />
         <Pill glyph="📅" label={labelFor(PERIODS, period)} onPress={() => setSheet('period')} />
+        {/* Locked, the pill still opens the sheet: the classes and their
+            driver counts are real and worth seeing, and each one is marked
+            PRO there. */}
         {brackets.length > 0 ? (
           <Pill
             glyph="🏁"
-            label={bracket ? bracketLabel(bracket) : 'All classes'}
+            label={classLabel}
             onPress={() => setSheet('bracket')}
-            disabled={!filtersLive && bracket == null}
+            disabled={!filtersLive && shownBracket == null}
+            pro={classesLocked}
+            accessibilityLabel={bracketPillAccessibilityLabel(classLabel, access)}
           />
         ) : null}
       </ScrollView>
@@ -609,9 +685,20 @@ export default function BoardScreen() {
         visible={sheet === 'bracket'}
         title="Vehicle class"
         options={bracketOptions}
-        value={bracket ?? 'all'}
-        onSelect={(v) => setBracket(v === 'all' ? null : v)}
+        value={shownBracket ?? ALL_CLASSES}
+        onSelect={(v) => {
+          // "All classes" always applies; a class applies, or on Free leads
+          // to Gapped Pro. The sheet closes either way.
+          const pick = pickBracket(v, access);
+          if (pick.kind === 'goPro') proAfterSheet.current = true;
+          else setBracket(pick.bracket);
+        }}
         onClose={() => setSheet(null)}
+        onHidden={() => {
+          if (!proAfterSheet.current) return;
+          proAfterSheet.current = false;
+          goPro();
+        }}
       />
 
       {/* The list stays mounted through a reload, with the skeleton as its
@@ -747,6 +834,7 @@ const styles = StyleSheet.create({
   optionDetail: { flexShrink: 0 },
   optionGlyph: textStyle(glyphSize.xl),
   tick: { fontSize: 16, lineHeight: 20, color: color.accent },
+  optionPro: { marginLeft: space.sm },
   // xs, not md: it follows the VERIFIED row, whose 44pt target already
   // leaves ~8pt below the box.
   sampleBanner: {

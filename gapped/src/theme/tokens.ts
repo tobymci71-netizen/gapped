@@ -87,6 +87,11 @@ export const type = {
   body: { size: 17, lineHeight: 24 },
   caption: { size: 14, lineHeight: 20 },
   legal: { size: 13, lineHeight: 18 },
+  /**
+   * The small label over a figure (Stat, its Pro-locked twin, the You tab's
+   * tiles) and the speed distribution's band labels. A step under legal.
+   */
+  label: { size: 12, lineHeight: 15 },
 } as const;
 
 /**

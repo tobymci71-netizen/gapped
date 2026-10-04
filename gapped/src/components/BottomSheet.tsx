@@ -35,6 +35,12 @@ type Props = {
   children: React.ReactNode;
   /** Fraction of screen height, default 0.82 */
   heightFraction?: number;
+  /**
+   * Called once the sheet is fully gone: its Modal dismissed, not just closing.
+   * Navigate from here, never from a row's onPress: on iOS a push made while
+   * the Modal is still presented is dropped.
+   */
+  onHidden?: () => void;
 };
 
 /** Past a quarter of the sheet's travel, or faster than this, and it goes. */
@@ -67,6 +73,7 @@ export function BottomSheet({
   title,
   children,
   heightFraction = 0.82,
+  onHidden,
 }: Props): React.JSX.Element {
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -77,6 +84,13 @@ export function BottomSheet({
   // `mounted` lags `visible` so the exit animation finishes before the Modal
   // unmounts — Modal itself has no animation (animationType="none").
   const [mounted, setMounted] = useState(visible);
+
+  // Android has no Modal onDismiss; its Modal is gone once `mounted` drops.
+  const wasMounted = React.useRef(mounted);
+  useEffect(() => {
+    if (wasMounted.current && !mounted && Platform.OS !== 'ios') onHidden?.();
+    wasMounted.current = mounted;
+  }, [mounted, onHidden]);
 
   const translateY = useSharedValue(sheetHeight);
   const progress = useSharedValue(0);
@@ -208,6 +222,8 @@ export function BottomSheet({
       animationType="none"
       statusBarTranslucent
       onRequestClose={onClose}
+      // iOS: fires after the native dismissal, which is when a push can land.
+      onDismiss={Platform.OS === 'ios' ? onHidden : undefined}
     >
       {/* Gestures inside a Modal need their own root — the app's root view does
           not extend into the modal's native window.

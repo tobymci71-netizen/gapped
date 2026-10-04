@@ -60,14 +60,17 @@ Expo SDK 57 (React Native 0.86, TypeScript strict) · expo-router · Supabase (P
       power-to-weight tier × stock/modified) + NHTSA vPIC catalogue client
 - [x] **Phase 6 (partial):** privacy layer — salted deterministic 1.0–1.7 mi route trimming,
       privacy zones with 200–800 m centre offsets, polyline codec; GPX/CSV export + share from
-      the drive detail screen
-- [x] **Phase 7 (partial):** published free-vs-Pro matrix screen (`/plans`) — table stakes #13
+      the drive detail screen (export is Pro in the [plans](#plans); privacy never is)
+- [x] **Phase 7 (partial):** published free-vs-Pro matrix screen (`/plans`) — table stakes #13.
+      The split is **core free, depth Pro** ([Plans](#plans) below); the limits are written and
+      tested but switched off until purchases ship
 - [x] Supabase sync layer: anonymous-first upload of finalized drives, server verify invocation,
       offline-tolerant retry on next launch
 - [x] `eas.json` build profiles (dev / preview / production)
 
 - [x] **Phase 4 (boards):** bracket filtering is live. `board_top` takes a bracket, `board_brackets`
-      lists only classes that actually have drivers, and the Board tab has a class picker.
+      lists only classes that actually have drivers, and the Board tab has a class picker
+      (class brackets are Pro in the [plans](#plans); the global and country boards are Free).
       Specs come from a VIN decoded server-side by NHTSA vPIC (`decode-vin`) — never from the
       client, because drivetrain/power/weight choose your class and a self-declared
       "90 hp, 1800 kg" would put a fast car in the slowest bracket and win it.
@@ -80,11 +83,12 @@ Expo SDK 57 (React Native 0.86, TypeScript strict) · expo-router · Supabase (P
       Shown in the You tab. The client cannot grant one.
 - [x] **Phase 5:** share cards — `<ShareCard>` captured with view-shot and handed to the share
       sheet from the drive detail screen. Shows the privacy-trimmed route, and wears the verified
-      badge only when the server has actually said so.
+      badge only when the server has actually said so. Free cards carry the GAPPED badge; hiding
+      it is Pro ([plans](#plans)). The verified badge is not the brand and stays either way.
 - [x] **Phase 6:** friends — `add_friend` / `remove_friend` / `list_friends`, a friends screen,
       and the friends board wired to them. Following is one-way by design: adding someone changes
       your board and never theirs, so there is nothing to accept and no way onto a stranger's
-      screen.
+      screen. Free follows up to `FREE_LIMITS.friends` (5); unlimited friends are Pro.
 - [x] **Onboarding v2** ([below](#onboarding), contract in `docs/ONBOARDING.md`): splash + sting,
       carousel, 13 steps with server-backed proof screens, setup beat, flagged paywall.
       **Needs:** a new dev build (two new native modules, see [Run it](#run-it)) and
@@ -383,6 +387,39 @@ purchase is a stub.
 - Generated assets: `npm run generate:sting` (`assets/sounds/launch-sting.wav`, Python standard
   library only, byte-identical on re-run) and `npm run generate:country-dots`
   (`src/data/countryDots.json` from a SHA-256-pinned Natural Earth download, public domain).
+
+## Plans
+
+**`src/config/plans.ts` is the contract**: `PLAN_MATRIX` is the published Free-vs-Pro table the
+`/plans` screen draws, `FREE_LIMITS` holds its numbers, and every other sentence that describes the
+plans (the onboarding paywall's pitch, `PAYWALL_PRO_NOTE`) is tested against it.
+
+- **Free** keeps the core: unlimited recording, verified top speed and 0–60, placement on the
+  global and country boards, the last 30 days of drive history, a friends board of up to 5, share
+  cards with the GAPPED badge, privacy zones and route trimming, and one car.
+- **Pro** is depth: the full history, cornering G and the full telemetry, vehicle-class brackets,
+  unlimited friends, clean share cards (the badge can be hidden), GPX / CSV export and an unlimited
+  garage. Two rows are promised but not built: a telemetry overlay on your video, and restoring
+  your drives on a new phone. Pro is sold monthly or weekly (`PRO_PLANS`), nothing longer, no trial.
+- **Privacy is never Pro**, and nothing about where drives go depends on the plan: every account's
+  drives upload to be verified and ranked (`src/lib/sync.ts`).
+- **The rules** live in `src/lib/entitlements.ts` (`useAccess`, `canUse`, `canOpenDrive`,
+  `canAddFriend`, `canAddVehicle`), pure and unit-tested. A locked feature shows `<ProBadge />`
+  and leads to Gapped Pro (`useGoPro`); older drives, friends and cars past a limit are kept and
+  shown locked, never deleted.
+- **Where each lock is drawn**, each decided by a pure, tested view-model: drive history on the
+  Drive and You tabs, a deep-linked old drive, Peak G, export and the share card's badge
+  (`src/drive/driveAccess.ts`); the You tab's manoeuvres, turn preference and speed distribution,
+  which are "full telemetry" (`telemetryView`, same file); adding a friend
+  (`src/social/friendLimit.ts`); class brackets on the board (`src/board/bracketAccess.ts`); and
+  adding a car in onboarding (`src/onboarding/vehicle/garageAccess.ts`).
+  `src/lib/__tests__/proLocks.test.ts` runs every one of them as an enforced Free account in one
+  place, and fails when a Pro row of the matrix has no lock and is not marked unbuilt.
+- **`PRO_LIMITS_ENFORCED` is false** (`src/config/flags.ts`): every account is treated as Pro and
+  nothing is locked, which is how every TestFlight build ships. It turns on only in the build that
+  wires RevenueCat and the paywall (`ONBOARDING_PAYWALL`); a test holds the two together. Marking
+  which plan a feature is in (the Plans screen, the onboarding carousel's PRO chip on the cornering
+  demo) is not a lock and shows either way.
 
 ## Before launch (from the spec's naming constraints)
 

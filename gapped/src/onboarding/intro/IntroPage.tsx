@@ -1,8 +1,9 @@
 import React, { useRef } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { ProBadge } from '@/components/ProBadge';
 import { Text } from '@/components/Text';
 import { gutter, space } from '@/theme/tokens';
-import type { IntroPageCopy } from './introTimeline';
+import { type IntroPageCopy, spokenTitle } from './introTimeline';
 
 type Props = {
   copy: IntroPageCopy;
@@ -28,7 +29,8 @@ type Props = {
 };
 
 /**
- * One carousel page: a visual and its heading.
+ * One carousel page: a visual and its heading. A page that demos a Pro
+ * feature (`copy.proFeature`) wears the PRO chip above its title.
  *
  * Each page scrolls vertically inside the horizontal pager. At 375×667 every
  * page fits; at the largest Dynamic Type sizes the copy outgrows the screen,
@@ -47,9 +49,18 @@ export function IntroPage({
   const viewport = useRef({ top: 0, height: 0 });
   const heading = (
     <View style={[styles.heading, headingFirst ? styles.headingFirst : styles.headingAfter]}>
+      {copy.proFeature ? (
+        // Over the title, as an eyebrow. ProBadge pins itself to the start;
+        // on a centred page the row around it centres it.
+        <View style={[styles.chip, !headingFirst && styles.chipCentred]}>
+          <ProBadge />
+        </View>
+      ) : null}
       <Text
         variant="headline"
         accessibilityRole="header"
+        // The chip is silent to VoiceOver, so the title says "Gapped Pro".
+        accessibilityLabel={copy.proFeature ? spokenTitle(copy) : undefined}
         // No one-word last line ("See where you stack / up").
         lineBreakStrategyIOS="push-out"
         style={headingFirst ? undefined : styles.centerText}
@@ -114,4 +125,7 @@ const styles = StyleSheet.create({
   headingAfter: { marginTop: space.xl },
   centerText: { textAlign: 'center' },
   subtitle: { marginTop: space.sm },
+  chip: { marginBottom: space.sm },
+  // A row, so the chip's own alignSelf works on the vertical and this centres it.
+  chipCentred: { flexDirection: 'row', justifyContent: 'center' },
 });

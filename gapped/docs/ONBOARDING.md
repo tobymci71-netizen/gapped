@@ -26,6 +26,24 @@ accent), its own nouns (cars first, motorbikes supported) and its own words.
    not ship a button that cannot charge.
 6. Username rules stay the server's: 3–20 characters, lowercase letters, numbers and underscores
    (`src/lib/username.ts`), with the real availability check.
+7. **Every claim about Free and Pro agrees with `PLAN_MATRIX`** (`src/config/plans.ts`). The split
+   is "core free, depth Pro". Free: unlimited recording, verified top speed and 0–60, placement on
+   the global and country boards, the last 30 days of history, a friends board of up to 5, share
+   cards with the GAPPED badge, privacy zones and route trimming, and one car. Pro adds the full
+   history, cornering G and the full telemetry, vehicle-class brackets, unlimited friends, clean
+   share cards (the badge can be hidden), GPX / CSV export, an unlimited garage, and, not built
+   yet, a telemetry overlay on video and restoring your drives on a new phone. The numbers are
+   `FREE_LIMITS`. Privacy is never Pro. So what a step promises for every drive has to be in Free
+   (the carousel's first page no longer says "every corner"), and a step that shows a Pro feature
+   says so (the cornering page wears the PRO chip). Every account's drives upload to be verified
+   and ranked, on Free too; no copy may suggest otherwise.
+
+   The limits themselves are rules in `src/lib/entitlements.ts` (`useAccess`, `canUse`,
+   `canOpenDrive`, `canAddFriend`, `canAddVehicle`), and they lock nothing while
+   `PRO_LIMITS_ENFORCED` (`src/config/flags.ts`) is false: every account is treated as Pro, the
+   garage step never caps, and nothing shows a lock. The flag turns on only with purchases
+   (RevenueCat) and the paywall. Marking which plan a feature is in (the carousel's chip, the
+   Plans screen) is not a lock and shows either way.
 
 ## Steps
 
@@ -60,14 +78,21 @@ Back returns to the previous step without clearing later answers.
 **Splash.** `GAPPED` wordmark, lime, centred.
 
 **Carousel** (page dots, swipeable, button advances):
-1. *Track every drive* / Top speed, 0–60 and every corner. Verified, then ranked. — **Get started**
+1. *Track every drive* / Your top speed and 0–60 times. Verified, then ranked. — **Get started**
+   (It said "Top speed, 0–60 and every corner"; cornering G is Pro, and this page is the promise
+   for every drive.)
 2. *See where you stack up* / Your drives. Your friends. Your place on the board. Card: "Top speed",
    the person's country code or "Global", three rows. Real board rows when the server has three or
    more; otherwise sample rows wearing the existing SAMPLE treatment. — **Next**
-3. *See more in every drive.* / row label "Cornering G". Hero number counts 0.12 g → 0.94 g; an arc
-   marker (0 at the top, 0.5 and 1.0 g each side, green centre → yellow → red edges) swings right;
-   the car silhouette rolls a few degrees; footer "Peak cornering G" — Left 0.88 g | Right 0.94 g.
-   One ~2 s ease-in-out timeline, holds at the end. Labelled as a demo for VoiceOver. — **Next**
+3. PRO chip, then *See more in every drive.* / row label "Cornering G". Hero number counts
+   0.12 g → 0.94 g; an arc marker (0 at the top, 0.5 and 1.0 g each side, green centre → yellow →
+   red edges) swings right; the car silhouette rolls a few degrees; footer "Peak cornering G" —
+   Left 0.88 g | Right 0.94 g. One ~2 s ease-in-out timeline, holds at the end. Cornering G is
+   Pro, so the page's copy names its matrix row (`proFeature: 'advancedTelemetry'`, tested to be a
+   Pro-only row) and the outlined lime PRO chip (`<ProBadge />`) sits over the title. VoiceOver
+   hears the title as "Gapped Pro. See more in every drive.", the button's page announcement the
+   same, and the demo as "Gapped Pro demo. Cornering G: …". The chip marks the plan, not this
+   account's access, so it shows whether or not `PRO_LIMITS_ENFORCED` is on. — **Next**
 4. *Built by drivers* / From drivers. For drivers. Large white car silhouette. — **Set up my car**
 
 **Choose your ride** / Start with the car you drive most. Car | Motorbike. Fields "Select make",
@@ -90,9 +115,14 @@ drivers of the same kind (cars, or bikes), so the share line names the kind.
 
 **Add more cars?** / Optional. Your main car is set, so you can keep going and build your garage
 later. Card: silhouette, "{Make} {Model}" (or nickname), lime caption "Main car". Row: "+ Add
-another car". Continue. A Free garage holds `FREE_GARAGE_VEHICLES` (3, main included; an
-unlimited garage is Pro), so at three the row becomes "Your garage holds up to 3 vehicles for
-now."
+another car". Continue. A Free garage holds `FREE_LIMITS.garageVehicles` (1, the main car; an
+unlimited garage is Pro). With `PRO_LIMITS_ENFORCED` off, which it is until purchases ship, the
+step never caps. On, a full Free garage swaps the add row for a PRO row, "More cars come with
+Gapped Pro.", which leads to Gapped Pro (`useGoPro`), and the subtitle stops at "so you can keep
+going." Extras already added stay listed and removable
+(`src/onboarding/vehicle/garageAccess.ts`). `useGoPro` pushes `/plans`, which sits outside the
+onboarded guard in `app/_layout.tsx` for exactly this, so the PRO row lands there and Back returns
+to the step. When the paywall replaces `/plans` as the destination, it needs the same treatment.
 
 **Add a car photo** / Make it yours, or keep the illustration. **Add photo** (white pill),
 **Keep current image** (dark pill). After a pick the photo replaces the silhouette and Continue
@@ -149,7 +179,9 @@ numbers or underscores." Continue enables when valid and available (or unknown o
 **Trust.** Shield in a grey circle. *Thanks for trusting us.* Card with lime lock: "Your privacy
 matters to us." / "Your route is trimmed at both ends before anyone sees it. No ads, and your data
 is never sold." (The first draft promised "you choose what appears on your profile. Change it any
-time in Settings"; Settings has no profile controls, so that sentence waits until it does.)
+time in Settings"; Settings has no profile controls, so that sentence waits until it does.) It
+makes no promise that drives stay on the phone, and must not: every account's drives upload to be
+verified, and Settings says so under Privacy (rule 7).
 
 **Attribution.** *How did you hear about us?* TikTok, App Store, A friend, X / Twitter, Other,
 Reddit, YouTube, Instagram (brand marks from Simple Icons, CC0). Selected row: white, black label,
@@ -167,18 +199,22 @@ preferences (Your units. Your country. Your way.) · Your stats · Your rankings
 here. "Ready to drive 100%" and **Continue**.
 
 **Paywall** (flagged). Wordmark, close button, a real `<ShareCard>` rendered from a sample drive
-(labelled sample) as the hero, "Share your best drives" / "Create clean share cards from your best
-drives and routes." Plan cards Monthly (preselected) and Weekly (`PRO_PLANS`) with
-`PAYWALL_PLACEHOLDER_PRICES` (no reference prices, no trial), lime **Unlock Gapped Pro**, then Terms of Use · Privacy Policy · Restore
-Purchases. Purchase and restore are stubs.
+(labelled sample, GAPPED badge on, as every plan draws it) as the hero, then *See more in every
+drive* (the carousel's Pro page, closed here) / "Pro adds your full drive history, cornering G,
+class brackets and clean share cards. Recording and the boards stay free." Plan cards Monthly
+(preselected) and Weekly (`PRO_PLANS`) with `PAYWALL_PLACEHOLDER_PRICES` (no reference prices, no
+trial), lime **Unlock Gapped Pro**, then Terms of Use · Privacy Policy · Restore Purchases.
+Purchase and restore are stubs.
 
 Deliberate departures from the reference, each for a stated reason:
 - A small close button (top right): rule 5, always dismissible. Android back and both stubs also
   finish onboarding.
-- One honesty line under the pitch, "Share cards and the boards stay free. Pro adds class
-  brackets, deeper telemetry and a bigger garage." (`PAYWALL_PRO_NOTE` in `src/config/plans.ts`,
-  tested against the published matrix): share cards are free, so a paywall that only sold them would be selling
-  something nobody pays for.
+- The pitch sells depth, not sharing. It was the reference's share-card pitch, "Share your best
+  drives", with a small-print correction under it, because share cards are free; Pro is now
+  depth, so the depth is the pitch. Its one sentence is `PAYWALL_PRO_NOTE` (`src/config/plans.ts`):
+  each thing it calls Pro is a Pro-only row of the matrix, each thing it calls free is a Free row,
+  each has its words in the sentence, and rows not built yet (the video overlay, restoring on a
+  new phone) stay out of it, all held by `src/config/__tests__/plans.test.ts`.
 - The plan cards sit side by side in the pinned footer, beside the button, so the price is never
   scrolled away from the thing that charges it (on a 667 pt phone they used to be). Past 1.3x text
   the plans and links move into the scrolling page and only the button stays pinned, because a
@@ -191,11 +227,11 @@ Deliberate departures from the reference, each for a stated reason:
 ## Look and motion
 
 Reuse `src/theme/tokens.ts`: canvas, `surface2` cards (radius 16), `accent` lime for progress,
-checks, links, wordmark and the paywall CTA only. Primary buttons in this flow are **white pills
-with black labels** (`Button variant="light"`); disabled is `color.disabled` with `text3`. Errors use
-`color.warning` (orange, `#FF9F0A`). Motion is ease-out 350–550 ms, nothing bounces, numbers count,
-bars grow, sheets rise; reduced motion gets end states. No haptics are required by the reference;
-the app's existing selection haptic on choices is kept.
+checks, links, wordmark, the PRO chip and the paywall CTA only. Primary buttons in this flow are
+**white pills with black labels** (`Button variant="light"`); disabled is `color.disabled` with
+`text3`. Errors use `color.warning` (orange, `#FF9F0A`). Motion is ease-out 350–550 ms, nothing
+bounces, numbers count, bars grow, sheets rise; reduced motion gets end states. No haptics are
+required by the reference; the app's existing selection haptic on choices is kept.
 
 Headlines grow with Dynamic Type up to 1.5x (past that the wide display face breaks words in
 half); body copy is never capped, and every step scrolls where its content outgrows the screen.

@@ -104,6 +104,12 @@ function heroSize(slot: { width: number; height: number }): number {
  * Left out from the reference on purpose: the star rating, "1M+ miles
  * tracked", the deal badge and the struck-through price. Each is a number
  * Gapped does not have (rule 1).
+ *
+ * The pitch sells depth, which is what Pro is (src/config/plans.ts): the
+ * full history, cornering G, class brackets and clean share cards, and it
+ * says in the same sentence that recording and the boards stay free. The
+ * hero is still the sample share card, the reference's shape, drawn as every
+ * plan draws it, GAPPED badge and all.
  */
 export default function PaywallStep() {
   const finish = useOnboardingAdvance('/onboarding/paywall');
@@ -215,19 +221,21 @@ export default function PaywallStep() {
 
         <Entrance index={1}>
           <View style={styles.pitch}>
+            {/*
+              The carousel's Pro page has the same words over the cornering
+              demo, so the paywall closes the promise it opened.
+            */}
             <Text variant="cardTitle" accessibilityRole="header" style={styles.centerText}>
-              Share your best drives
-            </Text>
-            <Text variant="body" style={styles.centerText}>
-              Create clean share cards from your best drives and routes.
+              See more in every drive
             </Text>
             {/*
-              Share cards are free (the published matrix, src/config/plans.ts),
-              so a paywall that led with them and stopped there would sell
-              something nobody has to pay for. This line says what Pro
-              actually adds, and a test holds it to the matrix.
+              What Pro adds, then what stays free: one sentence, held to the
+              published matrix by a test (PAYWALL_PRO_NOTE). This used to be
+              "Share your best drives" over a small print correction, because
+              share cards are free; Pro is depth now, and the depth is the
+              pitch.
             */}
-            <Text variant="caption" style={[styles.centerText, styles.note]}>
+            <Text variant="body" style={styles.centerText}>
               {PAYWALL_PRO_NOTE.text}
             </Text>
           </View>
@@ -439,7 +447,6 @@ const styles = StyleSheet.create({
   },
   pitch: { gap: space.sm, marginTop: space.sm },
   centerText: { textAlign: 'center' },
-  note: { color: color.text3 },
   plans: { flexDirection: 'row', gap: space.md, marginBottom: space.xs },
   plansStacked: { flexDirection: 'column' },
   planSlot: { flex: 1 },

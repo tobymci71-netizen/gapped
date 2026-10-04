@@ -1,7 +1,11 @@
 /**
  * GPX and CSV generation — pure string builders, unit-tested. Neither
- * incumbent offers any export in any format; this is the cheapest trust
- * purchase in the category (spec §4.7). Users can always take their data out.
+ * incumbent offers any export in any format (spec §4.7).
+ *
+ * Export is a Pro row of the plans matrix (PLAN_MATRIX 'export'). The lock
+ * lives with the drive screen's other gates (exportView,
+ * src/drive/driveAccess.ts), not here: these stay pure and ungated, so
+ * whatever is allowed to export gets the same full-resolution output.
  */
 
 import { Fix } from './types';
