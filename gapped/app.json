@@ -9,6 +9,7 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0A0A0A",
     "ios": {
+      "buildNumber": "2",
       "bundleIdentifier": "com.tobym.gapped",
       "supportsTablet": false,
       "infoPlist": {
