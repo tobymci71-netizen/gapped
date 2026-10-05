@@ -219,7 +219,12 @@ web3 = 30
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
-enable_signup = true
+# Off: the app signs in anonymously and has no email flow, so the email signup
+# endpoint was only an unused way to mint accounts (and push usernames onto the
+# public boards) without the app. Local parity with the cloud project, where
+# the same switch is turned off in the dashboard (Authentication → Sign In /
+# Providers → Email). Anonymous sign-ins are a separate switch and stay on.
+enable_signup = false
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true

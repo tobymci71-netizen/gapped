@@ -21,7 +21,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 begin;
-select plan(8);
+select plan(10);
 
 -- ── row level security ───────────────────────────────────────────────────────
 
@@ -40,14 +40,28 @@ select is_empty(
 -- table_privs_are asserts the privilege set EXACTLY, so an added INSERT fails
 -- here rather than passing a "does not have INSERT" spot check.
 
+-- Own rows only since 0020: anon holds nothing, and authenticated reads
+-- through a policy that matches the caller's own profile and nothing else.
 select table_privs_are(
-  'public', 'achievements', 'anon', array['SELECT'],
-  'anon may only SELECT achievements'
+  'public', 'achievements', 'anon', array[]::text[],
+  'anon holds no privilege on achievements'
 );
 
 select table_privs_are(
   'public', 'achievements', 'authenticated', array['SELECT'],
   'authenticated may only SELECT achievements'
+);
+
+select policies_are(
+  'public', 'achievements', array['achievements_select'],
+  'one policy on achievements: the own-row read'
+);
+
+select is(
+  (select qual from pg_policies
+    where schemaname = 'public' and tablename = 'achievements' and policyname = 'achievements_select'),
+  '(auth.uid() = profile_id)',
+  'achievements_select matches the caller''s own rows only'
 );
 
 -- ── the source the payload inherits its constraint from ──────────────────────
