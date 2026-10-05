@@ -4,6 +4,19 @@ The owner's list for the first App Store release, in order. Each step says what 
 like. The steps before App Store Connect matter most: App Review opens the privacy and support
 links, and a dead link is a rejection.
 
+**Status on 5 October 2026.** Already done, and verified:
+- Section 3: the pages are live at `https://tobymci71-netizen.github.io/gapped/` (draft build, so
+  they say "Contact address coming soon" until section 1 is done and they are republished).
+- Section 5 steps 1–4 and 6: migrations 0018–0021 pushed (the cloud is at 0021), verify-drive v4,
+  decode-vin v2 and attest-device deployed, the three retention jobs scheduled, no
+  `country_number_one` rows. Step 5 was not needed: the only real drive (m061087, 31 mph) is under
+  every limit. The 21 test accounts (buddy_*, vin_*, the nameless ones) were deleted; tobym, toby,
+  gayahhnga and m061087 remain.
+- Section 6: build 1.0.0 (5) archived locally in Xcode (not EAS) and uploaded to App Store
+  Connect, after `npm run check:release` passed.
+
+Still open for the owner: sections 1, 4, 5 step 7 (Email provider off), 7, 8 and 9.
+
 ---
 
 ## 1. Choose the contact address
