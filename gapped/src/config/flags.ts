@@ -67,6 +67,24 @@ export const ONBOARDING_PAYWALL = false;
 export const PRO_LIMITS_ENFORCED = false;
 
 /**
+ * Show anything that sells Gapped Pro: the Free-vs-Pro matrix (/plans), the
+ * You tab's plans card, PRO chips and labels, and every "leads to Pro" tap.
+ *
+ * Tied to the limits: Pro is shown exactly when it can be bought. App Review
+ * rejects references to a paid tier that has no in-app purchase (2.1, 3.1.1),
+ * and a PRO chip on a feature a Free user can already use is untrue.
+ */
+export const SHOW_PRO = PRO_LIMITS_ENFORCED;
+
+/**
+ * Developer tools in the UI: the debug HUD toggle and its IMU strip.
+ *
+ * Development builds only. A TestFlight or App Store build is a release build,
+ * and the same binary goes to both, so this cannot depend on the channel.
+ */
+export const INTERNAL_TOOLS = __DEV__;
+
+/**
  * Display strings for the paywall's plan cards, in GBP.
  *
  * PLACEHOLDERS. Nothing has been priced: these exist so the plan cards can be
