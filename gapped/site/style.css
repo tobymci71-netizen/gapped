@@ -1,0 +1,296 @@
+/*
+ * The one stylesheet for every public page. scripts/build-legal-pages.mjs
+ * inlines it into each page's <head>, so the pages load nothing from anywhere
+ * else: no fonts, no CDN, no trackers. Content-Security-Policy on each page
+ * (style-src 'unsafe-inline', nothing else) holds them to that.
+ *
+ * Light and dark follow the reader's system setting. Dark matches the app's
+ * near-black canvas and lime accent; light keeps the lime off white, where it
+ * cannot be read, and uses a dark olive for links instead.
+ */
+
+:root {
+  color-scheme: light dark;
+  --bg: #fafaf7;
+  --surface: #efefe9;
+  --text: #16181a;
+  --muted: #565b62;
+  --rule: #dcddd6;
+  --link: #3d5a00;
+  --mark-bg: #0a0a0a;
+  --mark-fg: #ccff00;
+  --draft-bg: #ffe08a;
+  --draft-fg: #1a1a1a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0a0a;
+    --surface: #161718;
+    --text: #f2f2f0;
+    --muted: #a6aab0;
+    --rule: #2b2d2f;
+    --link: #ccff00;
+    --mark-bg: #ccff00;
+    --mark-fg: #0a0a0a;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+
+.wrap {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+header.site {
+  padding: 20px 0 8px;
+}
+
+.wordmark {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+  /* A comfortable tap target without growing the visible pill. */
+  min-height: 44px;
+  line-height: 32px;
+}
+
+main {
+  padding-bottom: 32px;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  margin: 1.6em 0 0.5em;
+}
+
+h1 {
+  font-size: 2rem;
+  margin-top: 0.8em;
+}
+
+h2 {
+  font-size: 1.35rem;
+  padding-top: 1em;
+  border-top: 1px solid var(--rule);
+}
+
+h3 {
+  font-size: 1.1rem;
+}
+
+p,
+ul,
+ol,
+blockquote,
+.table-wrap {
+  margin: 0 0 1em;
+}
+
+ul,
+ol {
+  padding-left: 1.4em;
+}
+
+li + li {
+  margin-top: 0.35em;
+}
+
+a {
+  color: var(--link);
+  text-underline-offset: 0.15em;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+strong {
+  font-weight: 650;
+}
+
+.lede {
+  font-size: 1.15rem;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+blockquote {
+  padding: 0.6em 1em;
+  border-left: 3px solid var(--link);
+  background: var(--surface);
+  border-radius: 0 8px 8px 0;
+}
+
+/* Wide tables scroll inside their own box, never the page. */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.55em 0.6em;
+  border-bottom: 1px solid var(--rule);
+}
+
+th {
+  font-weight: 650;
+  border-bottom-width: 2px;
+}
+
+/*
+ * The policy's tables, on a phone: one card per row, each cell under its
+ * column name, instead of three columns a few words wide.
+ */
+@media (max-width: 560px) {
+  table.stack,
+  table.stack tbody,
+  table.stack tr,
+  table.stack td {
+    display: block;
+  }
+
+  table.stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  table.stack tr {
+    padding: 0.6em 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  table.stack td {
+    padding: 0.2em 0;
+    border: 0;
+  }
+
+  table.stack td[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+code {
+  font-size: 0.9em;
+  background: var(--surface);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  background: var(--surface);
+  padding: 12px;
+  border-radius: 8px;
+  margin: 0 0 1.5em;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2em 0;
+}
+
+.links {
+  list-style: none;
+  padding: 0;
+}
+
+.links li + li {
+  margin-top: 0;
+}
+
+.links a {
+  display: block;
+  padding: 12px 0;
+  min-height: 44px;
+  border-bottom: 1px solid var(--rule);
+  font-weight: 600;
+}
+
+.safety {
+  padding: 0.8em 1em;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.draft {
+  background: var(--draft-bg);
+  color: var(--draft-fg);
+  font-weight: 600;
+  text-align: center;
+  padding: 10px 16px;
+}
+
+footer.site {
+  border-top: 1px solid var(--rule);
+  padding: 20px 0 40px;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+footer.site nav a {
+  display: inline-block;
+  padding: 10px 0;
+  margin-right: 1.2em;
+}

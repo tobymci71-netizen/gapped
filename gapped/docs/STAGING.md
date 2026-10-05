@@ -1,7 +1,7 @@
 # Staging environment
 
-**Status: prepared, not created.** Everything in the repo is ready for a second
-Supabase project. Creating it needs Toby — see [What Toby must do](#what-toby-must-do).
+**Status: prepared, not created** (as of v1.0.0). Everything in the repo is ready for a
+second Supabase project. Creating it needs Toby — see [What Toby must do](#what-toby-must-do).
 
 Why it was not created automatically: a new Supabase project is a billable
 resource on Toby's account and counts against the free-tier project limit.
@@ -19,6 +19,10 @@ effectively production. That means:
   the environment real users depend on.
 - There is nowhere to point a TestFlight build that is not production.
 - A destructive migration has no rehearsal.
+- `npm run verify:roundtrip` has nowhere to run except locally. It creates
+  accounts and drives, so it must **never** run against production: they would
+  appear on the live boards. Staging is where it can run against a real
+  deployment.
 
 The local stack (`npm run db:start`) covers most of this, but not everything:
 Edge Functions behave differently deployed than served locally, auth flows
@@ -50,12 +54,13 @@ stack, production and any new project all derive from the same files.
 
 ```bash
 supabase link --project-ref <STAGING_REF>
-supabase db push          # applies 0001..0013 in order
+supabase db push          # applies every migration in order, 0001 to 0021
 supabase functions deploy verify-drive attest-device decode-vin
 ```
 
 `0013` seeds `app_releases` with `min_build = 1`, so a fresh staging project
-does not accidentally block every client.
+does not accidentally block every client. `0021` enables `pg_cron` and schedules
+the three retention jobs; check they exist on the new project (below).
 
 ## What Toby must do
 
@@ -90,15 +95,28 @@ does not accidentally block every client.
 
 6. **Decide about data.** Staging should start empty. Do not copy production
    drives across: they are precise location histories belonging to real people,
-   and a staging project is by definition the one with looser access.
+   and a staging project is by definition the one with looser access. The
+   privacy policy names the production project's processor and region; copying
+   real data into another project would need the policy to say so.
 
 ## Verifying it worked
 
 ```bash
 supabase db query --linked "select count(*) from countries"     # expect 250
 supabase db query --linked "select platform, min_build from app_releases"
-npm run test:db                                                 # 37 pgTAP assertions
+supabase db query --linked "select jobname from cron.job"       # the three gapped_purge_* jobs
+npm run test:db                                                 # pgTAP, against the local stack
 ```
 
 Then build `preview` and confirm the app talks to staging — the quickest check
-is that the leaderboards are empty, since production has 40 entries.
+is that the leaderboards are empty. Then run the round-trip against staging
+(never production):
+
+```bash
+ALLOW_REMOTE=1 SUPABASE_URL=https://<STAGING_REF>.supabase.co \
+  SUPABASE_ANON_KEY=<STAGING_ANON_KEY> npm run verify:roundtrip
+```
+
+The script refuses any host but localhost unless `ALLOW_REMOTE=1` is set. Set it
+for staging only; with a staging service-role key in `SUPABASE_SERVICE_ROLE_KEY`
+the checks that need one run too, and without it they are reported as SKIP.

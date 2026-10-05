@@ -3,7 +3,7 @@
 The first-run flow, rebuilt after a frame-by-frame study of a competitor's onboarding (a sport-bike
 tracker). Gapped keeps that flow's **order, pacing and shape**: splash with one sound, a short
 feature carousel, identity questions broken up by proof screens, a staged setup beat, then an
-optional paywall. It keeps its own look (the "Acid" tokens are already near-black with a lime
+optional paywall (off in v1). It keeps its own look (the "Acid" tokens are already near-black with a lime
 accent), its own nouns (cars first, motorbikes supported) and its own words.
 
 ## Rules that override the reference
@@ -20,30 +20,32 @@ accent), its own nouns (cars first, motorbikes supported) and its own words.
    ad-attribution SDK.
 4. **The road-safety acknowledgement stays** (`SAFETY_ACKNOWLEDGEMENT`), as the last question
    before setup. It is the app's record that a public speed board was accepted for responsible
-   use (the guidelines say: obey local traffic laws and speed limits).
+   use (the guidelines say: obey local traffic laws and speed limits). Since v1 it also carries
+   the **18+ and driving-licence** box and the **Terms of Use** (with the Privacy Policy), which
+   App Review 1.2 and the Terms (section 1) need: agreeing calls `acceptSafety()` and
+   `acceptTerms()`, and `termsAcceptedAt` syncs to `onboarding_answers.terms_accepted_at`. The
+   copy is `src/onboarding/place/consentCopy.ts`. With the flag off the question moves to the
+   trust step rather than disappearing (`TERMS_ROUTE`, `src/onboarding/flow.ts`).
 5. **The paywall is behind `ONBOARDING_PAYWALL` (default false)** and is always dismissible. Its
    purchase and restore are stubs until RevenueCat is wired; a TestFlight or App Store build must
    not ship a button that cannot charge.
 6. Username rules stay the server's: 3–20 characters, lowercase letters, numbers and underscores
-   (`src/lib/username.ts`), with the real availability check.
-7. **Every claim about Free and Pro agrees with `PLAN_MATRIX`** (`src/config/plans.ts`). The split
-   is "core free, depth Pro". Free: unlimited recording, verified top speed and 0–60, placement on
-   the global and country boards, the last 30 days of history, a friends board of up to 5, share
-   cards with the GAPPED badge, privacy zones and route trimming, and one car. Pro adds the full
-   history, cornering G and the full telemetry, vehicle-class brackets, unlimited friends, clean
-   share cards (the badge can be hidden), GPX / CSV export, an unlimited garage, and, not built
-   yet, a telemetry overlay on video and restoring your drives on a new phone. The numbers are
-   `FREE_LIMITS`. Privacy is never Pro. So what a step promises for every drive has to be in Free
-   (the carousel's first page no longer says "every corner"), and a step that shows a Pro feature
-   says so (the cornering page wears the PRO chip). Every account's drives upload to be verified
-   and ranked, on Free too; no copy may suggest otherwise.
+   (`src/lib/username.ts`), with the real availability check. The server also refuses names on
+   its denylist (`blocked_terms`, migration 0019) with `username_not_allowed`, which the app
+   treats like a taken name: "That username isn't allowed. Pick another."
+7. **Nothing in the flow mentions Pro in v1.** `SHOW_PRO` (`src/config/flags.ts`) is false until
+   purchases work, so no step shows a PRO chip, names Gapped Pro, or leads to `/plans`
+   (`useGoPro` does nothing), and every account has every feature: `PRO_LIMITS_ENFORCED` is
+   false, so the garage step never caps and nothing is locked. App Review rejects references to
+   a paid tier that cannot be bought (2.1, 3.1.1).
 
-   The limits themselves are rules in `src/lib/entitlements.ts` (`useAccess`, `canUse`,
-   `canOpenDrive`, `canAddFriend`, `canAddVehicle`), and they lock nothing while
-   `PRO_LIMITS_ENFORCED` (`src/config/flags.ts`) is false: every account is treated as Pro, the
-   garage step never caps, and nothing shows a lock. The flag turns on only with purchases
-   (RevenueCat) and the paywall. Marking which plan a feature is in (the carousel's chip, the
-   Plans screen) is not a lock and shows either way.
+   When Pro ships, every claim about Free and Pro must agree with `PLAN_MATRIX`
+   (`src/config/plans.ts`), the two flags turn on together with RevenueCat and the paywall, and
+   a step that shows a Pro feature says so (the cornering page's chip). Whatever the plan, what a
+   step promises for every drive has to be true for every account, privacy is never Pro, and
+   every account's drives upload to be verified and ranked; no copy may suggest otherwise. The
+   app offers route trimming, not privacy zones (the zone maths in `src/drive/privacy.ts` has no
+   screen), so no copy may promise zones.
 
 ## Steps
 
@@ -63,9 +65,9 @@ is hidden where marked "—".
 | 8 | `/onboarding/focus` | Your focus | 8/13 | Single select, required. |
 | 9 | `/onboarding/focus-proof` | Focus proof | 9/13 | One variant per focus. |
 | 10 | `/onboarding/username` | Username | 10/13 | Live validation + availability. |
-| 11 | `/onboarding/trust` | Privacy reassurance | 11/13 | No form. |
+| 11 | `/onboarding/trust` | Privacy reassurance | 11/13 | What becomes public and what never does, and a Privacy Policy link. Asks 18+ and the Terms only when the safety step is off. |
 | 12 | `/onboarding/attribution` | How did you hear about us? | 12/13 | Single select, required. |
-| 13 | `/onboarding/safety` | Safety acknowledgement | 13/13 | Skipped when `SAFETY_ACKNOWLEDGEMENT` is false (total becomes 12). |
+| 13 | `/onboarding/safety` | Safety, age and Terms | 13/13 | Guidelines box, 18+ and licence box, Terms and Privacy Policy. Skipped when `SAFETY_ACKNOWLEDGEMENT` is false (total becomes 12, and the trust step asks instead). |
 | — | `/onboarding/setup` | Getting your car ready → You're all set | — | Real work (save, sync) behind a staged checklist; minimum ~3 s. |
 | — | `/onboarding/paywall` | Gapped Pro | — | Only when `ONBOARDING_PAYWALL`. Dismissible. |
 
@@ -81,18 +83,18 @@ Back returns to the previous step without clearing later answers.
 1. *Track every drive* / Your top speed and 0–60 times. Verified, then ranked. — **Get started**
    (It said "Top speed, 0–60 and every corner"; cornering G is Pro, and this page is the promise
    for every drive.)
-2. *See where you stack up* / Your drives. Your friends. Your place on the board. Card: "Top speed",
-   the person's country code or "Global", three rows. Real board rows when the server has three or
+2. *See where you stack up* / Your drives. Your friends. Your place on the board. Card: "Distance"
+   (the Ranks tab's default; it was "Top speed", and the first board anyone sees should not make a
+   contest of speed on public roads), the person's country code or "Global", three rows. Real board rows when the server has three or
    more; otherwise sample rows wearing the existing SAMPLE treatment. — **Next**
-3. PRO chip, then *See more in every drive.* / row label "Cornering G". Hero number counts
+3. *See more in every drive.* / row label "Cornering G". Hero number counts
    0.12 g → 0.94 g; an arc marker (0 at the top, 0.5 and 1.0 g each side, green centre → yellow →
    red edges) swings right; the car silhouette rolls a few degrees; footer "Peak cornering G" —
-   Left 0.88 g | Right 0.94 g. One ~2 s ease-in-out timeline, holds at the end. Cornering G is
-   Pro, so the page's copy names its matrix row (`proFeature: 'advancedTelemetry'`, tested to be a
-   Pro-only row) and the outlined lime PRO chip (`<ProBadge />`) sits over the title. VoiceOver
-   hears the title as "Gapped Pro. See more in every drive.", the button's page announcement the
-   same, and the demo as "Gapped Pro demo. Cornering G: …". The chip marks the plan, not this
-   account's access, so it shows whether or not `PRO_LIMITS_ENFORCED` is on. — **Next**
+   Left 0.88 g | Right 0.94 g. One ~2 s ease-in-out timeline, holds at the end. In v1 it is a
+   plain demo: every account has cornering G. The page's copy still names its matrix row
+   (`proFeature: 'advancedTelemetry'`), so when `SHOW_PRO` turns on the outlined lime PRO chip
+   (`<ProBadge />`) sits over the title and VoiceOver hears "Gapped Pro. See more in every
+   drive." (`marksPro`, `src/onboarding/intro/introTimeline.ts`). — **Next**
 4. *Built by drivers* / From drivers. For drivers. Large white car silhouette. — **Set up my car**
 
 **Choose your ride** / Start with the car you drive most. Car | Motorbike. Fields "Select make",
@@ -115,16 +117,14 @@ drivers of the same kind (cars, or bikes), so the share line names the kind.
 
 **Add more cars?** / Optional. Your main car is set, so you can keep going and build your garage
 later. Card: silhouette, "{Make} {Model}" (or nickname), lime caption "Main car". Row: "+ Add
-another car". Continue. A Free garage holds `FREE_LIMITS.garageVehicles` (1, the main car; an
-unlimited garage is Pro). With `PRO_LIMITS_ENFORCED` off, which it is until purchases ship, the
-step never caps. On, a full Free garage swaps the add row for a PRO row, "More cars come with
-Gapped Pro.", which leads to Gapped Pro (`useGoPro`), and the subtitle stops at "so you can keep
-going." Extras already added stay listed and removable
-(`src/onboarding/vehicle/garageAccess.ts`). `useGoPro` pushes `/plans`, which sits outside the
-onboarded guard in `app/_layout.tsx` for exactly this, so the PRO row lands there and Back returns
-to the step. When the paywall replaces `/plans` as the destination, it needs the same treatment.
+another car". Continue. In v1 the step never caps: `PRO_LIMITS_ENFORCED` is off, so every account
+can add as many vehicles as it likes, and nothing on the step mentions Pro. When the limits turn
+on (with `SHOW_PRO` and purchases), a Free garage holds `FREE_LIMITS.garageVehicles` (1, the main
+car) and a full one swaps the add row for a PRO row that leads to Gapped Pro (`useGoPro`); extras
+already added stay listed and removable (`src/onboarding/vehicle/garageAccess.ts`).
 
-**Add a car photo** / Make it yours, or keep the illustration. **Add photo** (white pill),
+**Add a car photo** / Make it yours, or keep the illustration. The photo stays on the phone (the
+app's Documents folder); it is never uploaded, and the privacy policy says so. **Add photo** (white pill),
 **Keep current image** (dark pill). After a pick the photo replaces the silhouette and Continue
 appears.
 
@@ -150,22 +150,24 @@ way the OS dialog is answered, the card shows the answer for a moment and the st
 refusal is a choice, not an error, and Back finds **Open Settings** waiting.
 
 **Focus.** Eyebrow "YOUR FOCUS". *What matters to your drive?* / Choose what you want to explore
-after each drive. Rows: Top speed — Track your verified top speed · 0–60 — Time your launches ·
-Local ranking — See where you rank · Beat friends — Compare real drive stats.
+after each drive. Rows: Top speed — Verified, on tracks and closed roads · 0–60 — Your
+acceleration, measured · Local ranking — See where you rank · Beat friends — Compare real drive
+stats. (The words describe what is measured, never a reason to go fast; the stored keys are
+unchanged. Source of truth: `FOCUS_OPTIONS`, `src/onboarding/flow.ts`.)
 
 **Focus proof** (pill repeats the focus):
 - Top speed: *Your top speed, verified* / Every run is re-checked on our servers before it counts.
-  No spoofed GPS, no typed-in numbers. Visual: a board row with the VERIFIED chip — the Board
+  No spoofed GPS, no typed-in numbers, and no top speed over its country's ranking limit makes the boards. Visual: a board row with the VERIFIED chip — the Board
   tab's own first sample row (`sample_driver_1`, BMW M240i, 82 mph), not the person's car: a
   verified speed beside a car they own would be an invented figure for that car.
 - 0–60: *Measured, not guessed* / From a standstill of at least two seconds, with a one-foot
-  rollout. No clean launch, no number. Visual: a sample timer running to 0–60, labelled sample.
+  rollout. No clean start, no number. Visual: a sample timer running to 0–60, labelled sample.
 - Local ranking: *Your country, your board* / Every verified run places on your country's board
   and the global one, so you can see where you and your car stand. Visual: sample rank card, "#7
-  of 48 drivers". Not class: class brackets are Pro in the published matrix, board placement is
-  Free.
-- Beat friends: *Friends make it a race* / Add friends by username and race their real drive stats.
+  of 48 drivers".
+- Beat friends: *See how you compare* / Add friends by username and compare real drive stats.
   Following is one-way, so nobody lands on a stranger's screen. Visual: sample friends board.
+  (It said "Friends make it a race"; friends compare, they do not race.)
 Three lime icons under every variant: Real drive data · Progress history · Ranking context.
 Every figure on these cards is labelled SAMPLE (and spoken as one), and every sample speed is a
 road speed no faster than the Board tab's own sample: this step comes just before the safety
@@ -173,24 +175,32 @@ acknowledgement.
 
 **Username.** *Choose a username* / This is how you'll appear on the leaderboards. Empty avatar
 circle. Field "@" + "username". Helper: 3–20 lowercase letters, numbers or underscores. Errors
-(orange border + caption): "That username is already taken." / "Use 3–20 lowercase letters,
-numbers or underscores." Continue enables when valid and available (or unknown offline).
+(orange border + caption): "That username is already taken." / "That username isn't allowed.
+Pick another." (the server's denylist, rule 6) / "Use 3–20 lowercase letters, numbers or
+underscores." Continue enables when valid and available (or unknown offline).
 
 **Trust.** Shield in a grey circle. *Thanks for trusting us.* Card with lime lock: "Your privacy
-matters to us." / "Your route is trimmed at both ends before anyone sees it. No ads, and your data
-is never sold." (The first draft promised "you choose what appears on your profile. Change it any
-time in Settings"; Settings has no profile controls, so that sentence waits until it does.) It
-makes no promise that drives stay on the phone, and must not: every account's drives upload to be
-verified, and Settings says so under Privacy (rule 7).
+matters to us." / "No ads, and your data is never sold. A route you choose to share is trimmed at
+both ends first." Card with an eye: "What others see" / "Your username, country and run results,
+including the date of each drive, are public on the leaderboards. Your routes never are." Then
+"Read the Privacy Policy" (a link). Every sentence matches `docs/PRIVACY.md`. It makes no promise
+that drives stay on the phone, and must not: every account's drives upload to be verified, and
+Settings says so under Privacy (rule 7). With the safety step off, this step also asks for the
+18+ box and the Terms (rule 4).
 
 **Attribution.** *How did you hear about us?* TikTok, App Store, A friend, X / Twitter, Other,
 Reddit, YouTube, Instagram (brand marks from Simple Icons, CC0). Selected row: white, black label,
 check. **Continue →** grey until a choice; the arrow is drawn (`Button`'s `trailing`), so VoiceOver
 says "Continue", not "rightwards arrow".
 
-**Safety.** The existing acknowledgement, restyled to this flow: the same four guidelines with
-drawn lime glyphs in place of their emoji, the same tickbox and legal line. The button reads
-**I agree**, since the next screen is setup, not a drive.
+**Safety.** *Before you drive.* The guidelines with drawn lime glyphs: "Top-speed and 0–60 runs
+belong on tracks and closed roads. Always obey speed limits.", then the original four (obey
+traffic laws and speed limits, start and stop only while parked, use a phone holder, never touch
+the phone while driving). Two boxes, both required: "I acknowledge these guidelines and agree to
+drive responsibly." and "I'm 18 or older and hold a valid driving licence." Then "By continuing
+you agree to the Terms of Use and Privacy Policy" (both links) and the legal line. The button
+reads **I agree**, since the next screen is setup, not a drive. Copy:
+`src/onboarding/place/consentCopy.ts`.
 
 **Setup.** Wordmark. *Getting your car ready.* Silhouette (or photo), make over model. "Making it
 yours" with a lime percent. Checklist, ticking as the percent crosses each: Your car · Your drive
@@ -198,7 +208,7 @@ preferences (Your units. Your country. Your way.) · Your stats · Your rankings
 (Keeping everything ready for your first drive.). Then *You're all set.* / Your next drive starts
 here. "Ready to drive 100%" and **Continue**.
 
-**Paywall** (flagged). Wordmark, close button, a real `<ShareCard>` rendered from a sample drive
+**Paywall** (flagged; off in v1 and never reached, since `ONBOARDING_PAYWALL` is false). Wordmark, close button, a real `<ShareCard>` rendered from a sample drive
 (labelled sample, GAPPED badge on, as every plan draws it) as the hero, then *See more in every
 drive* (the carousel's Pro page, closed here) / "Pro adds your full drive history, cornering G,
 class brackets and clean share cards. Recording and the boards stay free." Plan cards Monthly
@@ -270,6 +280,8 @@ All in `supabase/migrations/0017_onboarding_social_proof.sql`, which explains ea
   primary row of the driver, so make_popularity has one main car to count. Identity pushes run
   one at a time so two overlapping pushes cannot demote each other's car. The demotion is served
   by `vehicles_profile_id_idx`.
-- 0017 is applied to the local stack only. Until `supabase db push`, the cloud project answers the
-  two RPCs with PGRST202 and the screens show their early variants; answer writes fail quietly and
-  are retried on every sync pass.
+- `onboarding_answers.terms_accepted_at` (migration 0019) records when the Terms were accepted:
+  sent with the answers, never cleared by a later null write, never later than the server's clock.
+- On a project that lacks 0017 (check `supabase migration list --linked`), the two RPCs answer
+  PGRST202 and the screens show their early variants; answer writes fail quietly and are retried
+  on every sync pass. v1 needs every migration up to 0021 (`docs/LAUNCH.md`).

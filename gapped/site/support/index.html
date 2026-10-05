@@ -1,0 +1,62 @@
+<!doctype html>
+<!--
+  The support page the app's "Contact us" and "Leave feedback" rows open
+  (SUPPORT_URL in src/config/links.ts). It is the only place the contact
+  address appears, filled from site/site.config.json by
+  scripts/build-legal-pages.mjs, which writes site/dist/support/index.html.
+-->
+<html lang="en-GB">
+<head>
+{{HEAD}}
+<title>Support · Gapped</title>
+<meta name="description" content="How to contact Gapped, delete your account or a drive, report or hide a driver, and why Gapped asks for location access.">
+</head>
+<body>
+{{HEADER}}
+{{DRAFT_BANNER}}
+<main class="wrap">
+<h1>Support</h1>
+<p class="lede">Help with Gapped, and how to reach us.</p>
+
+<h2 id="contact">Contact us</h2>
+<p>Email {{CONTACT_EMAIL}} with questions, feedback or problems. If your message is about your account or your data, include your <a href="#account-id">Account ID</a> so we can find it.</p>
+<p>Requests about your data (a copy, a correction or deletion) are answered within one month. The <a href="../privacy/#your-choices-and-rights">Privacy Policy</a> explains your rights and how we confirm an account is yours.</p>
+
+<h2 id="delete-account">Delete your account</h2>
+<p>In the app, open the <strong>You</strong> tab, tap <strong>Settings</strong>, then <strong>Delete account</strong>. Your profile, drives, results on the boards, vehicles, friends and hidden drivers are removed from our servers and from your phone straight away. It cannot be undone.</p>
+<p><strong>Removing the app does not delete your account.</strong> There is no sign-in, so once the app is gone you cannot get back into the account. Delete it in Settings first. If you have already removed the app, email us your username and, if you have it, your Account ID.</p>
+
+<h2 id="delete-drive">Delete a drive</h2>
+<p>Open the drive from your list on the <strong>Driving</strong> or <strong>You</strong> tab and tap <strong>Delete drive</strong>. It is removed from our servers, along with its results on the boards, and from your phone.</p>
+
+<h2 id="report-hide">Report or hide a driver</h2>
+<p>On the <strong>Ranks</strong> tab or in your friends list, tap <strong>⋯</strong> beside another driver (or press and hold their row), then choose <strong>Report driver</strong> or <strong>Hide this driver</strong>.</p>
+<ul>
+<li><strong>Report</strong> a username that is offensive, a driver you think is cheating, or someone impersonating another person. We review every report within 24 hours. The driver is never told who reported them.</li>
+<li><strong>Hide</strong> a driver to remove them from your boards and lists. To show them again, go to <strong>Settings</strong> then <strong>Hidden drivers</strong>.</li>
+</ul>
+
+<h2 id="account-id">Find your Account ID</h2>
+<p>Open the <strong>You</strong> tab and tap <strong>Settings</strong>. Your Account ID is under <strong>About</strong>; tap it to copy or send it. It is a random code that identifies your account to us; it cannot be used to sign in as you.</p>
+
+<h2 id="location">Why Gapped asks for "Always" location</h2>
+<p>Gapped records your location <strong>only during a drive</strong>: one you start with <strong>Start drive</strong>, or one automatic detection starts while the app is open. Nothing is recorded between drives.</p>
+<p>Allowing <strong>Always</strong> lets a drive keep recording when your screen locks or you switch to another app, so the whole journey is captured. While it records, iOS shows its location indicator. Without Always, a drive records only while Gapped is on screen. You can change this at any time in the iPhone's <strong>Settings</strong>, under <strong>Gapped</strong>, then <strong>Location</strong>.</p>
+
+<h2 id="results">Why a drive is unverified or not ranked</h2>
+<p>Our server recalculates every drive from its raw GPS points and checks that it looks like a real drive. A drive that is very short, has a weak GPS signal or does not pass a check is marked unverified. A top speed above the ranking limit for your country is never ranked on the public boards: it stays in your own history, marked "not ranked". The ranking limit is the highest speed limit anywhere in your country, or 130 km/h where your country has no general limit or we have no figure for it. It is never a speed to drive at: the limit on the road you are on always applies.</p>
+
+<h2 id="age">Who Gapped is for</h2>
+<p>Gapped is only for drivers aged 18 and over with a valid driving licence.</p>
+
+<p class="safety"><strong>Drive safely.</strong> Obey traffic laws and speed limits. Start and end a drive only when parked, keep your phone in a holder, and never touch it while driving. Top-speed and 0–60 runs belong on a track or a closed road, never a public road.</p>
+
+<ul class="links">
+<li><a href="../privacy/">Privacy Policy</a></li>
+<li><a href="../terms/">Terms of Use</a></li>
+<li><a href="../acknowledgements/">Acknowledgements</a></li>
+</ul>
+</main>
+{{FOOTER}}
+</body>
+</html>

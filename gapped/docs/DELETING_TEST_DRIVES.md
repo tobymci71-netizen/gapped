@@ -29,11 +29,15 @@ can, and that is what this document is for.
 
 ---
 
-## What already existed
+## In the app
 
-**Nothing in the app deletes a drive.** `drives` grants `DELETE` to
-`authenticated` and RLS scopes it to your own rows, so the capability is there —
-but no screen calls it. Drive detail (`app/drive/[id].tsx`) only reads.
+**For one drive, use the app.** Open the drive and tap **Delete drive**
+(`app/drive/[id].tsx`, `src/drive/deleteDrive.ts`). It calls the function below
+for that one drive, then removes the phone's copy; if the server cannot be
+reached nothing is touched, and the app says so. The SQL below is for a batch,
+or for drives on a phone you no longer have.
+
+## Why a plain delete is not enough
 
 What a raw `DELETE FROM drives` would do:
 
@@ -47,25 +51,25 @@ What a raw `DELETE FROM drives` would do:
 Achievements hang off `profile_id`, never off `drive_id`, and `grantAchievements`
 upserts them with `ignoreDuplicates: true` — written once, never re-evaluated.
 
-So a plain delete leaves you holding a "Fastest in country" trophy for a run
-that no longer exists, and the driver who is genuinely top now will never
-receive it, because granting only fires during verification. The board would be
-emptier and *disagree with the achievements next to it*.
+So a plain delete leaves you holding an achievement for a run that no longer
+exists. (It was worst for "Fastest in country", which named a board position;
+that achievement was retired in v1 and its rows deleted by migration 0020.) The
+board would be emptier and *disagree with the achievements next to it*.
 
 ---
 
 ## The function
 
 Migration `0014` adds `delete_drives_and_reconcile(uuid[], boolean)`. It deletes
-your drives, then re-derives each of the four achievement conditions and revokes
-any that no longer hold:
+your drives, then re-derives each achievement condition and revokes any that no
+longer hold:
 
 | Achievement | Kept only if |
 | --- | --- |
 | `first_verified_run` | ≥ 1 verified drive remains |
 | `ten_verified_runs` | ≥ 10 verified drives remain |
 | `first_measured_launch` | some remaining drive has a 0-60 |
-| `country_number_one` | you still top your country's all-time verified top-speed board |
+| `country_number_one` | retired in v1: no longer granted, and 0020 deleted every row, so there is nothing left to revoke |
 
 It **revokes rather than repoints**: a payload records the run that earned it,
 and rewriting it to name a different run would invent a history that never
@@ -80,20 +84,16 @@ nothing rather than erroring — asserted by a test.
 
 ### Deploy it
 
-Not yet applied to the cloud project. One command:
-
-```bash
-supabase db push
-```
-
-That applies `0014` only (`0001`–`0013` are already there).
+It ships with every migration up to `0021`, which v1 needs anyway
+(`docs/LAUNCH.md`, step 5). Check with `supabase migration list --linked`.
 
 ---
 
 ## Identifying your test drives
 
-You are the only real account; the `buddy_*` profiles are seeded fixtures. Start
-by listing what you have, newest first:
+Select by **your own** username or Account ID, never anyone else's: once the app
+is public, the project holds real drivers' drives. (Before launch the `buddy_*`
+profiles were seeded fixtures.) Start by listing what you have, newest first:
 
 ```bash
 supabase db query --linked "
@@ -133,38 +133,49 @@ pre-fix development data from post-fix data.
 
 ## Deleting
 
+The function deletes only **the caller's** drives: it reads the account from
+`auth.uid()`, which is empty when you run SQL as the database owner, so on its
+own it would stop with `not authenticated`. Each query below therefore says who
+"you" are first, with your Account ID (the app shows it in Settings, under
+About). Run them in the Supabase dashboard's SQL Editor, which avoids shell
+quoting.
+
 **Dry run first — it is the default**, so a forgotten argument reports rather
 than deletes:
 
-```bash
-supabase db query --linked "
+```sql
 select delete_drives_and_reconcile(array[
   '00000000-0000-0000-0000-000000000000',
   '11111111-1111-1111-1111-111111111111'
-]::uuid[]);"
+]::uuid[])
+from (select set_config('request.jwt.claims', '{"sub": "YOUR_ACCOUNT_ID"}', true)) as as_you;
 ```
 
 ```json
 { "dry_run": true, "would_delete_drives": 2,
-  "would_delete_leaderboard_entries": 6,
+  "would_delete_leaderboard_entries": 30,
   "note": "Re-run with p_dry_run := false to apply." }
 ```
 
-Check the counts look right — three board entries per drive is normal
-(`top_speed`, `distance`, `zero_to_60`) plus country-scoped duplicates. Then:
+Check the counts look right. A verified drive writes one board entry per
+metric (`top_speed`, `distance`, `zero_to_60`), per scope (global, and your
+country if you have one) and per period (day, week, month, all): up to 24. Fewer
+is normal: no 0-60 means no `zero_to_60` rows, and a top speed above the
+country's ceiling (`supabase/functions/_shared/speedLimits.ts`) writes no
+`top_speed` rows. Then:
 
-```bash
-supabase db query --linked "
+```sql
 select delete_drives_and_reconcile(array[
   '00000000-0000-0000-0000-000000000000',
   '11111111-1111-1111-1111-111111111111'
-]::uuid[], false);"
+]::uuid[], false)
+from (select set_config('request.jwt.claims', '{"sub": "YOUR_ACCOUNT_ID"}', true)) as as_you;
 ```
 
 ```json
 { "dry_run": false, "deleted_drives": 2,
-  "deleted_leaderboard_entries": 6,
-  "revoked_achievements": ["country_number_one"],
+  "deleted_leaderboard_entries": 30,
+  "revoked_achievements": ["first_measured_launch"],
   "verified_drives_remaining": 4 }
 ```
 
@@ -172,15 +183,15 @@ select delete_drives_and_reconcile(array[
 
 If the entire test session was bad, select by time instead of by id:
 
-```bash
-supabase db query --linked "
+```sql
 select delete_drives_and_reconcile(
   (select array_agg(d.id)
-     from drives d join profiles p on p.id = d.profile_id
-    where p.username = 'YOUR_USERNAME'
+     from drives d
+    where d.profile_id = 'YOUR_ACCOUNT_ID'
       and d.started_at >= '2026-08-12 18:00:00+01'),
   false
-);"
+)
+from (select set_config('request.jwt.claims', '{"sub": "YOUR_ACCOUNT_ID"}', true)) as as_you;
 ```
 
 ---
@@ -211,8 +222,8 @@ is for when you want to keep the account and drop a batch.
 
 ---
 
-## Not verified
+## Tests
 
-The function is covered by 10 pgTAP assertions against local Postgres, including
-the cross-user attempt. It has **not** been run against the cloud project — the
-migration is not yet pushed there, and there are no real drives to delete yet.
+The function is covered by pgTAP against local Postgres
+(`supabase/tests/delete_drives_reconcile.test.sql`), including the cross-user
+attempt, and the in-app path by `src/lib/__tests__/deleteDrive.test.ts`.
