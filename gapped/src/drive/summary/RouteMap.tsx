@@ -4,7 +4,6 @@ import {
   Circle,
   Group,
   LinearGradient,
-  Mask,
   Path,
   Points,
   RadialGradient,
@@ -231,24 +230,13 @@ export function RouteMap({ fixes, width, unitPref, spokenDistance }: Props) {
       accessibilityLabel={describe}
     >
       <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
-        <Mask
-          mode="alpha"
-          mask={
-            <Rect x={0} y={0} width={width} height={height}>
-              <LinearGradient
-                start={vec(0, 0)}
-                end={vec(0, height)}
-                positions={[0, FADE_IN, FADE_OUT, 1]}
-                colors={[
-                  alpha(color.canvas, 0),
-                  color.canvas,
-                  color.canvas,
-                  alpha(color.canvas, 0),
-                ]}
-              />
-            </Rect>
-          }
-        >
+        {/*
+          A layer the fade is cut out of. This was a <Mask mode="alpha">, which
+          drew nothing at all on device: the summary's route, markers and
+          ground were all invisible, only the running light (drawn outside it)
+          showed. dstIn keeps the layer only where the gradient is opaque.
+        */}
+        <Group layer>
           {/* The ground: a night panel with a fine dot texture and the scale grid. */}
           <Rect x={0} y={0} width={width} height={height} color={alpha(color.surface1, 0.8)} />
           <Points
@@ -285,7 +273,21 @@ export function RouteMap({ fixes, width, unitPref, spokenDistance }: Props) {
             : null}
           <Marker at={start} kind="start" />
           {loop ? null : <Marker at={end} kind="finish" />}
-        </Mask>
+          {/* The top and bottom fades (the mock's mask). */}
+          <Rect x={0} y={0} width={width} height={height} blendMode="dstIn">
+            <LinearGradient
+              start={vec(0, 0)}
+              end={vec(0, height)}
+              positions={[0, FADE_IN, FADE_OUT, 1]}
+              colors={[
+                alpha(color.canvas, 0),
+                color.canvas,
+                color.canvas,
+                alpha(color.canvas, 0),
+              ]}
+            />
+          </Rect>
+        </Group>
       </Canvas>
 
       {live ? <RunningLight path={model.path} run={run} width={width} height={height} /> : null}

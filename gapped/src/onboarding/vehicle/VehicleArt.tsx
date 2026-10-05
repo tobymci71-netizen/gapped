@@ -124,6 +124,9 @@ export function VehicleArt({
             entering={fade}
             exiting={FadeOut.duration(duration.fast)}
             style={[styles.silhouette, { top: (height - art) / 2 }]}
+            // Overhangs the frame above and below; never takes a touch meant
+            // for what sits there.
+            pointerEvents="none"
             importantForAccessibility="no-hide-descendants"
             accessibilityElementsHidden
           >
@@ -147,8 +150,10 @@ export function VehicleArt({
 }
 
 const styles = StyleSheet.create({
-  // Clips the silhouette's empty canvas, never the drawing (see the window).
-  frame: { overflow: 'hidden', alignItems: 'center' },
+  // Not clipped: the silhouette's canvas is taller than the window, but it is
+  // transparent there, and a clip cut the tail light's glow off in a hard
+  // square at the frame's side. The photo clips itself (photoWrap).
+  frame: { alignItems: 'center' },
   silhouette: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   photoWrap: { overflow: 'hidden', backgroundColor: color.surface2 },
   photo: { width: '100%', height: '100%' },

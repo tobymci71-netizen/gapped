@@ -6,13 +6,21 @@ import { OnSurface, Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
 import { CheckBoxMark, panel, RowLight } from '@/onboarding/ui/choice';
 import { duration, easing } from '@/theme/motion';
-import { color, font, space } from '@/theme/tokens';
+import { color, font, space, type } from '@/theme/tokens';
 import type { ConsentLink } from './consentCopy';
 
 /** The box's side. */
 const BOX = 26;
 /** Apple's minimum touch target, for the links inside a sentence. */
 const HIT = 44;
+
+/** Stretches a link's touch area to HIT above and below its line of text. */
+const LINK_SLOP = {
+  top: (HIT - type.legal.lineHeight) / 2,
+  bottom: (HIT - type.legal.lineHeight) / 2,
+  left: space.xs,
+  right: space.xs,
+};
 
 /** Opens one of the public pages (src/config/links.ts) in the browser. */
 export function openPage(url: string): void {
@@ -90,6 +98,7 @@ export function LinkedSentence({
             accessibilityRole="link"
             accessibilityLabel={run.label}
             accessibilityHint="Opens in your browser"
+            hitSlop={LINK_SLOP}
             style={styles.link}
           >
             <Text variant="legal" style={styles.linkText}>
@@ -117,7 +126,10 @@ const styles = StyleSheet.create({
   sentence: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.xs },
   sentenceCentred: { justifyContent: 'center' },
   centred: { textAlign: 'center' },
-  link: { minHeight: HIT, justifyContent: 'center' },
+  // The 44pt target comes from hitSlop, not height: a 44pt-tall link made
+  // every line it sat on 44pt tall, and a sentence that wrapped read as two
+  // separate lines with a gap between them.
+  link: { justifyContent: 'center' },
   // White and underlined, as every link in the flow (NightLink): red is
   // light, and a link is not one. The underline says "link" to anyone.
   linkText: {

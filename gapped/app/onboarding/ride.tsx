@@ -19,7 +19,7 @@ import { raisedPanel } from '@/onboarding/ui/choice';
 import { VehicleFields } from '@/onboarding/vehicle/VehicleFields';
 import { discardVehiclePhoto } from '@/onboarding/vehicle/vehiclePhoto';
 import { useProfile, type VehicleKind } from '@/state/profile';
-import { color, font, space, textStyle, type } from '@/theme/tokens';
+import { color, font, inputText, space, type } from '@/theme/tokens';
 
 const KINDS: readonly Segment<VehicleKind>[] = [
   { key: 'car', label: 'Car' },
@@ -140,6 +140,7 @@ function NicknameField({
       </Text>
       <View style={styles.inputRow}>
         <TextInput
+          selectionColor={color.text1}
           value={value}
           onChangeText={onChange}
           onFocus={() => reveal(wrap.current)}
@@ -172,7 +173,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
     color: color.text1,
     fontFamily: font.bodyMedium,
-    ...textStyle(type.body),
+    ...inputText(type.body),
     // Android pads single-line inputs; the row already sets the height.
     paddingVertical: 0,
   },

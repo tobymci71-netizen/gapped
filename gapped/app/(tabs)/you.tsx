@@ -56,17 +56,7 @@ import {
 import { metres, mps, seconds } from '@/types/units';
 import { useProfile } from '@/state/profile';
 import { useRecords } from '@/state/records';
-import {
-  alpha,
-  color,
-  font,
-  gutter,
-  radius,
-  slant,
-  space,
-  textStyle,
-  type,
-} from '@/theme/tokens';
+import { alpha, color, font, gutter, inputText, radius, slant, space, type } from '@/theme/tokens';
 import { DriverHeader } from '@/you/DriverHeader';
 import { YouIcon, type YouIconName } from '@/you/youIcons';
 
@@ -295,6 +285,7 @@ function UsernameTakenCard({ taken }: { taken: string | null }): React.JSX.Eleme
           @
         </Text>
         <TextInput
+          selectionColor={color.text1}
           style={styles.takenInput}
           placeholder="username"
           placeholderTextColor={color.text3}
@@ -849,7 +840,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: color.text1,
     fontFamily: font.body,
-    ...textStyle(type.body),
+    ...inputText(type.body),
     paddingVertical: space.sm,
   },
 

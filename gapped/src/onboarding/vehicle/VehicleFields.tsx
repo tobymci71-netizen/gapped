@@ -6,7 +6,7 @@ import { Text } from '@/components/Text';
 import { raisedPanel } from '@/onboarding/ui/choice';
 import { NightLink } from '@/onboarding/ui/StepTitle';
 import type { VehicleKind } from '@/state/profile';
-import { color, font, space, textStyle, type } from '@/theme/tokens';
+import { color, font, inputText, space, type } from '@/theme/tokens';
 import { MAKE_NOT_ALLOWED } from '@/lib/username';
 import { modelsForMake, popularMakes, searchMakes, searchModels } from '@/vehicles/catalog';
 import {
@@ -204,6 +204,7 @@ function TypedFields({ kind, draft, onChange }: Props) {
     <>
       <View ref={makeWrap} style={styles.field}>
         <TextInput
+          selectionColor={color.text1}
           ref={makeInput}
           value={draft.make}
           onChangeText={(make) => onChange({ ...draft, make })}
@@ -223,6 +224,7 @@ function TypedFields({ kind, draft, onChange }: Props) {
       </View>
       <View ref={modelWrap} style={styles.field}>
         <TextInput
+          selectionColor={color.text1}
           ref={modelInput}
           value={draft.model}
           onChangeText={(model) => onChange({ ...draft, model })}
@@ -261,7 +263,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     color: color.text1,
     fontFamily: font.bodyMedium,
-    ...textStyle(type.body),
+    ...inputText(type.body),
     // Android pads single-line inputs; the row already sets the height.
     paddingVertical: 0,
   },

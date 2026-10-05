@@ -69,6 +69,10 @@ line height.
 - **Dynamic Type.** Body roles are never capped. Wide variants default to a cap
   (`maxFontScale`: display 1.3, headline 1.5, titles 1.6); chips 2. Pass
   `maxFontSizeMultiplier` to override.
+- **Text fields.** A single-line `TextInput` takes `inputText(type.body)` (size
+  only), not `textStyle()`: a line height on a one-line iOS field pushes the
+  text down and cut off Archivo's descenders. Every field sets
+  `selectionColor={color.text1}`, not the iOS blue caret.
 - **No tiny uppercase labels.** Labels are sentence case, in mono or `label`.
 - **No raw timestamps as titles.** `driveTitle()` (`src/lib/driveTitle.ts`)
   gives `{ title: 'Monday afternoon', meta: 'Mon 5 Oct · 13:00 · 25 min',
@@ -85,7 +89,9 @@ acknowledgements page.
 The logo leans about 14°. `slant.transform` (`skewX(-14deg)`) is used for
 buttons, tags, the distance plate, stat dividers, the tab light and the board's
 selected-tab underline. Skew the **plate**, never the text on it. A hand-drawn
-parallelogram overhangs by `height × slant.tan` per side. The logo's streak tip
+parallelogram overhangs by `height × slant.tan` per side. Inside a scroll
+view, which clips at its edges, inset a full-width slanted row by that much or
+its outer ends are cut square (`SegmentedControl` does). The logo's streak tip
 (`StreakArrow`) is the button arrow and the head of every leaderboard bar.
 
 ## Components
@@ -95,7 +101,7 @@ parallelogram overhangs by `height × slant.tan` per side. The logo's streak tip
 | `Button` | `label, onPress, variant: 'primary' \| 'secondary' \| 'danger' \| 'light', disabled, style, accessibilityLabel, trailing?(ink), arrow?` | Parallelogram plate. Primary: red gradient, streak arrow, soft red spill (the only glowing button). Danger: outline. `arrow` defaults on for primary only. |
 | `Card` | `ViewProps` | Night panel, hairline, radius 6. Use for real objects, not for every number. |
 | `Stat` | `label, value, unit?, accent?, divider?, spoken?` | Open on the night: mono label, wide-italic figure. `accent` = a red light before the label; `divider` = slanted hairline before it. One VoiceOver sentence ("Top speed, 47 miles per hour"); `spoken` overrides the figure's words. `ProLockedStat` takes `divider` too. |
-| `Screen` | `children, scroll?, style?, footer?, backdrop?: 'top' \| 'horizon' \| 'plain'` | Sits on `NightBackdrop` ('top' by default). |
+| `Screen` | `children, scroll?, style?, footer?, backdrop?: 'top' \| 'horizon' \| 'plain'` | Sits on `NightBackdrop` ('top' by default). Scrolling, a scrim fades in over the status bar so content never runs under the clock. |
 | `SettingsRow` | `icon: IconName, label, value?, destructive?, onPress?` | Stroke icon, no tile, never an emoji. `value` is data, so mono. `SettingsSection` (wide-italic `SectionHeader` title) is for a screen whose other sections use `SectionHeader` too (the drive summary); Settings itself groups its rows under mono labels. |
 | `Icon` (`components/icons.tsx`) | `name: IconName, size?, color?, strokeWidth?, accessibilityLabel?` | 24-grid stroke icons. Decorative unless labelled. |
 | `TabIcon` | `name, focused` | White when active, with the red slanted light on the bar's top edge. |
@@ -122,6 +128,12 @@ restores after a group with an `origin` but only saves when the group has one
 of those, so the unmatched restore pops the parent's transform, and every
 sibling drawn after it lands in raw artboard coordinates. `NightVehicle`
 passes an origin only with its roll for this reason.
+
+**Skia gotcha 2.** `<Mask>` drew nothing at all on device: the drive
+summary's route, markers and ground vanished inside one. To fade a layer, draw
+it in `<Group layer>` and finish with a gradient `Rect` at `blendMode="dstIn"`
+(`RouteMap`). And a blurred glow near a canvas's edge stops in a hard square
+there: let the canvas bleed past its box (`CarSilhouette`) rather than clip.
 
 ## Screens
 

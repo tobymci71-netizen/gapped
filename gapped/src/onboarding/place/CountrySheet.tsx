@@ -17,7 +17,7 @@ import { Text } from '@/components/Text';
 import { countryByCode, type Country, type CountryCode } from '@/data/countries';
 import { searchCountries } from '@/data/countrySearch';
 import { haptic } from '@/lib/haptics';
-import { color, font, glyph, radius, space, textStyle, type } from '@/theme/tokens';
+import { color, font, glyph, inputText, radius, space, textStyle, type } from '@/theme/tokens';
 import { countryRegion } from './countryDots';
 import { deviceCountry } from './deviceCountry';
 import { CheckIcon, CloseIcon, MagnifierIcon } from './icons';
@@ -166,6 +166,7 @@ export function CountrySheet({ visible, selected, onSelect, onClose }: Props) {
           <View style={styles.searchField}>
             <MagnifierIcon />
             <TextInput
+              selectionColor={color.text1}
               style={styles.input}
               placeholder="Search country"
               placeholderTextColor={color.text2}
@@ -226,7 +227,7 @@ function CountryRow({
         </Text>
         {suggested || region ? (
           <Text variant="mono" numberOfLines={1}>
-            {suggested ? <Text style={styles.suggested}>Suggested{region ? ' · ' : ''}</Text> : null}
+            {suggested ? <Text variant="mono" style={styles.suggested}>Suggested{region ? ' · ' : ''}</Text> : null}
             {region}
           </Text>
         ) : null}
@@ -280,7 +281,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     color: color.text1,
     fontFamily: font.body,
-    ...textStyle(type.body),
+    ...inputText(type.body),
     // Android centres single-line inputs badly without this.
     paddingVertical: 0,
   },

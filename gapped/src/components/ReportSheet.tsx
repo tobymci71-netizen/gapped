@@ -213,6 +213,7 @@ function ReportBody({
           })}
         </View>
         <TextInput
+          selectionColor={color.text1}
           value={details}
           onChangeText={setDetails}
           placeholder="Anything that would help us check (optional)"

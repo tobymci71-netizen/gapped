@@ -848,80 +848,90 @@ export function CarSilhouette({
 
   if (!geo) return <View style={{ width: size, height: size }} />;
 
+  // The canvas overhangs the box on every side so the lamp's glow and the
+  // ground shadow fade out instead of stopping in a hard square at its edge.
+  const bleed = Math.ceil(geo.blur * 4);
+  const side = size + bleed * 2;
+
   return (
     <Animated.View style={[{ width: size, height: size }, fadeStyle]}>
-      <Canvas style={{ width: size, height: size }}>
-        <Path path={geo.ground} style="fill" color={stroke} opacity={groundOpacity}>
-          <BlurMask blur={geo.blur} style="normal" />
-        </Path>
+      <Canvas
+        pointerEvents="none"
+        style={{ position: 'absolute', left: -bleed, top: -bleed, width: side, height: side }}
+      >
+        <Group transform={[{ translateX: bleed }, { translateY: bleed }]}>
+          <Path path={geo.ground} style="fill" color={stroke} opacity={groundOpacity}>
+            <BlurMask blur={geo.blur} style="normal" />
+          </Path>
 
-        {/* body wash — only meaningful once the outline has closed */}
-        <Path path={geo.body} style="fill" color={stroke} opacity={fillOpacity} />
+          {/* body wash — only meaningful once the outline has closed */}
+          <Path path={geo.body} style="fill" color={stroke} opacity={fillOpacity} />
 
-        <Path
-          path={geo.body}
-          style="stroke"
-          strokeWidth={geo.stroke}
-          strokeCap="round"
-          strokeJoin="round"
-          color={stroke}
-          start={0}
-          end={bodyEnd}
-        />
+          <Path
+            path={geo.body}
+            style="stroke"
+            strokeWidth={geo.stroke}
+            strokeCap="round"
+            strokeJoin="round"
+            color={stroke}
+            start={0}
+            end={bodyEnd}
+          />
 
-        <Path
-          path={geo.detail}
-          style="stroke"
-          strokeWidth={geo.hairline}
-          strokeCap="round"
-          strokeJoin="round"
-          color={stroke}
-          opacity={0.72}
-          start={0}
-          end={detailEnd}
-        />
+          <Path
+            path={geo.detail}
+            style="stroke"
+            strokeWidth={geo.hairline}
+            strokeCap="round"
+            strokeJoin="round"
+            color={stroke}
+            opacity={0.72}
+            start={0}
+            end={detailEnd}
+          />
 
-        {geo.wheels.map((w, i) => (
-          <Group key={i} transform={wheelTransform} origin={w.origin} opacity={wheelOpacity}>
-            <Path path={w.tyre} style="stroke" strokeWidth={geo.stroke} color={stroke} />
-            <Path
-              path={w.hub}
-              style="stroke"
-              strokeWidth={geo.hairline}
-              color={stroke}
-              opacity={0.6}
-            />
-          </Group>
-        ))}
+          {geo.wheels.map((w, i) => (
+            <Group key={i} transform={wheelTransform} origin={w.origin} opacity={wheelOpacity}>
+              <Path path={w.tyre} style="stroke" strokeWidth={geo.stroke} color={stroke} />
+              <Path
+                path={w.hub}
+                style="stroke"
+                strokeWidth={geo.hairline}
+                color={stroke}
+                opacity={0.6}
+              />
+            </Group>
+          ))}
 
-        {lit ? (
-          <Group opacity={lampOpacity}>
-            <Line
-              p1={geo.lamp.p1}
-              p2={geo.lamp.p2}
-              strokeWidth={geo.lamp.width * 3}
-              strokeCap="round"
-              color={color.accent}
-              opacity={0.55}
-            >
-              <BlurMask blur={geo.blur * 1.2} style="normal" />
-            </Line>
-            <Line
-              p1={geo.lamp.p1}
-              p2={geo.lamp.p2}
-              strokeWidth={geo.lamp.width}
-              strokeCap="round"
-              color={color.accent}
-            />
-            <Line
-              p1={geo.lamp.p1}
-              p2={geo.lamp.p2}
-              strokeWidth={geo.lamp.width * 0.4}
-              strokeCap="round"
-              color={color.accentCore}
-            />
-          </Group>
-        ) : null}
+          {lit ? (
+            <Group opacity={lampOpacity}>
+              <Line
+                p1={geo.lamp.p1}
+                p2={geo.lamp.p2}
+                strokeWidth={geo.lamp.width * 3}
+                strokeCap="round"
+                color={color.accent}
+                opacity={0.55}
+              >
+                <BlurMask blur={geo.blur * 1.2} style="normal" />
+              </Line>
+              <Line
+                p1={geo.lamp.p1}
+                p2={geo.lamp.p2}
+                strokeWidth={geo.lamp.width}
+                strokeCap="round"
+                color={color.accent}
+              />
+              <Line
+                p1={geo.lamp.p1}
+                p2={geo.lamp.p2}
+                strokeWidth={geo.lamp.width * 0.4}
+                strokeCap="round"
+                color={color.accentCore}
+              />
+            </Group>
+          ) : null}
+        </Group>
       </Canvas>
     </Animated.View>
   );

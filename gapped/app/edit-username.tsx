@@ -18,7 +18,7 @@ import { USERNAME_SAVE_FAILED } from '@/lib/username';
 import { CheckGlyph } from '@/onboarding/identity/glyphs';
 import { useUsernameField } from '@/onboarding/identity/useUsernameField';
 import { useProfile } from '@/state/profile';
-import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
+import { color, font, inputText, radius, space, type } from '@/theme/tokens';
 
 /** The field's border, present in every state so turning orange never shifts the text. */
 const FIELD_BORDER = 1.5;
@@ -126,6 +126,7 @@ export default function EditUsernameScreen() {
           @
         </Text>
         <TextInput
+          selectionColor={color.text1}
           style={styles.input}
           value={value}
           // Shown as it will be stored, as on the onboarding step.
@@ -192,7 +193,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: color.text1,
     fontFamily: font.body,
-    ...textStyle(type.body),
+    ...inputText(type.body),
     paddingVertical: space.md,
   },
   caption: { marginTop: space.sm, color: color.text2 },

@@ -24,16 +24,7 @@ import { bracketKey, bracketLabel } from '@/vehicles/brackets';
 import { decodeVin, fetchPrimaryVehicle, setModified, VehicleSpecs } from '@/vehicles/specs';
 import { checkVin } from '@/vehicles/vin';
 import { duration } from '@/theme/motion';
-import {
-  color,
-  font,
-  gutter,
-  maxFontScale,
-  radius,
-  space,
-  textStyle,
-  type,
-} from '@/theme/tokens';
+import { color, font, gutter, inputText, maxFontScale, radius, space, type } from '@/theme/tokens';
 
 /** One line of the spec sheet: a mono label, the value against the right edge. */
 function SpecRow({ label, value }: { label: string; value: string }) {
@@ -435,6 +426,7 @@ export default function GarageScreen() {
               </Text>
               <WhyVin />
               <TextInput
+                selectionColor={color.text1}
                 value={vin}
                 onChangeText={(t) => {
                   setVin(t.toUpperCase());
@@ -537,7 +529,7 @@ const styles = StyleSheet.create({
     borderColor: color.hairline,
     color: color.text1,
     fontFamily: font.mono,
-    ...textStyle(type.callout),
+    ...inputText(type.callout),
     letterSpacing: 1,
   },
   decodeBtn: { marginTop: space.sm, marginBottom: space.xs },

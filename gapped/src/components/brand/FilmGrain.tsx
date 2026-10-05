@@ -16,15 +16,24 @@ import { ambient } from '@/theme/motion';
 
 /**
  * Noise to alpha, as the mockups' feColorMatrix does it: white everywhere,
- * alpha = 2.2 × noise − 1.1, so only the brighter half of the noise shows,
- * as specks. Skia's translate column is normalised (0–1), like SVG's.
+ * alpha = (2.2 × noise − 1.1) × opacity, so only the brighter half of the
+ * noise shows, as specks. Skia's translate column is normalised (0–1), like
+ * SVG's.
+ *
+ * The opacity has to be in the matrix. This filter writes alpha from the
+ * noise and ignores the alpha it is given, so an opacity on the paint or a
+ * parent group is thrown away — which is how the grain first shipped at
+ * several times its intended strength.
  */
-const GRAIN_MATRIX = [
-  0, 0, 0, 0, 1,
-  0, 0, 0, 0, 1,
-  0, 0, 0, 0, 1,
-  2.2, 0, 0, 0, -1.1,
-];
+export function grainMatrix(opacity: number): number[] {
+  const o = Math.min(1, Math.max(0, opacity));
+  return [
+    0, 0, 0, 0, 1,
+    0, 0, 0, 0, 1,
+    0, 0, 0, 0, 1,
+    2.2 * o, 0, 0, 0, -1.1 * o,
+  ];
+}
 
 /** The mockups' five jitter positions (pt), one every ambient.grainStep ms. */
 const OFFSETS: readonly (readonly [number, number])[] = [
@@ -93,10 +102,10 @@ export function FilmGrain({ opacity = 0.08, animated = true, style }: Props) {
     >
       {/* Fill paints the whole canvas; the group's transform moves only the
           noise underneath it, so the canvas never needs measuring. */}
-      <Group transform={transform} opacity={opacity}>
+      <Group transform={transform}>
         <Fill>
           <FractalNoise freqX={1} freqY={1} octaves={2} seed={7} />
-          <ColorMatrix matrix={GRAIN_MATRIX} />
+          <ColorMatrix matrix={grainMatrix(opacity)} />
         </Fill>
       </Group>
     </Canvas>

@@ -15,7 +15,7 @@ import { Entrance } from '@/components/Entrance';
 import { PressableScale } from '@/components/PressableScale';
 import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
-import { color, font, radius, space, type, textStyle } from '@/theme/tokens';
+import { color, font, inputText, radius, space, type } from '@/theme/tokens';
 import { exactEntry } from '@/vehicles/catalog';
 
 /**
@@ -141,6 +141,7 @@ export function SearchableListSheet({
         <View style={styles.searchField}>
           <Magnifier />
           <TextInput
+            selectionColor={color.text1}
             ref={inputRef}
             style={styles.input}
             placeholder={placeholder}
@@ -266,7 +267,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: color.text1,
     fontFamily: font.body,
-    ...textStyle(type.body),
+    ...inputText(type.body),
     // Android centres single-line inputs badly without this.
     paddingVertical: 0,
   },

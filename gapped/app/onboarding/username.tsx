@@ -25,7 +25,7 @@ import { useUsernameField } from '@/onboarding/identity/useUsernameField';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
 import { useProfile } from '@/state/profile';
 import { duration, easing } from '@/theme/motion';
-import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
+import { color, font, inputText, radius, space, type } from '@/theme/tokens';
 
 /** The empty avatar circle. */
 const AVATAR = 88;
@@ -146,6 +146,7 @@ export default function UsernameStep() {
           @
         </Text>
         <TextInput
+          selectionColor={color.text1}
           ref={input}
           style={styles.input}
           value={value}
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: color.text1,
     fontFamily: font.bodyMedium,
-    ...textStyle(type.body),
+    ...inputText(type.body),
     paddingVertical: space.md,
   },
   caption: { textAlign: 'center', color: color.text2 },

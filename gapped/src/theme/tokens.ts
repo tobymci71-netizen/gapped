@@ -296,6 +296,13 @@ export const textStyle = (t: { size: number; lineHeight: number }) => ({
 });
 
 /**
+ * Text size for a single-line TextInput: no line height. On iOS a line height
+ * on a one-line field pushes the text down, and Archivo's descenders ("g",
+ * "q", "_") were cut off at the field's bottom edge.
+ */
+export const inputText = (t: { size: number }) => ({ fontSize: t.size });
+
+/**
  * Ready-made text styles for the three faces, for code that styles an RN
  * <Text> directly rather than through the Text component.
  *

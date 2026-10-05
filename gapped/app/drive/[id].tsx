@@ -560,14 +560,18 @@ export default function DriveDetail() {
         */}
         <View style={exporting.locked ? styles.exportColumn : styles.exportRow}>
           {(['gpx', 'csv'] as const).map((kind) => {
-            const label = `Export ${kind.toUpperCase()}`;
+            // The plate says the format; the section header says "Export".
+            // "Export GPX" in the wide display face wrapped to two lines in
+            // half a row. VoiceOver still hears the whole action.
+            const format = kind.toUpperCase();
+            const label = `Export ${format}`;
             return (
               <Button
                 key={kind}
-                label={label}
+                label={format}
                 variant="secondary"
                 style={exporting.locked ? undefined : styles.exportBtn}
-                accessibilityLabel={exporting.locked ? proLabel(label) : undefined}
+                accessibilityLabel={exporting.locked ? proLabel(label) : label}
                 trailing={exporting.locked ? proChip : undefined}
                 onPress={exporting.locked ? goPro : () => shareFile(kind)}
               />

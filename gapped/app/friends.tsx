@@ -24,7 +24,7 @@ import {
   removeFriend,
 } from '@/social/friends';
 import { useProfile } from '@/state/profile';
-import { color, font, radius, space, type, textStyle } from '@/theme/tokens';
+import { color, font, inputText, radius, space, type } from '@/theme/tokens';
 
 /**
  * What hiding a friend does here: the Hide also unfollows them, so a driver
@@ -204,6 +204,7 @@ export default function FriendsScreen() {
                 @
               </Text>
               <TextInput
+                selectionColor={color.text1}
                 value={name}
                 onChangeText={(t) => {
                   setName(t);
@@ -353,7 +354,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     color: color.text1,
     fontFamily: font.body,
-    ...textStyle(type.body),
+    ...inputText(type.body),
   },
   // Wide enough for "Adding…" at default text size, so swapping the label
   // mid-request changes neither the width nor the height; at 96 the busy label

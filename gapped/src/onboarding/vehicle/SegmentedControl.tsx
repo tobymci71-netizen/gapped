@@ -24,6 +24,16 @@ type Props<K extends string> = {
 /** Space between the segments' plates. */
 const GAP = space.sm;
 
+/** Apple's minimum touch target, and the plates' height. */
+const SEGMENT_HEIGHT = 44;
+
+/**
+ * How far a slanted plate's corner leans past its box. The control is inset by
+ * this so the outer ends keep their slant: in a scroll view, which clips at
+ * its edges, the first and last plates were cut square at the gutter.
+ */
+const LEAN = Math.ceil((SEGMENT_HEIGHT / 2) * slant.tan);
+
 /**
  * Segments as slanted plates at the logo's lean, a white plate sliding to the
  * chosen one — Car | Motorbike on the ride step and in the garage. The Ranks
@@ -70,46 +80,48 @@ export function SegmentedControl<K extends string>({ segments, value, onChange }
   }));
 
   return (
-    <View style={styles.track} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      {/* The segments' plates, under the white one that slides over them. */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.track]}>
-        {segments.map((s) => (
-          <View key={s.key} style={styles.plate} />
-        ))}
+    <View style={styles.inset}>
+      <View style={styles.track} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+        {/* The segments' plates, under the white one that slides over them. */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.track]}>
+          {segments.map((s) => (
+            <View key={s.key} style={styles.plate} />
+          ))}
+        </View>
+        {segmentWidth > 0 ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.thumb, { width: segmentWidth }, thumbStyle]}
+          />
+        ) : null}
+        {segments.map((s, i) => {
+          const selected = s.key === value;
+          return (
+            <PressableScale
+              key={s.key}
+              silent
+              onPress={() => {
+                if (selected) return;
+                haptic.selection();
+                onChange(s.key);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={s.label}
+              accessibilityState={{ selected }}
+              style={styles.segment}
+            >
+              <SegmentLabel
+                label={s.label}
+                index={i}
+                x={x}
+                pitch={pitch}
+                segmentWidth={segmentWidth}
+                selected={selected}
+              />
+            </PressableScale>
+          );
+        })}
       </View>
-      {segmentWidth > 0 ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.thumb, { width: segmentWidth }, thumbStyle]}
-        />
-      ) : null}
-      {segments.map((s, i) => {
-        const selected = s.key === value;
-        return (
-          <PressableScale
-            key={s.key}
-            silent
-            onPress={() => {
-              if (selected) return;
-              haptic.selection();
-              onChange(s.key);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={s.label}
-            accessibilityState={{ selected }}
-            style={styles.segment}
-          >
-            <SegmentLabel
-              label={s.label}
-              index={i}
-              x={x}
-              pitch={pitch}
-              segmentWidth={segmentWidth}
-              selected={selected}
-            />
-          </PressableScale>
-        );
-      })}
     </View>
   );
 }
@@ -153,6 +165,7 @@ function SegmentLabel({
 }
 
 const styles = StyleSheet.create({
+  inset: { paddingHorizontal: LEAN },
   track: { flexDirection: 'row', gap: GAP },
   // The white plate. Skewed with the plates it slides over; its label is not.
   thumb: {
@@ -165,7 +178,7 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    minHeight: 44,
+    minHeight: SEGMENT_HEIGHT,
     paddingHorizontal: space.sm,
     paddingVertical: space.xs,
     alignItems: 'center',

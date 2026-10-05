@@ -250,7 +250,10 @@ export const HeroScene = memo(function HeroScene({
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={[StyleSheet.absoluteFill, slide]}
+      // Clipped: the camera push-in scales the scene past the window's
+      // edges, and without this the overhang stayed on screen as a strip
+      // down the left of page 2 after the scene had slid away.
+      style={[StyleSheet.absoluteFill, styles.clip, slide]}
     >
       <Animated.View
         style={[StyleSheet.absoluteFill, { transformOrigin: [vpScreen.x, vpScreen.y, 0] }, drift]}
@@ -823,6 +826,7 @@ const RED_GLINTS = [
 ] as const;
 
 const styles = StyleSheet.create({
+  clip: { overflow: 'hidden' },
   mark: { position: 'absolute' },
   gps: {
     position: 'absolute',
