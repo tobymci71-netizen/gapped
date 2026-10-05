@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fafaf7;
+  --surface: #efefe9;
+  --text: #16181a;
+  --muted: #565b62;
+  --rule: #dcddd6;
+  --link: #3d5a00;
+  --mark-bg: #0a0a0a;
+  --mark-fg: #ccff00;
+  --draft-bg: #ffe08a;
+  --draft-fg: #1a1a1a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0a0a;
+    --surface: #161718;
+    --text: #f2f2f0;
+    --muted: #a6aab0;
+    --rule: #2b2d2f;
+    --link: #ccff00;
+    --mark-bg: #ccff00;
+    --mark-fg: #0a0a0a;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+
+.wrap {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+header.site {
+  padding: 20px 0 8px;
+}
+
+.wordmark {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+  
+  min-height: 44px;
+  line-height: 32px;
+}
+
+main {
+  padding-bottom: 32px;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  margin: 1.6em 0 0.5em;
+}
+
+h1 {
+  font-size: 2rem;
+  margin-top: 0.8em;
+}
+
+h2 {
+  font-size: 1.35rem;
+  padding-top: 1em;
+  border-top: 1px solid var(--rule);
+}
+
+h3 {
+  font-size: 1.1rem;
+}
+
+p,
+ul,
+ol,
+blockquote,
+.table-wrap {
+  margin: 0 0 1em;
+}
+
+ul,
+ol {
+  padding-left: 1.4em;
+}
+
+li + li {
+  margin-top: 0.35em;
+}
+
+a {
+  color: var(--link);
+  text-underline-offset: 0.15em;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+strong {
+  font-weight: 650;
+}
+
+.lede {
+  font-size: 1.15rem;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+blockquote {
+  padding: 0.6em 1em;
+  border-left: 3px solid var(--link);
+  background: var(--surface);
+  border-radius: 0 8px 8px 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.55em 0.6em;
+  border-bottom: 1px solid var(--rule);
+}
+
+th {
+  font-weight: 650;
+  border-bottom-width: 2px;
+}
+
+@media (max-width: 560px) {
+  table.stack,
+  table.stack tbody,
+  table.stack tr,
+  table.stack td {
+    display: block;
+  }
+
+  table.stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  table.stack tr {
+    padding: 0.6em 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  table.stack td {
+    padding: 0.2em 0;
+    border: 0;
+  }
+
+  table.stack td[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+code {
+  font-size: 0.9em;
+  background: var(--surface);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  background: var(--surface);
+  padding: 12px;
+  border-radius: 8px;
+  margin: 0 0 1.5em;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2em 0;
+}
+
+.links {
+  list-style: none;
+  padding: 0;
+}
+
+.links li + li {
+  margin-top: 0;
+}
+
+.links a {
+  display: block;
+  padding: 12px 0;
+  min-height: 44px;
+  border-bottom: 1px solid var(--rule);
+  font-weight: 600;
+}
+
+.safety {
+  padding: 0.8em 1em;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.draft {
+  background: var(--draft-bg);
+  color: var(--draft-fg);
+  font-weight: 600;
+  text-align: center;
+  padding: 10px 16px;
+}
+
+footer.site {
+  border-top: 1px solid var(--rule);
+  padding: 20px 0 40px;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+footer.site nav a {
+  display: inline-block;
+  padding: 10px 0;
+  margin-right: 1.2em;
+}
+</style>
+<title>Gapped Terms of Use · Gapped</title>
+<meta name="description" content="The rules for using Gapped, including safety and conduct.">
+</head>
+<body>
+<header class="site"><div class="wrap"><a class="wordmark" href="../" aria-label="Gapped home">GAPPED</a></div></header>
+<div class="draft" role="note">Draft preview, not for publishing. The contact address has not been set yet.</div>
+<main class="wrap">
+<h1 id="gapped-terms-of-use">Gapped Terms of Use</h1>
+<p><strong>Effective date:</strong> 5 October 2026</p>
+<p>These terms are an agreement between you and <strong>Toby Mcintosh</strong>, an individual based in Guernsey (&quot;we&quot;, &quot;us&quot;), who makes Gapped. They apply whenever you use the Gapped app or its boards. You accept them when you agree during setup in the app. If you do not accept them, do not use Gapped.</p>
+<p>Your licence to use the app itself comes from <strong>Apple&#39;s Licensed Application End User License Agreement</strong> (<a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">apple.com/legal/internet-services/itunes/dev/stdeula</a>), which every App Store app is bound by. These terms add the rules for using Gapped&#39;s account, boards and other services. Section 15 sets out some terms Apple requires.</p>
+<p>How we handle your data is explained in our <a href="https://tobymci71-netizen.github.io/gapped/privacy/">Privacy Policy</a>.</p>
+<h2 id="1-who-can-use-gapped">1. Who can use Gapped</h2>
+<p>You may use Gapped only if you are <strong>18 or over</strong> and hold a <strong>valid driving licence</strong> for the vehicle you drive or ride. By using Gapped you confirm that both are true. You must also be allowed to use the app under the laws that apply to you.</p>
+<h2 id="2-safety-comes-first">2. Safety comes first</h2>
+<p>Gapped measures your drives. It never asks you to drive fast, and nothing in the app is a reason to break the law.</p>
+<ul>
+<li><strong>Obey traffic laws and speed limits at all times.</strong></li>
+<li><strong>Never handle your phone while driving.</strong> Start and end a drive only when you are safely parked, keep your phone in a holder, and leave it alone until you have stopped. A passenger may operate it for you.</li>
+<li><strong>Top-speed and 0–60 runs belong only where they are legal and safe:</strong> a race track, a track day or a closed road, with the organiser&#39;s or owner&#39;s permission. Never on a public road.</li>
+<li>Do not let the app distract you. If anything on screen needs your attention, pull over first.</li>
+<li>You are responsible for your vehicle, your insurance and the way you drive.</li>
+</ul>
+<p>A top speed above the ranking limit for your country is never ranked on the public boards. The ranking limit is the highest speed limit anywhere in your country, or 130 km/h where your country has no general limit or we have no figure for it. It is not a speed you may drive at: the limit on the road you are on always applies.</p>
+<h2 id="3-your-account">3. Your account</h2>
+<p>Gapped creates an anonymous account for you on your phone. There is no password and no way to recover the account if you remove the app or lose your phone. Keep your phone secure: you are responsible for what is done with your account.</p>
+<h2 id="4-measurements">4. Measurements</h2>
+<p>Gapped calculates speed, distance, times and G-force from your phone&#39;s GPS and motion sensors. Those can be wrong: GPS can drift, phones differ, and signal can drop. Measurements are provided <strong>as they are</strong>, without any promise that they are accurate.</p>
+<ul>
+<li>Always use your vehicle&#39;s own speedometer to judge your speed.</li>
+<li>Do not rely on Gapped for anything legal, insurance-related, safety-critical or financial, including disputing a speeding offence.</li>
+<li>&quot;Verified&quot; means a drive passed our automated checks. It is not a guarantee that every figure is exact.</li>
+</ul>
+<h2 id="5-your-content-and-the-boards">5. Your content and the boards</h2>
+<p>Your content is what you put into Gapped: your username, your vehicle details, your reports and the drives you record. You keep ownership of it.</p>
+<p>So that Gapped can work, you give us a worldwide, non-exclusive, royalty-free licence to store, process and display your username, country and results on the boards and elsewhere in the service, for as long as they remain in Gapped. The licence ends for a drive when you delete it, and for everything when you delete your account.</p>
+<p>We decide how results are checked, ranked and displayed. For example, we may leave a result unranked, mark it unverified, or remove it.</p>
+<h2 id="6-rules-zero-tolerance">6. Rules: zero tolerance</h2>
+<p>We have <strong>zero tolerance for objectionable content and abusive users.</strong> You must not:</p>
+<ul>
+<li>choose a username, or enter vehicle details, that are offensive, hateful, sexual, threatening, harassing or discriminatory, that impersonate someone else, that include someone&#39;s personal information, or that advertise anything;</li>
+<li>cheat, including by faking or altering GPS or sensor data, using a simulator or mock location, using a modified app, uploading data that did not come from a real drive, or claiming someone else&#39;s drive;</li>
+<li>use Gapped to organise or promote racing or stunts on public roads;</li>
+<li>harass, threaten or abuse other drivers, or make false reports;</li>
+<li>interfere with the service: overloading it, scraping it, probing it for weaknesses, getting around our limits, or accessing it except through the app;</li>
+<li>copy, change or reverse engineer the app, except where the law allows it;</li>
+<li>use Gapped for anything illegal.</li>
+</ul>
+<h2 id="7-reports-and-enforcement">7. Reports and enforcement</h2>
+<p>Our server filters usernames, and every driver can <strong>report</strong> another driver or <strong>hide</strong> them from their own boards. We review reports <strong>within 24 hours</strong>.</p>
+<p>If we decide that someone has broken these terms, we may, with or without warning:</p>
+<ul>
+<li>remove the content or results concerned;</li>
+<li>reset a username, after which the driver must choose a new one;</li>
+<li>hide a driver from the public boards;</li>
+<li>suspend or permanently delete the account.</li>
+</ul>
+<p>If you think we have made a mistake, contact us and we will look at it again.</p>
+<h2 id="8-a-free-service-that-can-change">8. A free service that can change</h2>
+<p>Gapped is free, and there are no in-app purchases in this version. We may change, add or remove features, and we may suspend or stop the service. Where we reasonably can, we will tell you in advance. We do not promise that Gapped will always be available or free of errors.</p>
+<h2 id="9-our-intellectual-property">9. Our intellectual property</h2>
+<p>The Gapped app, name, design and software belong to us or the people we license them from. Open-source software in the app is used under its own licences, which are listed on our <a href="https://tobymci71-netizen.github.io/gapped/acknowledgements/">Acknowledgements</a> page. These terms do not give you any right to our name or branding.</p>
+<h2 id="10-use-at-your-own-risk">10. Use at your own risk</h2>
+<p>You use Gapped at your own risk. As far as the law allows, the app and the service are provided &quot;as is&quot; and &quot;as available&quot;, without warranties of any kind. Nothing in these terms affects rights you have by law as a consumer that cannot be taken away.</p>
+<h2 id="11-our-liability">11. Our liability</h2>
+<p>As far as the law of Guernsey allows:</p>
+<ul>
+<li>we are not liable for any loss that comes from how you drive or ride, including accidents, injury, damage, fines, penalty points, licence or insurance consequences;</li>
+<li>we are not liable for indirect or consequential loss, loss of data, or loss we could not reasonably have foreseen;</li>
+<li>we are not liable for anything outside our reasonable control.</li>
+</ul>
+<p><strong>Nothing in these terms limits or excludes our liability for death or personal injury caused by our negligence, for fraud or fraudulent misrepresentation, or for anything else that cannot be limited or excluded by law.</strong></p>
+<h2 id="12-ending-this-agreement">12. Ending this agreement</h2>
+<p>You can stop using Gapped at any time, and you can delete your account in <strong>Settings → Delete account</strong>. We may suspend or end your access if you break these terms, or if we stop offering Gapped. Sections 4, 10, 11, 13 and 14 continue to apply afterwards.</p>
+<h2 id="13-changes-to-these-terms">13. Changes to these terms</h2>
+<p>We may update these terms. If we do, we will change the effective date on this page and tell you in the app. If you keep using Gapped after a change takes effect, you accept the new terms. If you do not accept them, stop using Gapped and delete your account.</p>
+<h2 id="14-law-and-disputes">14. Law and disputes</h2>
+<p>These terms are governed by the law of the Island of Guernsey, and the courts of Guernsey can hear any dispute about them. If you live in the United Kingdom, you can also bring a claim in the courts where you live, and you keep the protections of the consumer law there.</p>
+<p>If any part of these terms cannot be enforced, the rest still applies. These terms, with the Privacy Policy and Apple&#39;s Licensed Application End User License Agreement, are the whole agreement between you and us about Gapped.</p>
+<h2 id="15-terms-apple-requires">15. Terms Apple requires</h2>
+<ul>
+<li>These terms are between you and us, not Apple. We, not Apple, are responsible for Gapped and its content.</li>
+<li>Apple has no obligation to provide any maintenance or support for Gapped.</li>
+<li>If Gapped fails to meet a warranty that applies by law, you may tell Apple, and Apple will refund the price you paid for the app, if any. Apple has no other warranty obligation for Gapped.</li>
+<li>We, not Apple, are responsible for dealing with any claim about Gapped, including product liability claims, claims that Gapped breaks a law or regulation, and claims under consumer protection or privacy law.</li>
+<li>If anyone claims that Gapped infringes their intellectual property, we, not Apple, are responsible for investigating and dealing with the claim.</li>
+<li>You confirm that you are not in a country subject to a US Government embargo or designated as a &quot;terrorist supporting&quot; country, and that you are not on any US Government list of prohibited or restricted parties.</li>
+<li>You must follow any third-party terms that apply when you use Gapped, such as your mobile network&#39;s terms.</li>
+<li>Apple and its subsidiaries are third-party beneficiaries of these terms and may enforce them against you.</li>
+</ul>
+<h2 id="16-contact">16. Contact</h2>
+<p>Toby Mcintosh, Guernsey<br>
+<strong>Contact address coming soon</strong></p>
+<p><a href="https://tobymci71-netizen.github.io/gapped/privacy/">Privacy Policy</a> · <a href="https://tobymci71-netizen.github.io/gapped/support/">Support</a></p>
+</main>
+<footer class="site"><div class="wrap">
+<nav aria-label="Gapped pages">
+<a href="../privacy/">Privacy Policy</a>
+<a href="../terms/">Terms of Use</a>
+<a href="../support/">Support</a>
+<a href="../acknowledgements/">Acknowledgements</a>
+</nav>
+<p>Obey traffic laws and speed limits, and never touch your phone while driving.</p>
+<p>&copy; 2026 Toby Mcintosh. All rights reserved.</p>
+</div></footer>
+</body>
+</html>

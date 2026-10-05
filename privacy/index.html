@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fafaf7;
+  --surface: #efefe9;
+  --text: #16181a;
+  --muted: #565b62;
+  --rule: #dcddd6;
+  --link: #3d5a00;
+  --mark-bg: #0a0a0a;
+  --mark-fg: #ccff00;
+  --draft-bg: #ffe08a;
+  --draft-fg: #1a1a1a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0a0a;
+    --surface: #161718;
+    --text: #f2f2f0;
+    --muted: #a6aab0;
+    --rule: #2b2d2f;
+    --link: #ccff00;
+    --mark-bg: #ccff00;
+    --mark-fg: #0a0a0a;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+
+.wrap {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+header.site {
+  padding: 20px 0 8px;
+}
+
+.wordmark {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+  
+  min-height: 44px;
+  line-height: 32px;
+}
+
+main {
+  padding-bottom: 32px;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+  margin: 1.6em 0 0.5em;
+}
+
+h1 {
+  font-size: 2rem;
+  margin-top: 0.8em;
+}
+
+h2 {
+  font-size: 1.35rem;
+  padding-top: 1em;
+  border-top: 1px solid var(--rule);
+}
+
+h3 {
+  font-size: 1.1rem;
+}
+
+p,
+ul,
+ol,
+blockquote,
+.table-wrap {
+  margin: 0 0 1em;
+}
+
+ul,
+ol {
+  padding-left: 1.4em;
+}
+
+li + li {
+  margin-top: 0.35em;
+}
+
+a {
+  color: var(--link);
+  text-underline-offset: 0.15em;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+strong {
+  font-weight: 650;
+}
+
+.lede {
+  font-size: 1.15rem;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+blockquote {
+  padding: 0.6em 1em;
+  border-left: 3px solid var(--link);
+  background: var(--surface);
+  border-radius: 0 8px 8px 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.55em 0.6em;
+  border-bottom: 1px solid var(--rule);
+}
+
+th {
+  font-weight: 650;
+  border-bottom-width: 2px;
+}
+
+@media (max-width: 560px) {
+  table.stack,
+  table.stack tbody,
+  table.stack tr,
+  table.stack td {
+    display: block;
+  }
+
+  table.stack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  table.stack tr {
+    padding: 0.6em 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  table.stack td {
+    padding: 0.2em 0;
+    border: 0;
+  }
+
+  table.stack td[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+code {
+  font-size: 0.9em;
+  background: var(--surface);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  background: var(--surface);
+  padding: 12px;
+  border-radius: 8px;
+  margin: 0 0 1.5em;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2em 0;
+}
+
+.links {
+  list-style: none;
+  padding: 0;
+}
+
+.links li + li {
+  margin-top: 0;
+}
+
+.links a {
+  display: block;
+  padding: 12px 0;
+  min-height: 44px;
+  border-bottom: 1px solid var(--rule);
+  font-weight: 600;
+}
+
+.safety {
+  padding: 0.8em 1em;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.draft {
+  background: var(--draft-bg);
+  color: var(--draft-fg);
+  font-weight: 600;
+  text-align: center;
+  padding: 10px 16px;
+}
+
+footer.site {
+  border-top: 1px solid var(--rule);
+  padding: 20px 0 40px;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+footer.site nav a {
+  display: inline-block;
+  padding: 10px 0;
+  margin-right: 1.2em;
+}
+</style>
+<title>Gapped Privacy Policy · Gapped</title>
+<meta name="description" content="What Gapped collects, why, who can see it, how long it is kept and your rights.">
+</head>
+<body>
+<header class="site"><div class="wrap"><a class="wordmark" href="../" aria-label="Gapped home">GAPPED</a></div></header>
+<div class="draft" role="note">Draft preview, not for publishing. The contact address has not been set yet.</div>
+<main class="wrap">
+<h1 id="gapped-privacy-policy">Gapped Privacy Policy</h1>
+<p><strong>Effective date:</strong> 5 October 2026</p>
+<p>Gapped is an app that records your drives with your phone&#39;s GPS and motion sensors and ranks the results on public boards. This policy explains what Gapped collects, why, who can see it, how long it is kept and what you can do about it.</p>
+<p>Gapped is made by <strong>Toby Mcintosh</strong>, an individual based in Guernsey (&quot;we&quot;, &quot;us&quot;). He decides how your data is used, which makes him the data controller. You can contact him at <strong>Contact address coming soon</strong>.</p>
+<h2 id="the-short-version">The short version</h2>
+<ul>
+<li><strong>No sign-up.</strong> Gapped creates an anonymous account the first time you open it. We never ask for your name, email address, phone number or a password.</li>
+<li><strong>Location is recorded only during a drive.</strong> Gapped does not track you in the background between drives.</li>
+<li><strong>Your routes are never public.</strong> Other drivers see your username, country, unit preference and your results on the boards, with the date of each drive. They never see where you drove.</li>
+<li><strong>No ads, no analytics, no crash reporting, no tracking.</strong> Nothing in the app measures how you use it, and we never sell or share your data for advertising.</li>
+<li><strong>Raw GPS points do not stay forever.</strong> They are deleted 90 days after the drive.</li>
+<li><strong>You are in control.</strong> You can delete a drive, or your whole account, in the app at any time, and export your drives for free.</li>
+<li><strong>Gapped is for drivers aged 18 and over</strong> with a valid driving licence.</li>
+</ul>
+<h2 id="which-laws-apply">Which laws apply</h2>
+<p>We are based in Guernsey, so the <strong>Data Protection (Bailiwick of Guernsey) Law, 2017</strong> applies to everything we do with your data. If you are in the United Kingdom, the <strong>UK GDPR</strong> and the <strong>Data Protection Act 2018</strong> also apply. The two are closely aligned, and where they differ we follow whichever protects you more.</p>
+<p>Gapped is not offered on the App Store in the European Economic Area (the European Union, Iceland, Liechtenstein and Norway).</p>
+<h2 id="your-account">Your account</h2>
+<p>The first time you open Gapped it creates an account for you with a random identifier, your <strong>Account ID</strong>. The key that keeps you signed in is stored on your phone. There is no password and no way to sign in on another phone.</p>
+<p>That has two consequences worth knowing:</p>
+<ul>
+<li>If you remove the app or lose your phone, the account cannot be recovered, and it stays on our servers until it is deleted (see <a href="#your-choices-and-rights">Your choices and rights</a>).</li>
+<li>Your Account ID is shown in the app&#39;s Settings. Make a note of it if you might want to contact us about your data.</li>
+</ul>
+<h2 id="what-we-collect-and-why">What we collect and why</h2>
+<h3 id="drives-location-and-motion">Drives: location and motion</h3>
+<p><strong>When a drive is recorded.</strong> A drive starts when you tap <strong>Start drive</strong>, or when automatic detection notices you have been moving faster than 15 km/h (about 9 mph) for 30 seconds. Automatic detection works only while Gapped is open on your screen and you have allowed location access. To notice a drive starting, the app reads your position while it is open, but those readings stay in your phone&#39;s memory and are thrown away unless a drive begins. When one does, the drive keeps the movement that started it and the few seconds before it, so that a standing start can be timed.</p>
+<p>A drive ends when you tap <strong>End drive</strong>, or after you have been stationary for 3 minutes. If you have given Gapped <strong>Always</strong> location access, a drive keeps recording when your screen locks or you switch to another app, and iOS shows its location indicator while it does. Nothing is recorded between drives.</p>
+<p><strong>What a drive contains.</strong> About once a second during a drive:</p>
+<ul>
+<li>your position (latitude and longitude), its accuracy, your speed, heading and altitude, and the time;</li>
+<li>a field for whether the position was simulated (iPhones do not report this, so it is always recorded as &quot;no&quot;);</li>
+<li>readings from the motion sensors (acceleration with gravity removed, up to 10 times a second during hard acceleration or braking) and, if you allow Motion &amp; Fitness access, air pressure from the barometer.</li>
+</ul>
+<p><strong>Why.</strong> To work out each drive&#39;s distance, duration, top speed, average speed, 0–60 mph time and G-force; to check that a drive is genuine (our server recalculates everything from the raw points and runs automated checks, so a typed-in or spoofed result cannot reach the boards); to show you your drives; and to rank your results.</p>
+<p><strong>Where it goes.</strong> Each drive is saved on your phone as it is recorded, then uploaded to our server when it ends (or the next time you are online). The server keeps the full, untrimmed route in a separate store that the app itself has no access to. It also makes a <strong>trimmed route</strong> with between 1.0 and 1.7 miles removed from each end, so that it does not start or finish at your door. Only you can see your trimmed route in the app, and on a share card if you choose to share one.</p>
+<h3 id="your-profile">Your profile</h3>
+<ul>
+<li><strong>Username.</strong> Shown publicly on the boards. It must follow our rules, and our server rejects names that are offensive or reserved.</li>
+<li><strong>Country.</strong> You choose it (your phone&#39;s region is suggested). It decides which national board you appear on and is shown publicly.</li>
+<li><strong>Unit preference</strong> (km/h or mph). Stored with your public profile.</li>
+</ul>
+<h3 id="your-vehicles">Your vehicles</h3>
+<ul>
+<li><strong>Kind, make, model and, if you add them, year and whether the vehicle is modified,</strong> for your main vehicle and any others you add. These are private to you. We use them to attribute each drive to the vehicle that made it, and, combined across all drivers, to count how many drivers have each make. Those counts are shown only for makes with at least five drivers, and never name anyone.</li>
+<li><strong>VIN (vehicle identification number).</strong> Only if you choose to enter one in the Garage. Our server sends the VIN alone to the US Department of Transportation&#39;s vehicle database (NHTSA vPIC) to look up the vehicle&#39;s drivetrain, power and weight, and stores those figures. <strong>The VIN itself is not stored.</strong> The figures decide which vehicle class your results are ranked in.</li>
+<li><strong>Nickname and car photo.</strong> These stay on your phone. They are never uploaded.</li>
+</ul>
+<h3 id="your-answers-during-setup">Your answers during setup</h3>
+<p>During setup we ask what matters most to you (for example top speed or local ranking) and how you heard about Gapped, and we record the date and time you accepted the <a href="https://tobymci71-netizen.github.io/gapped/terms/">Terms of Use</a>. Only you can read these on our server. We use the answers to understand what drivers want from Gapped and how they find it, and the acceptance time as a record that you agreed to the Terms.</p>
+<h3 id="friends-and-hidden-drivers">Friends and hidden drivers</h3>
+<ul>
+<li><strong>People you follow.</strong> If you add someone as a friend by their username, we store that link so your friends board can show them. The other person is not notified, and your list is not public.</li>
+<li><strong>Drivers you hide.</strong> If you hide a driver, we store that so they disappear from your boards and lists. Your list of hidden drivers is private to you.</li>
+</ul>
+<h3 id="reports">Reports</h3>
+<p>If you report a driver, we store your Account ID, theirs, their username at the time, the reason you chose, anything you wrote in the details box (up to 500 characters), the time, and what we decided. We use this to review the report and act on it. We never tell the reported driver who reported them.</p>
+<h3 id="achievements">Achievements</h3>
+<p>Our server awards achievements (such as your first verified drive) based on your verified drives. They are shown to you in the app.</p>
+<h3 id="technical-information">Technical information</h3>
+<ul>
+<li>When the app connects to our server, our hosting provider receives your IP address and basic technical details such as your app and iOS version. These are used to keep the service secure, to limit abuse (for example, how many accounts can be created from one network) and to fix faults. They are kept in the provider&#39;s logs for a short period, and your sign-in session record is kept until your account is deleted.</li>
+<li>Our server counts how many drive checks, VIN lookups and reports each account makes in a set period (an hour or a day), so that nobody can overload the service or flood it with reports.</li>
+</ul>
+<h3 id="if-you-contact-us">If you contact us</h3>
+<p>If you email us, we receive your email address, your message and anything you attach. We use them to answer you and to deal with your request.</p>
+<h3 id="our-web-pages">Our web pages</h3>
+<p>Our web pages (including this one) are hosted by GitHub Pages. GitHub receives your IP address to deliver the pages. Our pages use no cookies, analytics or trackers.</p>
+<h2 id="what-we-do-not-collect">What we do not collect</h2>
+<p>We do not collect your name, email address (unless you email us), phone number, contacts, photos (your car photo stays on your phone), camera or microphone, health data, your phone&#39;s advertising identifier, browsing history or payment details.</p>
+<p>The app contains <strong>no analytics, no crash reporting, no advertising and no tracking</strong>, and we do not sell your data or share it with anyone for advertising.</p>
+<p>If you have turned on <strong>Share With App Developers</strong> in your iPhone&#39;s settings, Apple may give us crash reports and usage statistics about Gapped. These come from Apple under Apple&#39;s terms, and they are not linked to your Gapped account.</p>
+<h2 id="what-other-people-can-see">What other people can see</h2>
+<p>Anyone using Gapped can see the following, and so can anyone who reads the public data behind our boards:</p>
+<ul>
+<li>your username, country and unit preference, and the date your account was created;</li>
+<li>your results on the boards (top speed, distance, 0–60 mph time and number of drives), each with the <strong>date</strong> of the drive, but not the time of day;</li>
+<li>whether each result was verified;</li>
+<li>the vehicle class a result is ranked in (drivetrain, stock or modified, and a power-to-weight band), but <strong>not</strong> the make or model;</li>
+<li>your Account ID, which appears in the board data. It cannot be used to sign in as you.</li>
+</ul>
+<p>If someone adds you as a friend, they see the same things: your username, country and best verified top speed.</p>
+<p><strong>A top speed above the ranking limit for your country is never ranked publicly.</strong> The ranking limit is the highest speed limit anywhere in your country, or 130 km/h (about 81 mph) where your country has no general limit or we have no figure for it. A top speed above it stays in your own drive history, marked &quot;not ranked&quot;.</p>
+<p><strong>Never public:</strong> your routes (trimmed or full), your GPS points and motion data, the times of your drives, your vehicle&#39;s make, model or VIN, your nickname and car photo, your answers during setup, who you follow, who you hide, your reports and your achievements.</p>
+<p>We also show a few counts that combine many drivers, such as how many drivers from a country drove yesterday. A count is shown only when it includes at least ten drivers (five for vehicle makes), so it can never point to one person.</p>
+<p><strong>Share cards</strong> show a drive&#39;s trimmed route and stats. Nothing is shared unless you choose to share a card, and you decide where it goes.</p>
+<h2 id="who-receives-your-data">Who receives your data</h2>
+<div class="table-wrap"><table class="stack" role="table">
+<thead><tr role="row"><th role="columnheader">Who</th><th role="columnheader">What and why</th><th role="columnheader">Where</th></tr></thead>
+<tbody>
+<tr role="row"><td role="cell" data-label="Who"><strong>Supabase</strong> (Supabase, Inc.)</td><td role="cell" data-label="What and why">Hosts our database, sign-in and server functions. Supabase acts only on our instructions, under a data processing agreement.</td><td role="cell" data-label="Where">London, United Kingdom</td></tr>
+<tr role="row"><td role="cell" data-label="Who"><strong>NHTSA vPIC</strong> (US Department of Transportation)</td><td role="cell" data-label="What and why">Receives only the VIN, only if you enter one, sent from our server to look up the vehicle&#39;s specifications. Not stored by us.</td><td role="cell" data-label="Where">United States</td></tr>
+<tr role="row"><td role="cell" data-label="Who"><strong>Apple</strong></td><td role="cell" data-label="What and why">The map on the Driving tab is Apple Maps: your phone asks Apple for the map of the area on screen. Apple also runs the App Store. Apple&#39;s privacy policy applies to both.</td><td role="cell" data-label="Where">Apple&#39;s servers</td></tr>
+<tr role="row"><td role="cell" data-label="Who"><strong>GitHub</strong></td><td role="cell" data-label="What and why">Hosts our web pages.</td><td role="cell" data-label="Where">GitHub&#39;s servers</td></tr>
+<tr role="row"><td role="cell" data-label="Who"><strong>Our email provider</strong></td><td role="cell" data-label="What and why">Holds the emails you send us.</td><td role="cell" data-label="Where">Our provider&#39;s servers</td></tr>
+</tbody>
+</table></div>
+<p>We may also disclose information if the law requires it, or where it is needed to protect someone&#39;s safety. We do not sell your data, and we do not share it with advertisers or data brokers.</p>
+<h2 id="data-stored-outside-guernsey">Data stored outside Guernsey</h2>
+<p>Our database is in the United Kingdom. Guernsey law recognises the UK as giving your data adequate protection, and UK law recognises Guernsey in the same way. Supabase, Inc. is a US company: where its staff or sub-processors can reach data from outside the UK, for example to provide support, its data processing agreement applies the safeguards UK law requires (standard contractual clauses with the UK addendum).</p>
+<p>A VIN you enter is sent to the United States on its own, with nothing that identifies you, so that the lookup you asked for can be carried out.</p>
+<h2 id="our-legal-reasons-for-using-your-data">Our legal reasons for using your data</h2>
+<div class="table-wrap"><table class="stack" role="table">
+<thead><tr role="row"><th role="columnheader">What we do</th><th role="columnheader">Legal basis</th></tr></thead>
+<tbody>
+<tr role="row"><td role="cell" data-label="What we do">Creating your account; recording, checking, storing and showing your drives; ranking your results; your friends board and hidden drivers; looking up a VIN you enter</td><td role="cell" data-label="Legal basis"><strong>Contract</strong>: it is the service you asked for when you started using Gapped (UK GDPR Article 6(1)(b), and the matching condition in Guernsey law)</td></tr>
+<tr role="row"><td role="cell" data-label="What we do">Checking drives for cheating; moderating usernames, reports and hidden drivers; not ranking top speeds above the ranking limit for your country; security logs and rate limits; keeping a record that you accepted the Terms</td><td role="cell" data-label="Legal basis"><strong>Legitimate interests</strong>: keeping the boards fair and safe, protecting other drivers and keeping the service running (Article 6(1)(f))</td></tr>
+<tr role="row"><td role="cell" data-label="What we do">Your answers during setup</td><td role="cell" data-label="Legal basis"><strong>Legitimate interests</strong>: understanding what drivers want from Gapped and how they find it (Article 6(1)(f))</td></tr>
+<tr role="row"><td role="cell" data-label="What we do">Answering requests about your data and keeping the records the law requires</td><td role="cell" data-label="Legal basis"><strong>Legal obligation</strong> (Article 6(1)(c))</td></tr>
+</tbody>
+</table></div>
+<p>You choose whether Gapped can use your location and motion sensors through the iOS permission prompts, and you can change your answers at any time in the iPhone&#39;s Settings. Without location access Gapped cannot record drives.</p>
+<p><strong>Automated checks.</strong> Whether a drive is verified, and whether a result is ranked, is decided automatically by our server. These decisions do not have legal or similarly significant effects on you, but you can ask us to look at one again.</p>
+<h2 id="how-long-we-keep-your-data">How long we keep your data</h2>
+<div class="table-wrap"><table class="stack" role="table">
+<thead><tr role="row"><th role="columnheader">Data</th><th role="columnheader">How long</th></tr></thead>
+<tbody>
+<tr role="row"><td role="cell" data-label="Data">Raw GPS and sensor points, and the untrimmed route</td><td role="cell" data-label="How long">Deleted 90 days after the drive took place</td></tr>
+<tr role="row"><td role="cell" data-label="Data">Drive summary (distance, speeds, times) and trimmed route</td><td role="cell" data-label="How long">Until you delete the drive or your account</td></tr>
+<tr role="row"><td role="cell" data-label="Data">Your results on the boards</td><td role="cell" data-label="How long">Until you delete the drive or your account</td></tr>
+<tr role="row"><td role="cell" data-label="Data">Profile, vehicles, setup answers, friends, hidden drivers and achievements</td><td role="cell" data-label="How long">Until you delete your account</td></tr>
+<tr role="row"><td role="cell" data-label="Data">An account that never chose a username, never uploaded a drive and has not been used for 30 days</td><td role="cell" data-label="How long">Deleted automatically</td></tr>
+<tr role="row"><td role="cell" data-label="Data">Rate-limit counters</td><td role="cell" data-label="How long">2 days</td></tr>
+<tr role="row"><td role="cell" data-label="Data">Reports, and our notes on what we did about them</td><td role="cell" data-label="How long">Until the account of the driver who made the report, or the driver it is about, is deleted</td></tr>
+<tr role="row"><td role="cell" data-label="Data">Emails you send us</td><td role="cell" data-label="How long">As long as we need them to answer you and keep a record of your request</td></tr>
+<tr role="row"><td role="cell" data-label="Data">Hosting provider&#39;s technical logs</td><td role="cell" data-label="How long">A short period set by Supabase, then deleted automatically</td></tr>
+<tr role="row"><td role="cell" data-label="Data">Data on your phone</td><td role="cell" data-label="How long">Until you delete the drive or your account, or remove the app</td></tr>
+</tbody>
+</table></div>
+<p>Backups of your phone (for example iCloud Backup) may include Gapped&#39;s data on the phone. Those are controlled by you and Apple.</p>
+<h2 id="your-choices-and-rights">Your choices and rights</h2>
+<h3 id="in-the-app">In the app</h3>
+<ul>
+<li><strong>Delete a drive.</strong> Open the drive and tap <strong>Delete drive</strong>. It is removed from our server, including its results on the boards, and from your phone.</li>
+<li><strong>Delete your account.</strong> Go to <strong>Settings</strong> and tap <strong>Delete account</strong>. It immediately removes your profile, drives, results, vehicles, answers, friends, hidden drivers and achievements from our server and from your phone. It cannot be undone.</li>
+<li><strong>Export your drives.</strong> Open a drive and export it as a GPX or CSV file. It is free.</li>
+<li><strong>Change your username, country or units</strong> in Settings.</li>
+<li><strong>Hide a driver</strong>, and undo it under <strong>Settings → Hidden drivers</strong>.</li>
+<li><strong>Location and Motion &amp; Fitness access</strong> can be changed in the iPhone&#39;s Settings app, under Gapped.</li>
+<li><strong>Your Account ID</strong> is shown in Settings.</li>
+</ul>
+<p><strong>Removing the app does not delete your data on our server.</strong> Delete your account in Settings first.</p>
+<h3 id="your-rights">Your rights</h3>
+<p>You have the right to ask for a copy of your data, to have it corrected or deleted, to restrict or object to how we use it, and to receive it in a portable format. To use any of these rights, email <strong>Contact address coming soon</strong> with your Account ID. It is free, and we will answer within one month. If a request is complicated we may need up to two more months, and we will tell you if so.</p>
+<p>Because there is no sign-in, we need to make sure an account is yours before we act on a request. Your Account ID alone is not proof, because it appears in the public board data. We may ask you to show you have the app, for example by changing your username in the app to a code we send you.</p>
+<p>If you have already removed the app, email us your username and, if you have it, your Account ID. We will check that the account has had no activity since you removed the app, and then delete it.</p>
+<h3 id="complaints">Complaints</h3>
+<p>If you are unhappy with how we have handled your data, please tell us first so we can try to put it right. You can also complain to the <strong>Office of the Data Protection Authority</strong> in Guernsey (<a href="https://www.odpa.gg">odpa.gg</a>) or, if you are in the UK, the <strong>Information Commissioner&#39;s Office</strong> (<a href="https://ico.org.uk">ico.org.uk</a>).</p>
+<h2 id="age">Age</h2>
+<p>Gapped is only for people aged 18 or over who hold a valid driving licence. We do not knowingly collect data from anyone under 18. If you believe someone under 18 is using Gapped, contact us and we will delete the account.</p>
+<h2 id="keeping-your-data-safe">Keeping your data safe</h2>
+<p>All data travels between the app and our server encrypted. Our database rules mean the app can only ever read your own drives, the untrimmed routes cannot be read by the app at all, and only our server can write verification results and board entries. Data on your phone is protected by iOS. No system is perfectly secure, but if a breach put you at risk we would tell you and the regulators as the law requires.</p>
+<h2 id="changes-to-this-policy">Changes to this policy</h2>
+<p>If we change this policy we will update this page and its effective date. If a change matters to how your data is used, we will tell you in the app before it takes effect. If Gapped ever adds analytics or crash reporting, this policy will say so before it happens.</p>
+<h2 id="contact">Contact</h2>
+<p>Toby Mcintosh, Guernsey<br>
+<strong>Contact address coming soon</strong></p>
+<p><a href="https://tobymci71-netizen.github.io/gapped/terms/">Terms of Use</a> · <a href="https://tobymci71-netizen.github.io/gapped/support/">Support</a></p>
+</main>
+<footer class="site"><div class="wrap">
+<nav aria-label="Gapped pages">
+<a href="../privacy/">Privacy Policy</a>
+<a href="../terms/">Terms of Use</a>
+<a href="../support/">Support</a>
+<a href="../acknowledgements/">Acknowledgements</a>
+</nav>
+<p>Obey traffic laws and speed limits, and never touch your phone while driving.</p>
+<p>&copy; 2026 Toby Mcintosh. All rights reserved.</p>
+</div></footer>
+</body>
+</html>
