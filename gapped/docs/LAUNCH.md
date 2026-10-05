@@ -1,4 +1,4 @@
-# Launch checklist (v1.0.0, build 5)
+# Launch checklist (v1.0.0, build 6)
 
 The owner's list for the first App Store release, in order. Each step says what "done" looks
 like. The steps before App Store Connect matter most: App Review opens the privacy and support
@@ -150,7 +150,7 @@ deletes raw GPS points that the re-verification in step 5 needs.
 
 ## 6. The build
 
-- [ ] `app.json`: `version` `1.0.0`, `ios.buildNumber` `5`. With `appVersionSource: "remote"` EAS
+- [ ] `app.json`: `version` `1.0.0`, `ios.buildNumber` `6`. With `appVersionSource: "remote"` EAS
       keeps its own build counter: check it with `eas build:version:get -p ios` before building.
 - [ ] Production environment on EAS (`eas env:list --environment production`):
       `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` set;
