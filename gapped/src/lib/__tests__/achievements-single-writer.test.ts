@@ -1,9 +1,14 @@
 /**
  * achievements.payload->>'country' has no database constraint, deliberately.
- * The argument is that it is not an independent input: the only writer is
+ * The argument was that it is not an independent input: the only writer is
  * `grantAchievements` in verify-drive, running under the service role, and it
- * copies the value straight out of profiles.country — which has a foreign key
- * onto countries. The payload inherits that constraint transitively.
+ * copied the value straight out of profiles.country — which has a foreign key
+ * onto countries. The payload inherited that constraint transitively.
+ *
+ * Only `country_number_one` ("Fastest in country") ever carried a country, and
+ * it is retired at launch: verify-drive no longer grants it and migration 0020
+ * deleted every row. The argument now covers only historical rows (none left),
+ * and the check below is that the writer puts no country into any payload.
  *
  * That argument has two assumptions, and they fail in different ways:
  *
@@ -113,10 +118,11 @@ describe('achievements has exactly one writer', () => {
     expect(clientWrites).toEqual([]);
   });
 
-  test('the writer copies country from profiles rather than accepting one', () => {
-    // The transitive-constraint argument depends on where the value comes
-    // from. If grantAchievements ever took a country as a parameter or read it
-    // from the request body, the payload would become an independent input.
+  test('the writer puts no country into any payload (country_number_one retired)', () => {
+    // "Fastest in country" was the only kind with a country in its payload,
+    // and an award for being the fastest driver in a country is a reward for
+    // speed on public roads. Retired at launch: no kind may carry a country,
+    // from profiles or anywhere else, and the retired kind is never granted.
     const src = readFileSync(
       join(ROOT, 'supabase/functions/verify-drive/index.ts'),
       'utf8',
@@ -124,10 +130,10 @@ describe('achievements has exactly one writer', () => {
     const fn = src.slice(src.indexOf('function grantAchievements'));
     const body = fn.slice(0, fn.indexOf('\n}\n') + 1);
 
-    // The only country in the payload is the `country` already resolved from
-    // profiles earlier in the request, not anything parsed from the caller.
-    expect(body).toContain("payload: { country, value: top[0].value }");
-    expect(body).not.toMatch(/country\s*[:=]\s*(body|req|payload|input)\b/);
+    // Guards a vacuous pass: the slice really is the writer.
+    expect(body).toContain(".from('achievements')");
+    expect(body).not.toContain('country_number_one');
+    expect(body).not.toMatch(/\bcountry\b/);
   });
 
   test('the grant is write-once, which is what makes the payload historical', () => {

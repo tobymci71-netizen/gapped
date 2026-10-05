@@ -41,6 +41,12 @@ type BoardRowBase = {
    * labelled SAMPLE (spec §C6). Never presented as real people.
    */
   kind: 'user' | 'you' | 'benchmark' | 'sample';
+  /**
+   * The account behind a server row, which is what a report or a hide names.
+   * Absent on every local row: benchmarks and samples are nobody, and your
+   * own drives are you.
+   */
+  profileId?: string | null;
   /** Bracket the entry was ranked in, when the server supplied one. */
   bracketKey?: string | null;
   /** Provenance line for benchmarks, e.g. "manufacturer figure". */

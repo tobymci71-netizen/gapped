@@ -15,6 +15,7 @@ import {
   nextRoute,
   ONBOARDING_STEPS,
   progressFor,
+  TERMS_ROUTE,
   TOTAL_PROGRESS_STEPS,
   vehicleNoun,
   type OnboardingRoute,
@@ -95,6 +96,49 @@ describe('createFlow, safety acknowledgement off', () => {
   test('a stale link to the removed step neither shows the bar nor routes anywhere', () => {
     expect(flow.progressFor('/onboarding/safety')).toBeNull();
     expect(flow.nextRoute('/onboarding/safety')).toBeNull();
+  });
+});
+
+describe('terms acceptance', () => {
+  // App Review (1.2, 5.1.1): agreeing to the terms and confirming the minimum
+  // age is not optional, so no combination of flags may finish onboarding
+  // without passing the step that asks — and none may ask twice.
+  test.each([
+    [true, true],
+    [true, false],
+    [false, true],
+    [false, false],
+  ])('safety %s, paywall %s: asked on exactly one step the walk visits', (safety, paywall) => {
+    const flow = createFlow({ safety, paywall });
+    expect(walk(flow)).toContain(flow.termsRoute);
+    expect(flow.termsRoute).toBe(safety ? '/onboarding/safety' : '/onboarding/trust');
+  });
+
+  test('it comes before setup, which sends the answers', () => {
+    for (const safety of [true, false]) {
+      const order = walk(createFlow({ safety, paywall: false }));
+      expect(order.indexOf(createFlow({ safety, paywall: false }).termsRoute)).toBeLessThan(
+        order.indexOf('/onboarding/setup'),
+      );
+    }
+  });
+
+  test('this build asks where its flag says', () => {
+    expect(TERMS_ROUTE).toBe(SAFETY_ACKNOWLEDGEMENT ? '/onboarding/safety' : '/onboarding/trust');
+  });
+
+  test('both candidate steps record the agreement; trust only when it is the one asking', () => {
+    // Either can be the one asking, so each must hold the whole of it. Safety
+    // asks whenever it is in the flow; trust asks only when TERMS_ROUTE says.
+    const dir = path.join(__dirname, '../../../app/onboarding');
+    const read = (file: string) => fs.readFileSync(path.join(dir, file), 'utf8');
+    for (const file of ['safety.tsx', 'trust.tsx']) {
+      expect({ file, acceptTerms: read(file).includes('acceptTerms()') }).toEqual({
+        file,
+        acceptTerms: true,
+      });
+    }
+    expect(read('trust.tsx')).toMatch(/TERMS_ROUTE === '\/onboarding\/trust'/);
   });
 });
 
@@ -192,6 +236,19 @@ describe('option lists', () => {
     ]);
     for (const o of FOCUS_OPTIONS) expect(o.sublabel).toBeTruthy();
     expect(focusOption('beatFriends').label).toBe('Beat friends');
+  });
+
+  test('focus measures; it never invites a launch or a race', () => {
+    expect(focusOption('zeroToSixty')).toMatchObject({
+      label: '0–60',
+      sublabel: 'Your acceleration, measured',
+      spoken: 'Zero to sixty',
+    });
+    // Top speed says where it belongs.
+    expect(focusOption('topSpeed').sublabel).toMatch(/tracks and closed roads/);
+    for (const o of FOCUS_OPTIONS) {
+      expect(`${o.label} ${o.sublabel}`).not.toMatch(/launch|race|racing|fastest/i);
+    }
   });
 
   test('attribution covers every key once, in the documented order', () => {

@@ -12,8 +12,7 @@ const FREE: Access = { isPro: false, enforced: true };
 const PRO: Access = { isPro: true, enforced: true };
 const NOT_ENFORCED: Access = { isPro: false, enforced: false };
 
-const ORIGINAL_SUBTITLE =
-  'Optional. Your main car is set, so you can keep going and build your garage later.';
+const OPEN_SUBTITLE = 'Optional. Your main car is set. Add any others you drive, or keep going.';
 
 describe('vehicleAdd', () => {
   it('stays open at any size while limits are not enforced', () => {
@@ -55,9 +54,21 @@ describe('vehicleAdd', () => {
 });
 
 describe('garageStepSubtitle', () => {
-  it('is unchanged while adding is open', () => {
-    expect(garageStepSubtitle('car', vehicleAdd(0, 'car', NOT_ENFORCED))).toBe(ORIGINAL_SUBTITLE);
-    expect(garageStepSubtitle('car', vehicleAdd(4, 'car', PRO))).toBe(ORIGINAL_SUBTITLE);
+  it('invites more vehicles while adding is open', () => {
+    expect(garageStepSubtitle('car', vehicleAdd(0, 'car', NOT_ENFORCED))).toBe(OPEN_SUBTITLE);
+    expect(garageStepSubtitle('car', vehicleAdd(4, 'car', PRO))).toBe(OPEN_SUBTITLE);
+  });
+
+  it('never promises garage editing after onboarding, open or locked', () => {
+    // This step is the only place a vehicle is added; the Garage tab edits
+    // nothing. "Build your garage later" promised a screen that does not exist.
+    for (const access of [NOT_ENFORCED, PRO, FREE]) {
+      for (const noun of ['car', 'bike'] as const) {
+        expect(garageStepSubtitle(noun, vehicleAdd(0, noun, access))).not.toMatch(
+          /later|once|soon|edit/i,
+        );
+      }
+    }
   });
 
   it('does not promise a garage to build later when Free is full', () => {

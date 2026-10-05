@@ -5,6 +5,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PressableScale } from '@/components/PressableScale';
 import { ProBadge, useGoPro } from '@/components/ProBadge';
+import { ReportSheet, type ReportTarget } from '@/components/ReportSheet';
 import { Screen } from '@/components/Screen';
 import { Skeleton } from '@/components/Skeleton';
 import { Text } from '@/components/Text';
@@ -15,7 +16,17 @@ import { supabase } from '@/lib/supabase';
 import { friendAdd } from '@/social/friendLimit';
 import { addFriend, Friend, listFriends, removeFriend } from '@/social/friends';
 import { useProfile } from '@/state/profile';
-import { color, radius, space, type, textStyle } from '@/theme/tokens';
+import { color, glyph as glyphSize, radius, space, type, textStyle } from '@/theme/tokens';
+
+/**
+ * What hiding a friend does here: the Hide also unfollows them, so a driver
+ * you hid does not sit on your friends list, counted and invisible.
+ */
+const HIDE_FRIEND_DETAIL =
+  "They're removed from your friends and disappear from every board you see. Unhide them in Settings, under Hidden drivers.";
+
+/** Widens the 32pt '⋯' button to the 44pt minimum, into the card's padding. */
+const MORE_HIT_SLOP = { left: 6, right: 6 } as const;
 
 /**
  * Friends screen.
@@ -35,6 +46,7 @@ export default function FriendsScreen() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const access = useAccess();
   const goPro = useGoPro();
   // Free follows up to FREE_LIMITS.friends (src/social/friendLimit.ts). A list
@@ -98,6 +110,17 @@ export default function FriendsScreen() {
         },
       },
     ]);
+  };
+
+  // Hidden from the sheet: off the list at once, then unfollowed. The server
+  // already leaves a hidden driver out of list_friends, so the refresh agrees
+  // whether or not the unfollow got through; if it did not, the follow simply
+  // comes back with them should they ever be unhidden.
+  const onDriverHidden = (friendId: string) => {
+    setFriends((list) => (list ? list.filter((f) => f.friendId !== friendId) : list));
+    void removeFriend(friendId)
+      .catch(() => false)
+      .then(() => refresh());
   };
 
   // Without a backend there is no one to follow. Say that, rather than showing
@@ -194,34 +217,55 @@ export default function FriendsScreen() {
         </Card>
       ) : (
         friends.map((f) => (
-          <PressableScale
-            key={f.friendId}
-            onLongPress={() => onRemove(f)}
-            accessibilityRole="button"
-            accessibilityLabel={`${f.username}. Long press to remove.`}
-          >
-            <Card style={styles.friend}>
-              <View style={styles.friendMain}>
-                <Text variant="cardTitle" numberOfLines={1}>
-                  {f.username}
-                </Text>
-                <Text variant="caption">
-                  {f.bestSpeedMs != null
-                    ? `Best ${formatSpeed(f.bestSpeedMs, unitPref)}`
-                    : 'No verified runs yet'}
-                </Text>
-              </View>
-              {f.country ? <Text variant="caption">{f.country}</Text> : null}
-            </Card>
-          </PressableScale>
+          // The name is the long-press target and the '⋯' its own button,
+          // side by side rather than one inside the other: a pressable card
+          // read as a single element to VoiceOver, which hid the button.
+          <Card key={f.friendId} style={styles.friend}>
+            <PressableScale
+              onLongPress={() => onRemove(f)}
+              accessibilityRole="button"
+              accessibilityLabel={`${f.username}. Long press to remove.`}
+              style={styles.friendMain}
+            >
+              <Text variant="cardTitle" numberOfLines={1}>
+                {f.username}
+              </Text>
+              <Text variant="caption">
+                {f.bestSpeedMs != null
+                  ? `Best ${formatSpeed(f.bestSpeedMs, unitPref)}`
+                  : 'No verified runs yet'}
+              </Text>
+            </PressableScale>
+            {f.country ? <Text variant="caption">{f.country}</Text> : null}
+            <PressableScale
+              silent
+              onPress={() => {
+                haptic.selection();
+                setReportTarget({ profileId: f.friendId, username: f.username });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Report or hide ${f.username}`}
+              hitSlop={MORE_HIT_SLOP}
+              style={styles.more}
+            >
+              <Text style={styles.moreGlyph}>⋯</Text>
+            </PressableScale>
+          </Card>
         ))
       )}
 
       {friends && friends.length > 0 ? (
         <Text variant="legal" style={styles.hint}>
-          Long-press a friend to remove them.
+          Long-press a friend to remove them. Tap ⋯ to report or hide them.
         </Text>
       ) : null}
+
+      <ReportSheet
+        target={reportTarget}
+        onClose={() => setReportTarget(null)}
+        onDriverHidden={onDriverHidden}
+        hideDetail={HIDE_FRIEND_DETAIL}
+      />
     </Screen>
   );
 }
@@ -261,8 +305,10 @@ const styles = StyleSheet.create({
     marginTop: space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: space.sm,
   },
   friendMain: { flex: 1, gap: space.xs, minWidth: 0 },
+  more: { width: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  moreGlyph: { ...textStyle(glyphSize.xxl), color: color.text2 },
   hint: { marginTop: space.lg, textAlign: 'center' },
 });

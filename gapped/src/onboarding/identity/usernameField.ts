@@ -9,14 +9,22 @@
  * available, offline — has a test rather than a tap-through.
  */
 
-import { isValidUsername, normaliseUsername } from '@/lib/username';
+import {
+  isValidUsername,
+  normaliseUsername,
+  USERNAME_NOT_ALLOWED,
+  USERNAME_TAKEN,
+  usernameRefusal,
+} from '@/lib/username';
+
+// Defined beside the rules, because a server refusal is read there too
+// (usernameErrorMessage); re-exported so the step's copy stays in one import.
+export { USERNAME_NOT_ALLOWED, USERNAME_TAKEN };
 
 /** Grey, under an untouched or still-typing field. */
 export const USERNAME_HELPER = '3–20 lowercase letters, numbers or underscores.';
 /** Orange: the name cannot be used as typed. */
 export const USERNAME_INVALID = 'Use 3–20 lowercase letters, numbers or underscores.';
-/** Orange: another driver holds it. */
-export const USERNAME_TAKEN = 'That username is already taken.';
 
 /**
  * How long typing has to pause before the name is checked with the server,
@@ -43,9 +51,18 @@ const ALLOWED = /^[a-z0-9_]*$/;
  *  - unchecked: nothing asked yet (typing has not settled)
  *  - checking: asked, no answer yet
  *  - available / taken: the answer
+ *  - not_allowed: a write of this name was refused by the server's filter
+ *    (the availability check only asks who holds a name, so this comes from
+ *    a save, never from the check)
  *  - unknown: no backend, offline, an error, or the timeout — not a "no"
  */
-export type Availability = 'unchecked' | 'checking' | 'available' | 'taken' | 'unknown';
+export type Availability =
+  | 'unchecked'
+  | 'checking'
+  | 'available'
+  | 'taken'
+  | 'not_allowed'
+  | 'unknown';
 
 export type UsernameFieldInput = {
   /** The field's text, as typed. */
@@ -76,10 +93,16 @@ export type UsernameFieldState = {
  * The step's whole presentation for one moment.
  *
  * Characters outside the rule are flagged at once, because no further typing
- * can fix them. Length waits for `settled`. A well-formed name then waits on
- * the server — except that "unknown" counts as free, so the step never traps
- * someone with no signal (docs/ONBOARDING.md: "valid and available (or
- * unknown offline)").
+ * can fix them, and so is a term the denylist refuses anywhere in a name.
+ * Length waits for `settled`, and so does any refusal more typing may still
+ * undo (usernameRefusal's 'word'): a term refused only as a whole word
+ * ("admin", which may be the start of "admiral"), or one at the start of an
+ * innocent host ("scunt", on the way to "scunthorpe"). A
+ * well-formed name then waits on the server — except that "unknown" counts as
+ * free, so the step never traps someone with no signal (docs/ONBOARDING.md:
+ * "valid and available (or unknown offline)"). The server still judges the
+ * name when it is saved; a refusal then comes back as 'taken' or
+ * 'not_allowed'.
  */
 export function usernameFieldState({
   raw,
@@ -94,21 +117,26 @@ export function usernameFieldState({
     checking,
     canContinue: false,
   });
-  const invalid: UsernameFieldState = {
+  const refused = (caption: string): UsernameFieldState => ({
     name,
     tone: 'error',
-    caption: USERNAME_INVALID,
+    caption,
     checking: false,
     canContinue: false,
-  };
+  });
 
   if (name.length === 0) return neutral();
-  if (!ALLOWED.test(name)) return invalid;
-  if (!isValidUsername(name)) return settled ? invalid : neutral();
+  if (!ALLOWED.test(name)) return refused(USERNAME_INVALID);
+  const refusal = usernameRefusal(name);
+  if (refusal === 'contains') return refused(USERNAME_NOT_ALLOWED);
+  if (!isValidUsername(name)) return settled ? refused(USERNAME_INVALID) : neutral();
+  if (refusal === 'word') return settled ? refused(USERNAME_NOT_ALLOWED) : neutral();
 
   switch (availability) {
     case 'taken':
-      return { name, tone: 'error', caption: USERNAME_TAKEN, checking: false, canContinue: false };
+      return refused(USERNAME_TAKEN);
+    case 'not_allowed':
+      return refused(USERNAME_NOT_ALLOWED);
     case 'available':
       return { ...neutral(), tone: 'ok', canContinue: true };
     case 'unknown':

@@ -1,6 +1,7 @@
-import { epochMs, metres, mps, seconds } from '@/types/units';
+import { epochMs, metres, mps, MS_PER_MPH, raw, seconds } from '@/types/units';
 import {
   BoardResult,
+  boardSafetyLine,
   buildLocalBoard,
   emptyBoardFraming,
   periodPhrase,
@@ -216,5 +217,58 @@ describe('sameBrackets', () => {
     expect(sameBrackets([{ key: 'a', drivers: 2 }], [{ key: 'a', drivers: 2 }])).toBe(true);
     expect(sameBrackets([{ key: 'a', drivers: 2 }], [{ key: 'a', drivers: 3 }])).toBe(false);
     expect(sameBrackets([], [{ key: 'a', drivers: 1 }])).toBe(false);
+  });
+});
+
+describe('the SAMPLE board before a first drive', () => {
+  test('fills the Distance board too, which is the one the tab opens on', () => {
+    const r = buildLocalBoard(query({ metric: 'distance' }), null, NOW);
+    expect(r.isSample).toBe(true);
+    expect(r.rows.length).toBeGreaterThan(0);
+    expect(r.rows.every((row) => row.kind === 'sample' && row.metric === 'distance')).toBe(true);
+    expect(r.rows.map((row) => row.rank)).toEqual(r.rows.map((_, i) => i + 1));
+  });
+
+  test('still labels every row SAMPLE and never verified', () => {
+    for (const metric of ['distance', 'top_speed'] as const) {
+      const r = buildLocalBoard(query({ metric }), null, NOW);
+      expect(r.rows.every((row) => row.verification === 'unverified')).toBe(true);
+      expect(r.rows.every((row) => row.username.startsWith('sample_driver_'))).toBe(true);
+    }
+  });
+
+  test('ranks no sample top speed that the line above it says is never ranked', () => {
+    // 70 mph is the UK's limit; 130 km/h is verify-drive's default ceiling.
+    const r = buildLocalBoard(query({ metric: 'top_speed' }), null, NOW);
+    expect(r.rows.length).toBeGreaterThan(0);
+    for (const row of r.rows) {
+      expect(raw(row.value) / MS_PER_MPH).toBeLessThan(70);
+      expect(raw(row.value) * 3.6).toBeLessThan(130);
+    }
+  });
+
+  test('invents nothing for the metrics it has no sample of', () => {
+    expect(buildLocalBoard(query({ metric: 'zero_to_60' }), null, NOW).rows).toEqual([]);
+    expect(buildLocalBoard(query({ metric: 'trip_count' }), null, NOW).rows).toEqual([]);
+  });
+});
+
+describe('boardSafetyLine', () => {
+  test("the top-speed board says speeds over the country's ranking limit are never ranked", () => {
+    expect(boardSafetyLine('top_speed')).toMatch(
+      /above the ranking limit for the driver's country \(its highest speed limit, or 130 km\/h\) are never ranked/,
+    );
+    // The driver's country, not the reader's: a global board ranks each
+    // driver against their own country's ceiling.
+    expect(boardSafetyLine('top_speed')).not.toMatch(/your country/);
+  });
+
+  test('the 0–60 board says where acceleration may be timed', () => {
+    expect(boardSafetyLine('zero_to_60')).toMatch(/legal and safe/);
+  });
+
+  test('distance and drives need none', () => {
+    expect(boardSafetyLine('distance')).toBeNull();
+    expect(boardSafetyLine('trip_count')).toBeNull();
   });
 });

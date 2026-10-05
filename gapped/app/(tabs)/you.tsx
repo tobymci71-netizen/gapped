@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/Skeleton';
 import { Stat } from '@/components/Stat';
 import { Text } from '@/components/Text';
 import { StreakGrid } from '@/components/StreakGrid';
+import { SHOW_PRO } from '@/config/flags';
 import { Achievement, listAchievements } from '@/state/achievements';
 import {
   addBins,
@@ -36,11 +37,16 @@ import { distanceForDisplay, formatDistance, formatDuration, formatSpeed, UnitPr
 import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
 import { isUsernameAvailable } from '@/lib/sync';
-import { isValidUsername, normaliseUsername } from '@/lib/username';
+import {
+  isUsernameAllowed,
+  isValidUsername,
+  normaliseUsername,
+  USERNAME_NOT_ALLOWED,
+} from '@/lib/username';
 import { metres, mps, seconds } from '@/types/units';
 import { useProfile } from '@/state/profile';
 import { useRecords } from '@/state/records';
-import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
+import { color, font, glyph, radius, space, textStyle, type } from '@/theme/tokens';
 
 /** Glyph-tile tints: palette colours at low alpha, matching the Settings screen. */
 const tint = {
@@ -136,7 +142,9 @@ function ManeuverTile({
 }
 
 /**
- * Shown when the server refused the username because another driver holds it.
+ * Shown when the server refused the username: another driver holds it, or it
+ * failed the server's name filter, which sync treats the same way (one flag,
+ * `usernameTaken`), so the words cover both and blame no one.
  *
  * Onboarding never checked, and the refusal used to be swallowed: the runs
  * went up with no name while this screen kept showing the one picked. The
@@ -153,6 +161,15 @@ function UsernameTakenCard({ taken }: { taken: string | null }): React.JSX.Eleme
 
   const save = async () => {
     if (!valid || checking) return;
+    // The availability check only asks whether someone holds the name. One
+    // the server's filter refuses would be saved here, pushed, and refused
+    // again, bringing this card straight back; the short mirror of that
+    // filter (src/lib/username.ts) stops the commonest ones first.
+    if (!isUsernameAllowed(name)) {
+      haptic.error();
+      setProblem(USERNAME_NOT_ALLOWED);
+      return;
+    }
     setChecking(true);
     setProblem(null);
     const free = await isUsernameAvailable(name);
@@ -161,7 +178,7 @@ function UsernameTakenCard({ taken }: { taken: string | null }): React.JSX.Eleme
       haptic.error();
       setProblem(
         free === false
-          ? `@${name} is taken too. Try another.`
+          ? `@${name} is taken. Try another.`
           : 'Could not check that name. Check your connection and try again.',
       );
       return;
@@ -174,11 +191,11 @@ function UsernameTakenCard({ taken }: { taken: string | null }): React.JSX.Eleme
   return (
     <Card style={styles.takenCard}>
       <Text variant="caption" style={{ color: color.danger }}>
-        USERNAME TAKEN
+        USERNAME UNAVAILABLE
       </Text>
       <Text variant="body">
-        {taken ? `@${taken} already belongs to another driver, ` : 'Your username is taken, '}
-        so your runs appear on the boards without a name. Pick another.
+        {taken ? `@${taken} can't be used` : "Your username can't be used"} (it is taken or not
+        allowed), so your runs appear on the boards without a name. Pick another.
       </Text>
       <View style={styles.takenRow}>
         <Text variant="bodyMedium" style={{ color: color.text3 }}>
@@ -347,6 +364,16 @@ export default function YouScreen() {
 
   const avgDistance =
     drives.length > 0 ? distanceForDisplay(metres(totalDistanceM / drives.length), unitPref) : null;
+  // The longest single drive, from the same summaries as the totals. It took
+  // the place of "Total stops", which showed a dash because stops are not
+  // measured: a tile for a number the app does not have.
+  const longest =
+    drives.length > 0
+      ? distanceForDisplay(
+          metres(drives.reduce((m, d) => Math.max(m, d.summary.distanceM), 0)),
+          unitPref,
+        )
+      : null;
 
   // Only the list is split. Every total above is summed over all drives,
   // locked ones included: they are the person's own numbers, and top speed
@@ -570,19 +597,26 @@ export default function YouScreen() {
           value={avgDistance ? avgDistance.value.toFixed(1) : EM_DASH}
           unit={avgDistance ? avgDistance.unit : undefined}
         />
-        <Stat label="Total stops" value={EM_DASH} />
+        <Stat
+          label="Longest drive"
+          value={longest ? longest.value.toFixed(1) : EM_DASH}
+          unit={longest ? longest.unit : undefined}
+        />
       </View>
-      <Text variant="legal" style={styles.note}>
-        Stops are shown as a dash because we do not measure them yet. A number here would be a
-        guess, and this app does not guess.
-      </Text>
 
-      <PressableScale onPress={() => router.push('/plans')} accessibilityRole="button">
-        <Card style={styles.plansLink}>
-          <Text variant="bodyMedium">Free vs Pro — the whole matrix, published</Text>
-          <Text variant="caption">{PLANS_LINK_NOTE.text}</Text>
-        </Card>
-      </PressableScale>
+      {/*
+        Only while Pro is on sale (SHOW_PRO): a link to a plan comparison
+        with nothing to buy is a reference to a paid tier App Review rejects,
+        and /plans redirects back here then anyway.
+      */}
+      {SHOW_PRO ? (
+        <PressableScale onPress={() => router.push('/plans')} accessibilityRole="button">
+          <Card style={styles.plansLink}>
+            <Text variant="bodyMedium">Free vs Pro — the whole matrix, published</Text>
+            <Text variant="caption">{PLANS_LINK_NOTE.text}</Text>
+          </Card>
+        </PressableScale>
+      ) : null}
 
       <Text variant="cardTitle" style={styles.sectionTitle}>
         History
@@ -651,7 +685,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gearGlyph: { fontSize: 20, lineHeight: 24, color: color.text1 },
+  gearGlyph: { ...textStyle(glyph.xxl), color: color.text1 },
   identity: { marginTop: space.lg },
   meta: { marginTop: space.xs },
   takenCard: { marginTop: space.md, gap: space.sm },
@@ -676,7 +710,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', gap: space.md, marginTop: space.md },
   achievements: { marginTop: space.xl, gap: space.sm },
   achievementCard: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  achievementGlyph: { fontSize: 26, lineHeight: 32 },
+  achievementGlyph: { ...textStyle(glyph.huge) },
   achievementBody: { flex: 1, gap: 2 },
   streakCard: { marginTop: space.xl },
   pbCard: { marginTop: space.md, gap: space.xs },
@@ -689,7 +723,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tileGlyph: { fontSize: 15, lineHeight: 20, color: color.text1, textAlign: 'center' },
+  tileGlyph: { ...textStyle(glyph.lg), color: color.text1, textAlign: 'center' },
   tileLabel: { textTransform: 'uppercase', letterSpacing: 0.6, ...textStyle(type.label) },
   turnCard: { marginTop: space.md, gap: space.md },
   cardLabel: { textTransform: 'uppercase', letterSpacing: 0.6, ...textStyle(type.label) },
@@ -712,7 +746,6 @@ const styles = StyleSheet.create({
   },
   distFill: { backgroundColor: color.accent },
   distCount: { minWidth: 40, textAlign: 'right', color: color.text2, ...textStyle(type.label) },
-  note: { marginTop: space.md },
   plansLink: { marginTop: space.xl, gap: space.xs },
   historyCard: { marginTop: space.md, gap: space.xs },
   // Wraps at large text sizes rather than pushing the chip off the card.

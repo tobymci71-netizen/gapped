@@ -1,16 +1,18 @@
 import { FlashList } from '@shopify/flash-list';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { AppState, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { countryByCode } from '@/data/countries';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Entrance } from '@/components/Entrance';
 import { PressableScale } from '@/components/PressableScale';
 import { ProBadge, useGoPro } from '@/components/ProBadge';
+import { ReportSheet, type ReportTarget } from '@/components/ReportSheet';
 import { Screen } from '@/components/Screen';
 import { Skeleton } from '@/components/Skeleton';
 import { Text } from '@/components/Text';
 import {
+  boardSafetyLine,
   fetchBoard,
   fetchBrackets,
   BoardResult,
@@ -27,6 +29,14 @@ import {
   bracketsLocked,
   pickBracket,
 } from '@/board/bracketAccess';
+import {
+  answeredAfter,
+  type HiddenHere,
+  hideHere,
+  isModeratable,
+  settleHidden,
+  withoutHidden,
+} from '@/board/hiddenRows';
 import { BoardMetric, BoardPeriod, BoardRow, BoardScope } from '@/board/types';
 import { useDriveStore } from '@/drive/recorder';
 import { formatDistance, formatSpeed } from '@/drive/units';
@@ -52,10 +62,13 @@ type Option<T extends string> = {
   accessibilityLabel?: string;
 };
 
+// Distance first, and the board the tab opens on: it ranks driving, not a
+// number that could be chased on a public road. Top speed and 0–60 stay a
+// tap away, each with its safety line (boardSafetyLine).
 const METRICS: Option<BoardMetric>[] = [
-  { key: 'top_speed', label: 'Top speed' },
   { key: 'distance', label: 'Distance' },
   { key: 'trip_count', label: 'Drives' },
+  { key: 'top_speed', label: 'Top speed' },
   { key: 'zero_to_60', label: '0–60 mph' },
 ];
 // Rolling windows, labelled as what they are. Both the local board and
@@ -112,6 +125,15 @@ const NO_FLAG = '🏳️';
 
 /** One stable empty list for the loading state, rather than a new [] per render. */
 const NO_ROWS: BoardRow[] = [];
+
+/** Nobody hidden on this screen yet. */
+const NONE_HIDDEN: HiddenHere = new Map();
+
+/**
+ * Widens the 32pt '⋯' button to the 44pt minimum sideways, into the row's
+ * own padding and the gap beside the value, without pushing the value left.
+ */
+const MORE_HIT_SLOP = { left: 6, right: 6 } as const;
 
 function labelFor<T extends string>(options: Option<T>[], value: T): string {
   return options.find((o) => o.key === value)?.label ?? '';
@@ -265,10 +287,19 @@ function BoardRowView({
   item,
   value,
   stacked,
+  menuSlot,
+  onMore,
 }: {
   item: BoardRow;
   value: string;
   stacked: boolean;
+  /**
+   * The board has rows with a '⋯' button, so every row keeps the column, and
+   * values stay aligned whether or not their own row has one.
+   */
+  menuSlot: boolean;
+  /** Opens Report / Hide. Set only on another real driver's row. */
+  onMore?: () => void;
 }): React.JSX.Element {
   const chips = (
     <>
@@ -319,7 +350,27 @@ function BoardRowView({
     </Text>
   );
 
-  return (
+  // The visible, VoiceOver-reachable way to Report or Hide; the row's long
+  // press is the shortcut to the same sheet.
+  const more = onMore ? (
+    <PressableScale
+      silent
+      onPress={() => {
+        haptic.selection();
+        onMore();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`Report or hide ${item.username}`}
+      hitSlop={MORE_HIT_SLOP}
+      style={styles.more}
+    >
+      <Text style={styles.moreGlyph}>⋯</Text>
+    </PressableScale>
+  ) : menuSlot ? (
+    <View style={styles.more} />
+  ) : null;
+
+  const row = (
     <View
       style={[
         styles.row,
@@ -356,7 +407,23 @@ function BoardRowView({
           {valueText}
         </>
       )}
+      {more}
     </View>
+  );
+  if (!onMore) return row;
+  // Not accessible itself, so VoiceOver still reaches the row's text and its
+  // '⋯' button one by one; a grouped row would swallow the button. No press
+  // styling either: every scroll that starts on a row would flash it.
+  return (
+    <Pressable
+      accessible={false}
+      onLongPress={() => {
+        haptic.selection();
+        onMore();
+      }}
+    >
+      {row}
+    </Pressable>
   );
 }
 
@@ -365,7 +432,7 @@ export default function BoardScreen() {
   const { username, country, unitPref } = useProfile();
   const { fontScale } = useWindowDimensions();
   const largeText = fontScale >= LARGE_TEXT;
-  const [metric, setMetric] = useState<BoardMetric>('top_speed');
+  const [metric, setMetric] = useState<BoardMetric>('distance');
   const [scope, setScope] = useState<BoardScope>('global');
   const [period, setPeriod] = useState<BoardPeriod>('week');
   const [verifiedOnly, setVerifiedOnly] = useState(true);
@@ -435,11 +502,29 @@ export default function BoardScreen() {
   // verification are server concepts and those controls are shown inert
   // rather than lying. Held beside `result` rather than derived from it so the
   // controls do not flicker while `result` is null during a reload.
-  const [board, setBoard] = useState<{ result: BoardResult | null; live: boolean }>({
+  // `answered`: the newest request the server has answered, whether or not
+  // its board differed from the one showing, which says which hides the
+  // server has applied by itself (below, and answeredAfter).
+  const [board, setBoard] = useState<{
+    result: BoardResult | null;
+    live: boolean;
+    answered: number;
+  }>({
     result: null,
     live: false,
+    answered: 0,
   });
-  const { result, live: filtersLive } = board;
+  const { result, live: filtersLive, answered } = board;
+  // Report / Hide. `hidden` takes a driver off this board the moment the hide
+  // goes through, until a board fetched after it — which the server answers
+  // without them — is the one on screen (src/board/hiddenRows.ts).
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const [hidden, setHidden] = useState<HiddenHere>(NONE_HIDDEN);
+  const rows = useMemo(
+    () => withoutHidden(result?.rows ?? NO_ROWS, settleHidden(hidden, answered)),
+    [result, hidden, answered],
+  );
+  const menuSlot = useMemo(() => rows.some(isModeratable), [rows]);
   const load = useCallback(async () => {
     const key = JSON.stringify([
       metric,
@@ -462,7 +547,13 @@ export default function BoardScreen() {
     if (seq !== requestId.current) return;
     setBoard((b) => {
       const next = settleBoard(b.result, r, quiet);
-      return next === b.result ? b : { result: next, live: next.source === 'server' };
+      // Counted even when the board is unchanged (answeredAfter): an Unhide
+      // made before any refetch comes back as exactly the board from before
+      // the hide.
+      const nowAnswered = answeredAfter(b.answered, seq, r.source);
+      return next === b.result && nowAnswered === b.answered
+        ? b
+        : { result: next, live: next.source === 'server', answered: nowAnswered };
     });
     // `country` is a real input now that it scopes the query — without it here
     // a country change would leave the previous country's board on screen.
@@ -573,6 +664,8 @@ export default function BoardScreen() {
     }
   };
 
+  const safetyLine = boardSafetyLine(metric);
+
   const header = (
     <View style={styles.header}>
       <Text variant="headline">Ranks</Text>
@@ -652,6 +745,12 @@ export default function BoardScreen() {
         </PressableScale>
       </View>
 
+      {safetyLine ? (
+        <Text variant="legal" style={styles.safety}>
+          {safetyLine}
+        </Text>
+      ) : null}
+
       {result?.isSample ? (
         <View style={styles.sampleBanner}>
           <Text variant="caption" style={{ color: color.onAccent }}>
@@ -708,11 +807,21 @@ export default function BoardScreen() {
           time FlashList recycled a cell into a new position. */}
       <Entrance style={styles.list}>
         <FlashList
-          data={result?.rows ?? NO_ROWS}
+          data={rows}
           keyExtractor={(r: BoardRow) => r.id}
           ListHeaderComponent={largeText ? header : null}
           renderItem={({ item }: { item: BoardRow }) => (
-            <BoardRowView item={item} value={formatValue(item)} stacked={largeText} />
+            <BoardRowView
+              item={item}
+              value={formatValue(item)}
+              stacked={largeText}
+              menuSlot={menuSlot}
+              onMore={
+                isModeratable(item)
+                  ? () => setReportTarget({ profileId: item.profileId, username: item.username })
+                  : undefined
+              }
+            />
           )}
           ListEmptyComponent={
             result == null ? (
@@ -771,6 +880,11 @@ export default function BoardScreen() {
         value={period}
         onSelect={setPeriod}
         onClose={() => setSheet(null)}
+      />
+      <ReportSheet
+        target={reportTarget}
+        onClose={() => setReportTarget(null)}
+        onDriverHidden={(id) => setHidden((h) => hideHere(h, id, requestId.current))}
       />
     </Screen>
   );
@@ -848,6 +962,7 @@ const styles = StyleSheet.create({
   // a margin above the text is now inside the target, so the tap no longer
   // has to land on a 20pt line of caption.
   manageFriends: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  safety: { marginTop: space.xs },
   list: { flex: 1 },
   skeleton: { gap: space.md, paddingTop: space.md },
   row: {
@@ -881,6 +996,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   chipText: { color: color.accentDim, fontSize: 9, lineHeight: 11, letterSpacing: 1 },
+  // 32pt wide, widened to 44 by MORE_HIT_SLOP; the full row height tall.
+  more: { width: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  moreGlyph: { ...textStyle(glyphSize.xxl), color: color.text2 },
   empty: { alignItems: 'center', gap: space.md, paddingTop: space.xxl },
   emptyTile: {
     width: 72,

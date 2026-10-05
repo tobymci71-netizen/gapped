@@ -1,12 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { AccessibilityInfo, Platform, StyleSheet, TextInput, View } from 'react-native';
 import { PressableScale } from '@/components/PressableScale';
 import { SearchableListSheet } from '@/components/SearchableListSheet';
 import { Text } from '@/components/Text';
 import type { VehicleKind } from '@/state/profile';
 import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
+import { MAKE_NOT_ALLOWED } from '@/lib/username';
 import { modelsForMake, popularMakes, searchMakes, searchModels } from '@/vehicles/catalog';
-import { cleanName, MAX_MAKE_LENGTH, MAX_MODEL_LENGTH, type VehicleDraft, withMake } from './draft';
+import {
+  cleanName,
+  makeRefused,
+  MAX_MAKE_LENGTH,
+  MAX_MODEL_LENGTH,
+  type VehicleDraft,
+  withMake,
+} from './draft';
 import { CheckIcon, ChevronDownIcon } from './icons';
 import { useRevealOnFocus } from './StepScroll';
 
@@ -53,6 +61,15 @@ export function VehicleFields({ kind, draft, onChange }: Props) {
   );
   const hasModelList = !!make && modelsForMake(kind, make).length > 0;
   const linkLabel = typing ? 'Choose from the list instead' : 'Not listed? Add it yourself';
+  // A make the server would refuse (draftReady holds Continue back for it).
+  // Only a typed or "Enter manually" make can be one: the catalogue's pass.
+  const refused = makeRefused(draft.make);
+
+  // Spoken as it appears, as the username step does. iOS only: on Android the
+  // caption's live region already reads it.
+  useEffect(() => {
+    if (refused && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(MAKE_NOT_ALLOWED);
+  }, [refused]);
 
   return (
     <View style={styles.root}>
@@ -63,6 +80,7 @@ export function VehicleFields({ kind, draft, onChange }: Props) {
           <PickerField
             label="Make"
             value={make}
+            refused={refused}
             placeholder="Select make"
             onPress={() => setSheet('make')}
           />
@@ -76,6 +94,12 @@ export function VehicleFields({ kind, draft, onChange }: Props) {
           />
         </>
       )}
+
+      {refused ? (
+        <Text variant="caption" accessibilityLiveRegion="polite" style={styles.refused}>
+          {MAKE_NOT_ALLOWED}
+        </Text>
+      ) : null}
 
       <PressableScale
         silent
@@ -126,6 +150,7 @@ export function VehicleFields({ kind, draft, onChange }: Props) {
 function PickerField({
   label,
   value,
+  refused = false,
   placeholder,
   disabled = false,
   disabledHint,
@@ -133,6 +158,8 @@ function PickerField({
 }: {
   label: string;
   value: string;
+  /** The value is one the server would refuse: no check, and VoiceOver says so. */
+  refused?: boolean;
   placeholder: string;
   disabled?: boolean;
   disabledHint?: string;
@@ -144,7 +171,9 @@ function PickerField({
       disabled={disabled}
       silent
       accessibilityRole="button"
-      accessibilityLabel={value ? `${label}, ${value}` : placeholder}
+      accessibilityLabel={
+        value ? `${label}, ${value}${refused ? `. ${MAKE_NOT_ALLOWED}` : ''}` : placeholder
+      }
       accessibilityHint={
         disabled ? disabledHint : `Opens a searchable list of ${label.toLowerCase()}s`
       }
@@ -158,7 +187,7 @@ function PickerField({
       >
         {value || placeholder}
       </Text>
-      {value ? <CheckIcon /> : <ChevronDownIcon />}
+      {value && !refused ? <CheckIcon /> : <ChevronDownIcon />}
     </PressableScale>
   );
 }
@@ -198,7 +227,7 @@ function TypedFields({ kind, draft, onChange }: Props) {
           accessibilityLabel={kind === 'motorbike' ? 'Bike make' : 'Car make'}
           style={styles.input}
         />
-        {cleanName(draft.make) ? <CheckIcon /> : null}
+        {cleanName(draft.make) && !makeRefused(draft.make) ? <CheckIcon /> : null}
       </View>
       <View ref={modelWrap} style={styles.field}>
         <TextInput
@@ -252,4 +281,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
   },
   linkLabel: { color: color.accent, fontFamily: font.bodySemibold, textAlign: 'center' },
+  refused: { color: color.warning, paddingHorizontal: space.lg },
 });

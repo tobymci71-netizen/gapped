@@ -18,7 +18,6 @@ import { countryDots, discDots } from './countryDots';
 import { Crossfade } from './Crossfade';
 import { DotMap } from './DotMap';
 import { ChevronDownIcon } from './icons';
-import { useCountryProof } from './useCountryProof';
 import { useCountUp } from './useCountUp';
 
 /**
@@ -65,17 +64,22 @@ const FLAG_TILE_MAX_SCALE = 1.5;
  *
  * `play` holds the count at its start until the step has arrived, so the
  * figure is seen counting rather than finishing under the push transition.
+ *
+ * `proof` is the step's (useCountryProof), not fetched here: the headline
+ * above is worded from the same answer (countryTitle), and one fetch keeps
+ * the two from ever disagreeing.
  */
 export function CountryProof({
   country,
+  proof,
   onChange,
   play,
 }: {
   country: Country | null;
+  proof: Proof | 'loading' | null;
   onChange: () => void;
   play: boolean;
 }) {
-  const proof = useCountryProof(country?.code ?? null);
   return (
     <>
       {country ? (

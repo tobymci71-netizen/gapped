@@ -19,6 +19,7 @@ import { PressableScale } from '@/components/PressableScale';
 import { ProBadge, useGoPro } from '@/components/ProBadge';
 import { Speedometer } from '@/components/Speedometer';
 import { Text } from '@/components/Text';
+import { INTERNAL_TOOLS } from '@/config/flags';
 import { lockedHistoryRow, splitHistory } from '@/drive/driveAccess';
 import { sanitiseHeading } from '@/drive/heading';
 import { HUD_MAX_FONT_SCALE, hudDialSize } from '@/drive/hud';
@@ -37,7 +38,7 @@ import { haptic } from '@/lib/haptics';
 import { seconds, raw } from '@/types/units';
 import { useProfile } from '@/state/profile';
 import { useRecords } from '@/state/records';
-import { color, gutter, radius, space, textStyle, type } from '@/theme/tokens';
+import { color, font, gutter, radius, space, textStyle, type } from '@/theme/tokens';
 import { BodyType, inferBodyType } from '@/vehicles/bodyType';
 
 /**
@@ -61,6 +62,16 @@ const AVATAR = 44;
 const CONTROL = 44;
 const PANEL_RADIUS = radius.card + 8;
 const DISCARDED_NOTE = "That drive wasn't saved — no usable GPS fix was recorded.";
+/**
+ * Location is allowed only while Gapped is open, so the screen locking ends
+ * the drive's fixes (recorder.ts, BackgroundPermission).
+ */
+const ALWAYS_NOTE = 'Set Location to Always so drives keep recording with the screen off.';
+/**
+ * The one line beside Start drive, read before every drive: the phone is
+ * dealt with parked, and left alone on the move.
+ */
+const SET_OFF_LINE = 'Set up before you set off. Never handle your phone while driving.';
 const ACTION_NOTE_MAX_FONT_SCALE = 1.3;
 
 type FinalizedDrive = LocalDrive & { summary: DriveSummary };
@@ -105,6 +116,7 @@ export default function DriveScreen() {
     permission,
     canAskAgain,
     precise,
+    backgroundPermission,
     requestPermissions,
     startDrive,
     stopDrive,
@@ -117,6 +129,7 @@ export default function DriveScreen() {
       permission: s.permission,
       canAskAgain: s.canAskAgain,
       precise: s.precise,
+      backgroundPermission: s.backgroundPermission,
       requestPermissions: s.requestPermissions,
       startDrive: s.startDrive,
       stopDrive: s.stopDrive,
@@ -311,26 +324,27 @@ export default function DriveScreen() {
       {recording && hudVisible ? <LiveHud top={hudTop} size={hudSize} unitPref={unitPref} /> : null}
 
       {/*
-        IMU debug readout. Off by default; Settings → Debug HUD turns it on.
-        NOT behind __DEV__ and not inside the HUD block above, both deliberately.
+        IMU debug readout. Off by default; Settings → Debug HUD turns it on, in
+        development builds only (INTERNAL_TOOLS). It was once deliberately
+        visible in TestFlight builds, to confirm the gravity and sampling fixes
+        in a moving vehicle; those are confirmed, and a release build — the App
+        Store's and TestFlight's are the same binary — no longer carries
+        developer tools. The profile store also holds `debugHud` false in a
+        release build, so a TestFlight install that left it on cannot bring it
+        back; the flag is checked here as well so the strip cannot render
+        whatever the store says.
 
-        A TestFlight build is a release build, so a __DEV__ gate would hide the
-        one instrument needed to confirm the gravity and sampling fixes — and
-        those can only be confirmed in a moving vehicle, which is never where a
-        debug build is.
-
-        Nested inside `recording && hudVisible` it would have been almost as
-        useless: the parked baseline and the phone-rotation gravity check both
-        happen BEFORE a drive starts, and tapping HUD to hide the speedometer
-        would have taken the diagnostics with it. It renders whenever the flag
-        is on.
+        Not inside the HUD block above, deliberately: the parked baseline and
+        the phone-rotation gravity check both happen BEFORE a drive starts, and
+        tapping HUD to hide the speedometer would have taken the diagnostics
+        with it.
 
         Reading it: `g` sits near 0.00 parked and rises under braking or
         cornering; `Hz` sits at 1 cruising and flicks to 10 when something
         happens. A `g` that idles near 1.00 means gravity is back in the signal,
         and Hz will be stuck at 10 as a consequence.
       */}
-      {debugHud ? <DebugStrip top={insets.top + space.md} /> : null}
+      {INTERNAL_TOOLS && debugHud ? <DebugStrip top={insets.top + space.md} /> : null}
 
       <View style={[styles.panel, { height: panelHeight }]}>
         <View style={styles.panelHeader}>
@@ -461,6 +475,10 @@ export default function DriveScreen() {
             </>
           ) : (
             <>
+              {/* Not a block: a drive still records while Gapped is on screen. */}
+              {backgroundPermission !== 'granted' ? (
+                <AlwaysNote onOpenSettings={openSettings} />
+              ) : null}
               {lastDiscardedAt != null ? (
                 <ActionNote>{DISCARDED_NOTE}</ActionNote>
               ) : null}
@@ -471,6 +489,13 @@ export default function DriveScreen() {
                   startDrive();
                 }}
               />
+              <Text
+                variant="legal"
+                style={styles.setOff}
+                maxFontSizeMultiplier={ACTION_NOTE_MAX_FONT_SCALE}
+              >
+                {SET_OFF_LINE}
+              </Text>
             </>
           )}
         </View>
@@ -556,6 +581,33 @@ function ActionNote({ children }: { children: React.ReactNode }) {
     >
       {children}
     </Text>
+  );
+}
+
+/**
+ * Location is on only while Gapped is open: one tappable line that says what
+ * that costs and opens Settings, where Location can be set to Always. Shown
+ * only beside Start drive, parked — never during a drive, when the phone is
+ * not to be handled. The whole line is the 44pt target, and it is capped like
+ * the other notes so it cannot push Start drive out of the panel.
+ */
+function AlwaysNote({ onOpenSettings }: { onOpenSettings: () => void }) {
+  return (
+    <PressableScale
+      onPress={onOpenSettings}
+      accessibilityRole="button"
+      accessibilityLabel={`${ALWAYS_NOTE} Open Settings`}
+      accessibilityHint="Opens Gapped's settings"
+      style={styles.alwaysNote}
+    >
+      <Text
+        variant="caption"
+        style={styles.actionNote}
+        maxFontSizeMultiplier={ACTION_NOTE_MAX_FONT_SCALE}
+      >
+        {ALWAYS_NOTE} <Text variant="caption" style={styles.alwaysLink}>Open Settings</Text>
+      </Text>
+    </PressableScale>
   );
 }
 
@@ -651,4 +703,7 @@ const styles = StyleSheet.create({
   rowChevron: { fontSize: 20, lineHeight: 22, color: color.text3 },
   action: { paddingTop: space.sm, gap: space.sm },
   actionNote: { textAlign: 'center' },
+  alwaysNote: { minHeight: 44, justifyContent: 'center' },
+  alwaysLink: { color: color.accent, fontFamily: font.bodyMedium },
+  setOff: { textAlign: 'center' },
 });

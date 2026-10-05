@@ -12,8 +12,11 @@
  * allocate nothing.
  */
 
+import { SHOW_PRO } from '@/config/flags';
 import type { PlanFeatureKey } from '@/config/plans';
+import { SIXTY_MPH_MS } from '@/drive/units';
 import type { VehicleKind } from '@/state/profile';
+import type { MetresPerSecond } from '@/types/units';
 import { vehicleNoun } from '../flow';
 
 // ─── Splash ──────────────────────────────────────────────────────────────────
@@ -73,11 +76,11 @@ export type IntroPageCopy = {
   /** The footer button's label on this page. */
   cta: string;
   /**
-   * The Pro-only PLAN_MATRIX row this page demos, if any. The page wears the
-   * PRO chip over its title and VoiceOver hears "Gapped Pro" with it. This
-   * marks which plan the feature is in, as the Plans screen's PRO column
-   * does, not whether this account can use it, so it shows whether or not
-   * Free limits are enforced. The test holds it to the matrix.
+   * The Pro-only PLAN_MATRIX row this page demos, if any. While Pro is shown
+   * (SHOW_PRO), the page wears the PRO chip over its title and VoiceOver
+   * hears "Gapped Pro" with it (marksPro). This marks which plan the feature
+   * is in, as the Plans screen's PRO column does, not whether this account
+   * can use it. The test holds it to the matrix.
    */
   proFeature?: PlanFeatureKey;
 };
@@ -88,14 +91,19 @@ export type IntroPageCopy = {
  * What these pages promise for every drive has to be in Free (PLAN_MATRIX,
  * src/config/plans.ts): the first page used to say "Top speed, 0–60 and every
  * corner", and cornering G is Pro. The cornering demo stays, as page 3, and
- * says it is Pro.
+ * says it is Pro whenever Pro is shown.
+ *
+ * Calm, and about the person's own drives: these are public roads, and
+ * nothing here makes a speed a contest. Page 1 leads with distance, the
+ * board the Ranks tab opens on, and says the figures are verified before they
+ * are ranked, not that they are there to be beaten.
  */
 export const INTRO_PAGES: readonly IntroPageCopy[] = [
   {
     key: 'track',
     title: 'Track every drive',
-    subtitle: 'Your top speed and 0–60 times. Verified, then ranked.',
-    spokenSubtitle: 'Your top speed and zero to sixty times. Verified, then ranked.',
+    subtitle: 'Distance, top speed and 0–60. Verified, then ranked.',
+    spokenSubtitle: 'Distance, top speed and zero to sixty. Verified, then ranked.',
     cta: 'Get started',
   },
   {
@@ -135,21 +143,33 @@ export function ctaFor(page: number, kind: VehicleKind | null | undefined): stri
 const PRO_SPOKEN = 'Gapped Pro';
 
 /**
+ * Whether a page wears the PRO chip and names the plan aloud: it demos a
+ * Pro-only row, and Pro is shown at all (SHOW_PRO). With Pro hidden, as it
+ * is until purchases work, every account has every feature, and a chip or a
+ * spoken "Gapped Pro" would name a plan nobody can buy.
+ *
+ * `showPro` defaults to the build's flag; the tests pass both.
+ */
+export function marksPro(copy: IntroPageCopy, showPro: boolean = SHOW_PRO): boolean {
+  return showPro && copy.proFeature != null;
+}
+
+/**
  * The page's title as VoiceOver reads it: a Pro page says so first, in the
  * order the chip and the title are drawn. The PRO chip itself is hidden from
  * VoiceOver (src/components/ProBadge.tsx), so this is where it is heard.
  */
-export function spokenTitle(copy: IntroPageCopy): string {
-  return copy.proFeature ? `${PRO_SPOKEN}. ${copy.title}` : copy.title;
+export function spokenTitle(copy: IntroPageCopy, showPro: boolean = SHOW_PRO): string {
+  return marksPro(copy, showPro) ? `${PRO_SPOKEN}. ${copy.title}` : copy.title;
 }
 
 /**
  * What VoiceOver announces when the button, not a swipe, changes the page.
  * The button keeps focus, so without this the new page arrives in silence.
  */
-export function pageAnnouncement(page: number): string {
+export function pageAnnouncement(page: number, showPro: boolean = SHOW_PRO): string {
   const i = clampPage(page, INTRO_PAGE_COUNT);
-  const title = spokenTitle(INTRO_PAGES[i]).replace(/\.$/, '');
+  const title = spokenTitle(INTRO_PAGES[i], showPro).replace(/\.$/, '');
   return `${title}. Page ${i + 1} of ${INTRO_PAGE_COUNT}.`;
 }
 
@@ -221,6 +241,18 @@ export function isOnScreen(mask: number, page: number): boolean {
  * overshoot, which is well under a degree of needle.
  */
 export const DIAL_SWEEP_MS = 800;
+
+/**
+ * The speed the welcome dial sweeps to: 60 mph (about 97 km/h), the top of
+ * the 0–60 the page talks about and a legal speed on many open roads. It was
+ * 87 mph (140 km/h), over the national limit in the UK and in most countries,
+ * on the first screen anyone sees.
+ *
+ * Branded, as SIXTY_MPH_MS is: this is where the 313 km/h bug lived, when a
+ * bare 87 already in mph was converted a second time. A bare number in
+ * display units no longer compiles here.
+ */
+export const DIAL_DEMO_MS: MetresPerSecond = SIXTY_MPH_MS;
 
 /**
  * The welcome dial for VoiceOver. It shows a speed nobody drove, so it says
@@ -355,10 +387,18 @@ export function formatG(hundredths: number): string {
 /**
  * The demo as one VoiceOver label. The gauge is a picture of a reading, not a
  * reading, so it says so first, and gives the end state the animation holds.
- * It names the plan too: someone who swipes straight onto the gauge has not
- * heard the title's "Gapped Pro", and cornering G is Pro.
+ * While Pro is shown it names the plan too: someone who swipes straight onto
+ * the gauge has not heard the title's "Gapped Pro", and cornering G is Pro.
+ * With Pro hidden it is just a demo, as the welcome dial is.
  */
-export const CORNERING_DEMO_LABEL =
-  `${PRO_SPOKEN} demo. Cornering G: ${formatG(gHundredths(CORNERING_END_G))} g through a right-hand corner. ` +
-  `Peak cornering G: left ${formatG(gHundredths(CORNERING_LEFT_PEAK_G))} g, ` +
-  `right ${formatG(gHundredths(CORNERING_END_G))} g.`;
+export function corneringDemoLabel(showPro: boolean = SHOW_PRO): string {
+  return (
+    `${showPro ? `${PRO_SPOKEN} demo` : 'Demo'}. ` +
+    `Cornering G: ${formatG(gHundredths(CORNERING_END_G))} g through a right-hand corner. ` +
+    `Peak cornering G: left ${formatG(gHundredths(CORNERING_LEFT_PEAK_G))} g, ` +
+    `right ${formatG(gHundredths(CORNERING_END_G))} g.`
+  );
+}
+
+/** The cornering demo's label in this build. */
+export const CORNERING_DEMO_LABEL = corneringDemoLabel();

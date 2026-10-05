@@ -7,8 +7,13 @@
  * app shows "improve up to 2.4x faster" under every answer; nothing like that
  * exists here, because Gapped has no study behind such a figure. What each
  * variant shows instead is the mechanism the copy describes — a verified row,
- * a timed launch, a rank in your country, a friends board — with the numbers
+ * a measured 0–60, a rank in your country, a friends board — with the numbers
  * plainly marked as an example.
+ *
+ * Nothing here invites speed. Top speed says what is never ranked (a speed
+ * over the country's national limit, which verify-drive keeps off the
+ * boards), a 0–60 is a measurement rather than a launch, and friends compare
+ * rather than race.
  */
 
 import { SAMPLE_BOARD_ROWS } from '@/board/sampleRows';
@@ -31,12 +36,12 @@ export function focusProofCopy(focus: Focus, noun: 'car' | 'bike'): FocusProofCo
     case 'topSpeed':
       return {
         title: 'Your top speed, verified',
-        body: 'Every run is re-checked on our servers before it counts. No spoofed GPS, no typed-in numbers.',
+        body: "Every run is re-checked on our servers before it counts. No spoofed GPS, no typed-in numbers, and no top speed over its country's ranking limit makes the boards.",
       };
     case 'zeroToSixty':
       return {
         title: 'Measured, not guessed',
-        body: 'From a standstill of at least two seconds, with a one-foot rollout. No clean launch, no number.',
+        body: 'From a standstill of at least two seconds, with a one-foot rollout. No clean start, no number.',
       };
     // Country and global, not class: placement on those boards is Free, and
     // class brackets are Pro in the published plans matrix, so this screen
@@ -48,8 +53,8 @@ export function focusProofCopy(focus: Focus, noun: 'car' | 'bike'): FocusProofCo
       };
     case 'beatFriends':
       return {
-        title: 'Friends make it a race',
-        body: "Add friends by username and race their real drive stats. Following is one-way, so nobody lands on a stranger's screen.",
+        title: 'See how you compare',
+        body: "Add friends by username and compare real drive stats. Following is one-way, so nobody lands on a stranger's screen.",
       };
   }
 }
@@ -59,9 +64,24 @@ export const PROOF_POINTS = ['Real drive data', 'Progress history', 'Ranking con
 export type ProofPoint = (typeof PROOF_POINTS)[number];
 
 /**
- * Top speed: one board row — the Board tab's own first sample row
- * (src/board/sampleRows.ts), the same one the welcome carousel shows: 82 mph,
- * 132 km/h.
+ * The fastest any sample on this step may show: 70 mph (113 km/h), the UK's
+ * motorway limit, and under the 130 km/h ceiling verify-drive ranks to where
+ * a country has no limit of its own (supabase/functions/_shared
+ * speedLimits.ts). The top-speed copy says nothing over the national limit is
+ * ranked; a sample "verified" row above it, on the same screen, would show a
+ * run that the UK's board, and most others, would never rank.
+ */
+export const SAMPLE_SPEED_CAP_MPH = 70;
+
+/** The Board tab's first sample row within the cap (src/board/sampleRows.ts). */
+const TOP_SPEED_SAMPLE =
+  SAMPLE_BOARD_ROWS.find((r) => r.mph <= SAMPLE_SPEED_CAP_MPH) ??
+  SAMPLE_BOARD_ROWS[SAMPLE_BOARD_ROWS.length - 1];
+
+/**
+ * Top speed: one board row — one of the Board tab's own sample rows
+ * (src/board/sampleRows.ts), the first within SAMPLE_SPEED_CAP_MPH: as the
+ * rows stand, 69 mph, 111 km/h.
  *
  * Not "You" and the person's own car. A VERIFIED speed printed beside a real
  * car they own is a made-up figure for that car, whatever tag sits over the
@@ -76,15 +96,15 @@ export const SAMPLE_TOP_SPEED_ROW: {
   vehicle: string;
   topSpeed: MetresPerSecond;
 } = {
-  name: SAMPLE_BOARD_ROWS[0].username,
-  vehicle: SAMPLE_BOARD_ROWS[0].vehicle,
-  topSpeed: fromMph(SAMPLE_BOARD_ROWS[0].mph),
+  name: TOP_SPEED_SAMPLE.username,
+  vehicle: TOP_SPEED_SAMPLE.vehicle,
+  topSpeed: fromMph(TOP_SPEED_SAMPLE.mph),
 };
 
 /**
  * 0–60: the time the server re-derives from the zeroSixtyPull fixture in
  * `npm run verify:roundtrip` (README, "Backend") — a real measurement of a
- * test trace, shown as a sample of what a launch looks like.
+ * test trace, shown as a sample of what a measured 0–60 looks like.
  */
 export const SAMPLE_ZERO_SIXTY_S = 5.02;
 
@@ -97,12 +117,12 @@ export type SampleFriend = { name: string; topSpeed: MetresPerSecond; you?: true
  * Beat friends: a three-row friends board, ranked. Usernames say "sample" in
  * the name itself, as the board's own sample rows do (src/board/boards.ts),
  * so even a screenshot cropped past the SAMPLE tag cannot pass them off as
- * people.
+ * people. Within SAMPLE_SPEED_CAP_MPH, and no faster than the top-speed row.
  */
 export const SAMPLE_FRIENDS: readonly SampleFriend[] = [
-  { name: 'sample_friend_1', topSpeed: fromMph(76) },
-  { name: 'You', topSpeed: fromMph(71), you: true },
-  { name: 'sample_friend_2', topSpeed: fromMph(64) },
+  { name: 'sample_friend_1', topSpeed: fromMph(67) },
+  { name: 'You', topSpeed: fromMph(62), you: true },
+  { name: 'sample_friend_2', topSpeed: fromMph(58) },
 ];
 
 /**

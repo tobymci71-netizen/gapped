@@ -48,16 +48,20 @@ export function closerLine(noun: Noun): string {
  * profile with no make (which the ride step does not allow, but a stored
  * profile from an older build could carry) gets the same sentences without
  * the blank where the make would be.
+ *
+ * The body used to end "Yours can be the one to beat". These are public
+ * roads, and a drive is not something to beat; the body now says only what
+ * happens to a verified drive.
  */
 export function earlyCopy(make: string | null | undefined): { title: string; body: string } {
   const m = cleanName(make);
   return m
     ? {
         title: `Be one of the first ${m} drivers on the board`,
-        body: `Every verified ${m} run lands on the board. Yours can be the one to beat.`,
+        body: `Each verified ${m} drive is added to the board as it comes in.`,
       }
     : {
         title: 'Be one of the first drivers on the board',
-        body: 'Every verified run lands on the board. Yours can be the one to beat.',
+        body: 'Each verified drive is added to the board as it comes in.',
       };
 }

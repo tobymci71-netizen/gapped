@@ -124,3 +124,8 @@ export function PodiumIcon({ size = 22, color: c = color.text2 }: IconProps) {
     </Svg>
   );
 }
+
+/** Tracks and closed roads: a flag on its pole. */
+export function FlagIcon(p: IconProps) {
+  return <Line {...p} d="M5 21V3.5M5 4.5h12.5l-2.5 4 2.5 4H5" />;
+}

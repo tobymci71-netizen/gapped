@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -21,7 +21,8 @@ import { PressableScale } from '@/components/PressableScale';
 import { SHARE_CARD_RENDER, ShareCard } from '@/components/ShareCard';
 import { Text } from '@/components/Text';
 import { PAYWALL_PLACEHOLDER_PRICES } from '@/config/flags';
-import { PAYWALL_PRO_NOTE, PRO_PLANS, type ProPlan } from '@/config/plans';
+import { PRIVACY_URL, TERMS_URL } from '@/config/links';
+import { PAYWALL_PRO_NOTE, paywallRedirect, PRO_PLANS, type ProPlan } from '@/config/plans';
 import { haptic } from '@/lib/haptics';
 import { CheckGlyph, CloseGlyph } from '@/onboarding/identity/glyphs';
 import { SAMPLE_DRIVE } from '@/onboarding/identity/sampleDrive';
@@ -35,8 +36,7 @@ import { color, font, glyph, radius, space, textStyle } from '@/theme/tokens';
 type Plan = ProPlan;
 
 /**
- * The two plans, monthly first and preselected (PRO_PLANS, the list the Plans
- * screen's pricing line is checked against). Prices are
+ * The two plans, monthly first and preselected (PRO_PLANS). Prices are
  * PAYWALL_PLACEHOLDER_PRICES until RevenueCat supplies localised ones, and
  * there is no "was" price, per-week breakdown or deal badge: nothing has been
  * priced, so nothing can be discounted.
@@ -46,10 +46,6 @@ const PLANS: readonly { key: Plan; title: string; price: string }[] = PRO_PLANS.
   title: p.title,
   price: PAYWALL_PLACEHOLDER_PRICES[p.key],
 }));
-
-/** The same pages Settings links to. */
-const TERMS_URL = 'https://gapped.app/terms';
-const PRIVACY_URL = 'https://gapped.app/privacy';
 
 const UNAVAILABLE = "Gapped Pro isn't available yet";
 const PURCHASE_STUB =
@@ -88,6 +84,18 @@ function heroSize(slot: { width: number; height: number }): number {
 }
 
 /**
+ * /onboarding/paywall. The flow only routes here with ONBOARDING_PAYWALL on;
+ * with it off, a deep link is sent back to the start of onboarding
+ * (paywallRedirect, src/config/plans.ts) rather than drawing a paywall that
+ * cannot charge, or finishing onboarding past steps it never showed. A
+ * wrapper, so the screen's hooks are never called conditionally.
+ */
+export default function PaywallRoute() {
+  const redirect = paywallRedirect();
+  return redirect ? <Redirect href={redirect} /> : <PaywallStep />;
+}
+
+/**
  * Gapped Pro (docs/ONBOARDING.md, paywall). Reached only when
  * ONBOARDING_PAYWALL is on, after "You're all set".
  *
@@ -111,7 +119,7 @@ function heroSize(slot: { width: number; height: number }): number {
  * hero is still the sample share card, the reference's shape, drawn as every
  * plan draws it, GAPPED badge and all.
  */
-export default function PaywallStep() {
+function PaywallStep() {
   const finish = useOnboardingAdvance('/onboarding/paywall');
   useHardwareBack(finish);
   const [plan, setPlan] = useState<Plan>(PLANS[0].key);

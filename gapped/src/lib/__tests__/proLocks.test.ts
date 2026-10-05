@@ -4,15 +4,15 @@
  * its three states (enforced Free, enforcement off, Pro); this file is the
  * one to read and run when the flag flips. One test per lock, named for the
  * screen that draws it, and a check that every Pro-only row of PLAN_MATRIX
- * is locked somewhere below or is marked as not built yet.
+ * is locked somewhere below.
  *
  * It renders nothing and never touches the flag: the Access is explicit. The
  * last block runs the same helpers as the committed build, where with the
  * flag off not one of them may lock.
  */
 
-import { PRO_LIMITS_ENFORCED } from '@/config/flags';
-import { FREE_LIMITS, PLAN_MATRIX, type PlanFeatureKey } from '@/config/plans';
+import { PRO_LIMITS_ENFORCED, SHOW_PRO } from '@/config/flags';
+import { FREE_LIMITS, goProRoute, PLAN_MATRIX, type PlanFeatureKey } from '@/config/plans';
 import {
   ALL_CLASSES,
   appliedBracket,
@@ -54,12 +54,15 @@ const BRACKETS: Bracket[] = [
   { key: 'awd|modified|pw4', drivers: 12 },
 ];
 
-const NOT_BUILT = 'not built yet: nothing to lock';
-
 /**
  * Where each Pro-only row of the matrix is locked. A new Pro row fails the
- * first test until it is given a lock here (and a test below), or is marked
- * not built, so the matrix cannot promise a Pro feature Free still gets.
+ * first test until it is given a lock here and a test below, so the matrix
+ * cannot promise a Pro feature Free still gets.
+ *
+ * There is no "not built yet" entry any more. The video overlay and restoring
+ * on a new phone were Pro rows with nothing behind them, and they left the
+ * matrix (src/config/plans.ts) rather than be sold unbuilt: a row with no
+ * lock is either free or does not exist.
  */
 const LOCKED_AT: Record<ProFeature, string> = {
   fullHistory: "the Drive and You tabs' history, and a deep link to an old drive",
@@ -70,21 +73,21 @@ const LOCKED_AT: Record<ProFeature, string> = {
   cleanShareCards: '"Hide Gapped badge" on a drive',
   export: 'GPX and CSV export on a drive',
   unlimitedGarage: 'adding a car in onboarding once the main car fills the garage',
-  videoOverlay: NOT_BUILT,
-  cloudSync: NOT_BUILT,
 };
 
 const row = (key: PlanFeatureKey) => PLAN_MATRIX.find((r) => r.key === key);
 
 describe('the map of locks', () => {
-  test('every Pro-only row of the matrix is locked somewhere, or marked not built', () => {
+  test('every Pro-only row of the matrix is locked somewhere', () => {
     expect(Object.keys(LOCKED_AT).sort()).toEqual([...PRO_FEATURES].sort());
     for (const f of PRO_FEATURES) expect(canUse(f, FREE)).toBe(false);
   });
 
-  test('the rows marked not built are the two the plans call unbuilt', () => {
-    const unbuilt = PRO_FEATURES.filter((f) => LOCKED_AT[f] === NOT_BUILT);
-    expect(unbuilt.sort()).toEqual(['cloudSync', 'videoOverlay']);
+  test('every Pro-only row names a real place it is locked: none is sold unbuilt', () => {
+    for (const f of PRO_FEATURES) expect(LOCKED_AT[f]).not.toMatch(/not built/i);
+    const keys: string[] = [...PRO_FEATURES];
+    expect(keys).not.toContain('videoOverlay');
+    expect(keys).not.toContain('cloudSync');
   });
 });
 
@@ -198,6 +201,14 @@ describe('this build, as committed', () => {
   // is not called here: it is a hook, and becomes a real one with purchases.
   const BUILD: Access = { isPro: false, enforced: PRO_LIMITS_ENFORCED };
 
+  test('a lock only ever shows when Pro is shown: the chip and the lock are one flag', () => {
+    // Every lock above wears a PRO chip and says "Gapped Pro". With SHOW_PRO
+    // off the chip draws nothing and a "leads to Pro" tap does nothing, so a
+    // lock that could apply then would be a dead, unexplained control.
+    expect(SHOW_PRO).toBe(PRO_LIMITS_ENFORCED);
+    expect(goProRoute()).toBe(SHOW_PRO ? '/plans' : null);
+  });
+
   test('every lock above applies exactly when PRO_LIMITS_ENFORCED is on', () => {
     // Off, which every TestFlight build is, not one of them may lock.
     const on = PRO_LIMITS_ENFORCED;
@@ -211,5 +222,76 @@ describe('this build, as committed', () => {
     expect(friendAdd(FREE_LIMITS.friends, BUILD).kind === 'locked').toBe(on);
     expect(bracketsLocked(BUILD)).toBe(on);
     expect(vehicleAdd(0, 'car', BUILD).kind === 'locked').toBe(on);
+  });
+});
+
+describe('the build that turns Pro on', () => {
+  // The block above runs the committed flags, which are off. This loads
+  // useAccess's inputs and the "leads to Pro" route against flags turned on,
+  // so the build that wires purchases is checked before it exists.
+  test('locks a Free account everywhere, and every lock leads to the matrix', () => {
+    let flags: typeof import('@/config/flags') | undefined;
+    let planRoutes: typeof import('@/config/plans') | undefined;
+    jest.isolateModules(() => {
+      jest.doMock('@/config/flags', () => ({
+        ...jest.requireActual('@/config/flags'),
+        SHOW_PRO: true,
+        PRO_LIMITS_ENFORCED: true,
+      }));
+      flags = jest.requireMock<typeof import('@/config/flags')>('@/config/flags');
+      planRoutes = jest.requireActual<typeof import('@/config/plans')>('@/config/plans');
+    });
+    jest.dontMock('@/config/flags');
+    const f = flags as typeof import('@/config/flags');
+    const p = planRoutes as typeof import('@/config/plans');
+    expect(f.SHOW_PRO).toBe(true);
+    expect(p.goProRoute()).toBe('/plans');
+
+    const built: Access = { isPro: false, enforced: f.PRO_LIMITS_ENFORCED };
+    expect(splitHistory(DRIVES, NOW, built).locked).toBe(2);
+    expect(driveLocked(OLD_DRIVE.startedAt, NOW, built)).toBe(true);
+    expect(peakGView(0.94, built).kind).toBe('locked');
+    expect(exportView(built).locked).toBe(true);
+    expect(cleanShareLocked(built)).toBe(true);
+    expect(telemetryView(built).locked).toBe(true);
+    expect(friendAdd(FREE_LIMITS.friends, built).kind).toBe('locked');
+    expect(bracketsLocked(built)).toBe(true);
+    expect(vehicleAdd(0, 'car', built).kind).toBe('locked');
+    for (const feature of PRO_FEATURES) expect(canUse(feature, built)).toBe(false);
+    // And Pro opens every one of them.
+    const pro: Access = { isPro: true, enforced: f.PRO_LIMITS_ENFORCED };
+    for (const feature of PRO_FEATURES) expect(canUse(feature, pro)).toBe(true);
+  });
+});
+
+describe('the PRO chip', () => {
+  // Every lock wears ProBadge, and so do screens this file does not cover
+  // (friends, the board, a drive). It calls no hooks, so it can be called as
+  // a plain function: what it returns is what it draws.
+  function badgeWith(showPro: boolean) {
+    let badge: typeof import('@/components/ProBadge') | undefined;
+    jest.isolateModules(() => {
+      jest.doMock('@/config/flags', () => ({
+        ...jest.requireActual('@/config/flags'),
+        SHOW_PRO: showPro,
+        PRO_LIMITS_ENFORCED: showPro,
+      }));
+      // Only useGoPro reads the router, and it is not called here; expo-router
+      // itself does not load under jest.
+      jest.doMock('expo-router', () => ({ useRouter: jest.fn() }));
+      badge = jest.requireActual<typeof import('@/components/ProBadge')>('@/components/ProBadge');
+    });
+    jest.dontMock('@/config/flags');
+    jest.dontMock('expo-router');
+    return badge as typeof import('@/components/ProBadge');
+  }
+
+  test('draws nothing while Pro is hidden, and comes back when it is shown', () => {
+    expect(badgeWith(false).ProBadge()).toBeNull();
+    expect(badgeWith(true).ProBadge()).not.toBeNull();
+  });
+
+  test('this build draws it exactly when SHOW_PRO is on', () => {
+    expect(badgeWith(SHOW_PRO).ProBadge() !== null).toBe(SHOW_PRO);
   });
 });

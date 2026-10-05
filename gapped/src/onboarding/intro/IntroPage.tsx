@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { ProBadge } from '@/components/ProBadge';
 import { Text } from '@/components/Text';
 import { gutter, space } from '@/theme/tokens';
-import { type IntroPageCopy, spokenTitle } from './introTimeline';
+import { type IntroPageCopy, marksPro, spokenTitle } from './introTimeline';
 
 type Props = {
   copy: IntroPageCopy;
@@ -30,7 +30,9 @@ type Props = {
 
 /**
  * One carousel page: a visual and its heading. A page that demos a Pro
- * feature (`copy.proFeature`) wears the PRO chip above its title.
+ * feature (`copy.proFeature`) wears the PRO chip above its title, but only
+ * while Pro is shown at all (marksPro, SHOW_PRO): until then it is a plain
+ * page, with no chip and no "Gapped Pro" in its spoken title.
  *
  * Each page scrolls vertically inside the horizontal pager. At 375×667 every
  * page fits; at the largest Dynamic Type sizes the copy outgrows the screen,
@@ -47,9 +49,10 @@ export function IntroPage({
   onViewport,
 }: Props) {
   const viewport = useRef({ top: 0, height: 0 });
+  const pro = marksPro(copy);
   const heading = (
     <View style={[styles.heading, headingFirst ? styles.headingFirst : styles.headingAfter]}>
-      {copy.proFeature ? (
+      {pro ? (
         // Over the title, as an eyebrow. ProBadge pins itself to the start;
         // on a centred page the row around it centres it.
         <View style={[styles.chip, !headingFirst && styles.chipCentred]}>
@@ -60,7 +63,7 @@ export function IntroPage({
         variant="headline"
         accessibilityRole="header"
         // The chip is silent to VoiceOver, so the title says "Gapped Pro".
-        accessibilityLabel={copy.proFeature ? spokenTitle(copy) : undefined}
+        accessibilityLabel={pro ? spokenTitle(copy) : undefined}
         // No one-word last line ("See where you stack / up").
         lineBreakStrategyIOS="push-out"
         style={headingFirst ? undefined : styles.centerText}

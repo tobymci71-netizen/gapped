@@ -1,6 +1,6 @@
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Linking, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, AppState, Linking, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Button } from '@/components/Button';
 import { Entrance } from '@/components/Entrance';
@@ -13,11 +13,14 @@ import { driveLog } from '@/lib/log';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { LocationArrowIcon, PinIcon } from '@/onboarding/place/icons';
 import {
+  advancesOnAnswer,
   type LastRequest,
   LOCATION_ACTION_LABEL,
+  LOCATION_NOTE_TEXT,
   LOCATION_STATUS_LABEL,
   locationAction,
   locationCaption,
+  locationNote,
   locationStatus,
 } from '@/onboarding/place/locationStep';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
@@ -71,12 +74,22 @@ async function untilNoSystemDialog(): Promise<void> {
  * kept here: the same permission recording will use, re-read by the store on
  * every return to the foreground. So it reads Not requested, Allowed or Not
  * allowed truthfully, including after a trip to Settings.
+ *
+ * Background ("Always") is what keeps a drive recording with the screen
+ * locked, and iOS asks for it in a second dialog right after the first. The
+ * line under the card says what to pick there before the tap and while the
+ * dialogs are up (locationNote, 'chooseAlways'). If the answer leaves
+ * location on only while Gapped is open, the step stays put and says what
+ * that means and how to change it (LOCATION_NOTE_TEXT.screenLock), with Open
+ * Settings beside Continue — never a block. Coming back from Settings with
+ * Always on moves the step along.
  */
 export default function LocationStep() {
   const advance = useOnboardingAdvance('/onboarding/location');
   const requestPermissions = useDriveStore((s) => s.requestPermissions);
   const permission = useDriveStore((s) => s.permission);
   const canAskAgain = useDriveStore((s) => s.canAskAgain);
+  const background = useDriveStore((s) => s.backgroundPermission);
   /*
    * How the last request ended (locationStep.ts, LastRequest).
    *
@@ -84,10 +97,11 @@ export default function LocationStep() {
    * platform fault, not a refusal, so it gets "Try again" rather than Open
    * Settings.
    *
-   * 'answered': the OS has just answered and the step is about to move on.
-   * The footer holds still as Continue meanwhile (a tap skips the wait),
-   * rather than flashing "Open Settings" under a refusal for the moment
-   * before it leaves.
+   * 'answered': the OS has just answered and the step is about to move on —
+   * or, when the answer leaves location on only while Gapped is open, is
+   * waiting on Continue under the screen-lock warning. The footer holds
+   * still as Continue meanwhile (a tap skips the wait), rather than flashing
+   * "Open Settings" under a refusal for the moment before it leaves.
    */
   const [last, setLast] = useState<LastRequest>('none');
   /*
@@ -99,20 +113,40 @@ export default function LocationStep() {
    * few milliseconds, and a disabled state would flash the button grey.
    */
   const inFlight = useRef(false);
+  /*
+   * The same request, as state, for the line under the card only: while the
+   * dialogs are up it keeps saying what to choose, rather than reading the
+   * half-answered permission (foreground in, background not yet) as a
+   * warning.
+   */
+  const [asking, setAsking] = useState(false);
   /** The pending move-on after the answer lands. */
   const beat = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Set by Open Settings; see the effect below ask(). */
   const sentToSettings = useRef(false);
+  /**
+   * Set while the step holds on the screen-lock warning, and by its Open
+   * Settings; see the effect below.
+   */
+  const awaitingAlways = useRef(false);
 
   const action = locationAction({ permission, canAskAgain }, last);
   const status = locationStatus(permission);
+  const note = locationNote({ permission, background }, action, asking);
 
   const moveOn = useCallback(() => {
     if (beat.current) clearTimeout(beat.current);
     beat.current = null;
     sentToSettings.current = false;
+    awaitingAlways.current = false;
     advance();
   }, [advance]);
+
+  /** Shows the answer for a beat, then moves on. */
+  const moveOnAfterBeat = useCallback(() => {
+    if (beat.current) clearTimeout(beat.current);
+    beat.current = setTimeout(moveOn, ANSWER_BEAT_MS);
+  }, [moveOn]);
 
   // Back to this step shows what the permission is now, not the pause before
   // it left. Cleared on the way back in rather than on the way out, so the
@@ -135,16 +169,29 @@ export default function LocationStep() {
   const ask = useCallback(async () => {
     if (inFlight.current) return;
     inFlight.current = true;
+    setAsking(true);
     try {
       await requestPermissions();
       // The "Always" request can resolve with its dialog still up (see
       // recorder.ts); moving on beneath it would leave it over "Your focus".
       await untilNoSystemDialog();
-      // The card now reads Allowed or Not allowed (the store took the answer
-      // before resolving); let that land, then carry on either way.
+      // The card now reads Allowed or Not allowed (the store took both
+      // answers before resolving); let that land, then carry on — unless the
+      // answer leaves recording cut off at screen lock, which is said and
+      // left on screen until Continue.
       setLast('answered');
-      if (beat.current) clearTimeout(beat.current);
-      beat.current = setTimeout(moveOn, ANSWER_BEAT_MS);
+      const now = useDriveStore.getState();
+      const after = locationNote(
+        { permission: now.permission, background: now.backgroundPermission },
+        'continue',
+        false,
+      );
+      if (advancesOnAnswer(after)) {
+        moveOnAfterBeat();
+      } else {
+        awaitingAlways.current = true;
+        AccessibilityInfo.announceForAccessibility(LOCATION_NOTE_TEXT.screenLock);
+      }
     } catch (e) {
       // Uncaught, this left the step with no way forward but Not now, and no
       // word on why nothing happened.
@@ -153,8 +200,9 @@ export default function LocationStep() {
       setLast('failed');
     } finally {
       inFlight.current = false;
+      setAsking(false);
     }
-  }, [requestPermissions, moveOn]);
+  }, [requestPermissions, moveOnAfterBeat]);
 
   /*
    * "Open Settings" sends them out of the app to grant it. When they come
@@ -181,6 +229,31 @@ export default function LocationStep() {
     void ask();
   }, [permission, focused, ask]);
 
+  /*
+   * Always turns up while the step holds on the screen-lock warning: the
+   * warning is answered, so the step does what it would have done had the
+   * dialog's answer said so at once — shows it, and moves on. Nothing is
+   * asked; the store re-reads background on every return (syncPermission).
+   *
+   * Two ways here. Back from Settings, after the warning's Open Settings. Or
+   * straight after the dialog: expo-location can resolve the Always request
+   * before the dialog is answered (its 1.5 s timer; see recorder.ts), so
+   * ask() can read the old "While Using" and hold on the warning a moment
+   * before the store's re-read on 'active' brings in the Always picked in
+   * the dialog.
+   */
+  useEffect(() => {
+    if (background !== 'granted' || !awaitingAlways.current || !focused) return;
+    awaitingAlways.current = false;
+    setLast('answered');
+    moveOnAfterBeat();
+  }, [background, focused, moveOnAfterBeat]);
+
+  const openSettingsForAlways = () => {
+    awaitingAlways.current = true;
+    Linking.openSettings().catch(() => undefined);
+  };
+
   const primary = () => {
     switch (action) {
       case 'continue':
@@ -204,7 +277,7 @@ export default function LocationStep() {
             variant="light"
             onPress={primary}
           />
-          {action === 'continue' ? null : (
+          {action !== 'continue' ? (
             <PressableScale
               onPress={moveOn}
               accessibilityRole="button"
@@ -216,7 +289,19 @@ export default function LocationStep() {
                 Not now
               </Text>
             </PressableScale>
-          )}
+          ) : note === 'screenLock' ? (
+            <PressableScale
+              onPress={openSettingsForAlways}
+              accessibilityRole="button"
+              accessibilityLabel="Open Settings"
+              accessibilityHint="Opens Gapped's settings, where Location can be set to Always."
+              style={styles.notNow}
+            >
+              <Text variant="bodyMedium" style={styles.notNowLabel}>
+                Open Settings
+              </Text>
+            </PressableScale>
+          ) : null}
         </View>
       }
     >
@@ -245,8 +330,27 @@ export default function LocationStep() {
         </OnSurface>
       </View>
 
+      {note ? <NoteText key={note} text={LOCATION_NOTE_TEXT[note]} /> : null}
+
       <Text variant="caption">{locationCaption(action)}</Text>
     </OnboardingFrame>
+  );
+}
+
+/**
+ * The line about recording with the screen locked, fading in when it changes
+ * from what to choose to what the answer means. White rather than the
+ * caption's grey: it is the one thing on the step that changes how a drive
+ * records.
+ */
+function NoteText({ text }: { text: string }) {
+  const reduced = useReducedMotion();
+  return (
+    <Animated.View entering={reduced ? undefined : FadeIn.duration(duration.base)}>
+      <Text variant="caption" style={styles.note}>
+        {text}
+      </Text>
+    </Animated.View>
   );
 }
 
@@ -280,6 +384,7 @@ const styles = StyleSheet.create({
   },
   cardLabel: { flex: 1 },
   statusOn: { color: color.accent },
+  note: { color: color.text1 },
   footer: { gap: space.xs },
   notNow: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   notNowLabel: { color: color.text2 },

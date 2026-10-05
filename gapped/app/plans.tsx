@@ -1,11 +1,11 @@
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import React from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
-import { PLAN_MATRIX, PRO_PRICING_NOTE } from '@/config/plans';
+import { PLAN_MATRIX, plansRedirect } from '@/config/plans';
 import { useProfile } from '@/state/profile';
 import { color, space } from '@/theme/tokens';
 
@@ -27,11 +27,24 @@ const included = (yes: boolean) => (yes ? 'included' : 'not included');
 const TABLE_MAX_SCALE = 1.4;
 
 /**
+ * /plans. While SHOW_PRO is off there is no Pro to compare against, so the
+ * route redirects (plansRedirect, src/config/plans.ts): to the You tab, or to
+ * onboarding for a profile that has not finished it. The screen stays for
+ * when Pro ships. A wrapper rather than an early return inside the screen,
+ * which would call its hooks conditionally.
+ */
+export default function PlansRoute() {
+  const onboarded = useProfile((s) => s.onboarded);
+  const redirect = plansRedirect(onboarded);
+  return redirect ? <Redirect href={redirect} /> : <PlansScreen />;
+}
+
+/**
  * The published free-vs-Pro matrix — table stakes #13. The rows live in
  * src/config/plans.ts (PLAN_MATRIX), where the onboarding paywall's line about
  * what Pro adds is tested against them; this screen only draws them.
  */
-export default function PlansScreen() {
+function PlansScreen() {
   const router = useRouter();
   const { fontScale } = useWindowDimensions();
   const stacked = fontScale > TABLE_MAX_SCALE;
@@ -121,10 +134,6 @@ export default function PlansScreen() {
           </View>
         ))}
       </Card>
-
-      <Text variant="legal" style={styles.legal}>
-        {PRO_PRICING_NOTE}
-      </Text>
     </Screen>
   );
 }
@@ -137,5 +146,4 @@ const styles = StyleSheet.create({
   featureCol: { flex: 1 },
   tierCol: { minWidth: 48, textAlign: 'center' },
   tiers: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg },
-  legal: { marginTop: space.lg },
 });

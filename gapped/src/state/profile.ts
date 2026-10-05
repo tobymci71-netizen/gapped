@@ -7,6 +7,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { INTERNAL_TOOLS } from '@/config/flags';
 import { canonicaliseCountry, type CountryCode } from '@/data/countries';
 import { UnitPref } from '@/drive/units';
 import { uuid } from '@/lib/ids';
@@ -67,6 +68,14 @@ type ProfileData = {
    * even after the user switches rides.
    */
   vehicleId: string | null;
+  /**
+   * The server refused the main vehicle's row (0019: a make on its denylist,
+   * or text it cannot store), so drives in it cannot upload: each one points
+   * at a vehicle the server does not have. They stay on this phone, unsent,
+   * and the Garage tab says so. Set by sync, cleared once the server takes
+   * the row (the owner can widen the list) or the car changes.
+   */
+  vehicleRefused: boolean;
   username: string | null;
   /**
    * The server refused `username` because another driver already holds it.
@@ -78,9 +87,21 @@ type ProfileData = {
   usernameTaken: boolean;
   safetyAccepted: boolean;
   /**
+   * When this driver agreed to the Terms of Use and Privacy Policy and
+   * confirmed they are 18 or older with a valid driving licence: an ISO 8601
+   * timestamp, or null until they have. Set by acceptTerms() from whichever
+   * onboarding step asks (TERMS_ROUTE in src/onboarding/flow.ts), and sent to
+   * the driver's own `onboarding_answers.terms_accepted_at` by sync. A
+   * profile carried over from a build before the terms existed has none.
+   */
+  termsAcceptedAt: string | null;
+  /**
    * Shows the IMU debug readout on the drive HUD. Off by default. Exists
    * because the adaptive sampling rate and the gravity-removed G magnitude
    * cannot be confirmed from a simulator — they need a moving vehicle.
+   *
+   * Development builds only (INTERNAL_TOOLS): a release build can neither
+   * turn it on nor keep it on from a TestFlight build that could.
    */
   debugHud: boolean;
   /**
@@ -126,7 +147,12 @@ type ProfileState = ProfileData & {
    * accepted at a later one, after its holder lets it go).
    */
   setUsernameTaken: (taken: boolean) => void;
+  /** Sync's verdict on the main vehicle's row: see vehicleRefused. */
+  setVehicleRefused: (refused: boolean) => void;
   acceptSafety: () => void;
+  /** Records the terms acceptance as now (termsAcceptedAt). */
+  acceptTerms: () => void;
+  /** A no-op outside development builds (INTERNAL_TOOLS). */
   toggleDebugHud: () => void;
   completeOnboarding: () => void;
   /** Returns the store to first-run state. Used by account deletion. */
@@ -147,9 +173,11 @@ const INITIAL: ProfileData = {
   vehicleMake: null,
   vehicleModel: null,
   vehicleId: null,
+  vehicleRefused: false,
   username: null,
   usernameTaken: false,
   safetyAccepted: false,
+  termsAcceptedAt: null,
   debugHud: false,
   nickname: null,
   extraVehicles: [],
@@ -165,8 +193,9 @@ const INITIAL: ProfileData = {
  *   0  (unversioned) everything up to onboarding v1
  *   1  onboarding v2: nickname, extraVehicles, vehiclePhotoUri, focus,
  *      attribution
+ *   2  launch: termsAcceptedAt
  */
-export const PROFILE_VERSION = 1;
+export const PROFILE_VERSION = 2;
 
 /**
  * Brings a stored profile from any earlier version up to PROFILE_VERSION.
@@ -184,9 +213,9 @@ export const PROFILE_VERSION = 1;
  * Exported for the tests; nothing else should call it.
  */
 export function migrateProfile(persisted: unknown, version: number): Partial<ProfileData> {
-  const state = (persisted && typeof persisted === 'object' ? persisted : {}) as Partial<ProfileData>;
+  let state = (persisted && typeof persisted === 'object' ? persisted : {}) as Partial<ProfileData>;
   if (version < 1) {
-    return {
+    state = {
       nickname: INITIAL.nickname,
       extraVehicles: INITIAL.extraVehicles,
       vehiclePhotoUri: INITIAL.vehiclePhotoUri,
@@ -194,6 +223,11 @@ export function migrateProfile(persisted: unknown, version: number): Partial<Pro
       attribution: INITIAL.attribution,
       ...state,
     };
+  }
+  if (version < 2) {
+    // Null, not a date: a driver who onboarded before the terms existed has
+    // not agreed to them, whatever else they accepted (safetyAccepted).
+    state = { termsAcceptedAt: INITIAL.termsAcceptedAt, ...state };
   }
   return state;
 }
@@ -223,6 +257,7 @@ export const useProfile = create<ProfileState>()(
                 vehicleMake: null,
                 vehicleModel: null,
                 vehicleId: null,
+                vehicleRefused: false,
                 nickname: null,
                 vehiclePhotoUri: null,
               },
@@ -233,7 +268,7 @@ export const useProfile = create<ProfileState>()(
         set((s) =>
           s.vehicleMake === vehicleMake && s.vehicleModel === vehicleModel && s.vehicleId
             ? s
-            : { vehicleMake, vehicleModel, vehicleId: uuid() },
+            : { vehicleMake, vehicleModel, vehicleId: uuid(), vehicleRefused: false },
         ),
       // A nickname and a photo survive a make/model change within one kind:
       // that is nearly always a correction (1 Series → 1M) of the same car.
@@ -255,8 +290,13 @@ export const useProfile = create<ProfileState>()(
       // every screen subscribed to the profile.
       setUsernameTaken: (usernameTaken) =>
         set((s) => (s.usernameTaken === usernameTaken ? s : { usernameTaken })),
+      setVehicleRefused: (vehicleRefused) =>
+        set((s) => (s.vehicleRefused === vehicleRefused ? s : { vehicleRefused })),
       acceptSafety: () => set({ safetyAccepted: true }),
-      toggleDebugHud: () => set((st) => ({ debugHud: !st.debugHud })),
+      // The latest agreement wins: going Back through the step and agreeing
+      // again records when they last agreed, which is the one that counts.
+      acceptTerms: () => set({ termsAcceptedAt: new Date().toISOString() }),
+      toggleDebugHud: () => set((st) => ({ debugHud: INTERNAL_TOOLS && !st.debugHud })),
       completeOnboarding: () => set({ onboarded: true }),
       reset: () => set({ ...INITIAL }),
     }),
@@ -282,10 +322,20 @@ export const useProfile = create<ProfileState>()(
        * never run again. merge runs on every rehydration, which makes
        * "the stored country is canonical" true at all times rather than true
        * after a one-off fix-up.
+       *
+       * The debug HUD is held off here for the same reason. A TestFlight build
+       * before INTERNAL_TOOLS could switch it on, and the App Store build is
+       * an update over that install: its stored `true` would otherwise bring
+       * the IMU strip back in a build that has no switch to turn it off.
        */
       merge: (persisted, current) => {
         const s = (persisted ?? {}) as Partial<ProfileState>;
-        return { ...current, ...s, country: canonicaliseCountry(s.country ?? current.country) };
+        return {
+          ...current,
+          ...s,
+          country: canonicaliseCountry(s.country ?? current.country),
+          debugHud: INTERNAL_TOOLS && (s.debugHud ?? current.debugHud),
+        };
       },
     },
   ),

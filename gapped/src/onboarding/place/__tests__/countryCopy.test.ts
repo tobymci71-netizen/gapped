@@ -5,7 +5,13 @@
  */
 
 import { countryByCode, type Country } from '@/data/countries';
-import { countryInSentence, countryLine, formatCount, spokenCountryLine } from '../countryCopy';
+import {
+  countryInSentence,
+  countryLine,
+  countryTitle,
+  formatCount,
+  spokenCountryLine,
+} from '../countryCopy';
 
 const c = (code: string): Country => {
   const found = countryByCode(code);
@@ -77,5 +83,33 @@ describe('countryLine', () => {
       detail: 'The United Kingdom board fills one verified run at a time.',
     });
     expect(spokenCountryLine(line)).not.toMatch(/\d/);
+  });
+});
+
+describe('countryTitle', () => {
+  test('before a country, the question', () => {
+    expect(countryTitle(null, null)).toBe('Where do you drive?');
+  });
+
+  test('"good company" only over a real count', () => {
+    expect(countryTitle({ kind: 'yesterday', n: 20890 }, c('IT'))).toBe("You're in good company");
+    expect(countryTitle({ kind: 'onBoard', n: 12 }, c('GB'))).toBe("You're in good company");
+  });
+
+  test('an early board asks for its first run instead', () => {
+    expect(countryTitle({ kind: 'early' }, c('GB'))).toBe('Start the United Kingdom board');
+    expect(countryTitle({ kind: 'early' }, c('GG'))).toBe('Start the Guernsey board');
+    expect(countryTitle({ kind: 'early' }, c('FR'))).not.toMatch(/company/);
+  });
+
+  test('while the count is coming it names the board, true either way', () => {
+    expect(countryTitle('loading', c('FR'))).toBe('The France board');
+    expect(countryTitle(null, c('FR'))).toBe('The France board');
+  });
+
+  test('never a number in the headline', () => {
+    for (const proof of [{ kind: 'yesterday', n: 50 }, { kind: 'onBoard', n: 50 }, { kind: 'early' }] as const) {
+      expect(countryTitle(proof, c('US'))).not.toMatch(/\d/);
+    }
   });
 });

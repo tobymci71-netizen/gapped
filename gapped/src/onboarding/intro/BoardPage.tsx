@@ -5,7 +5,7 @@ import { Entrance } from '@/components/Entrance';
 import { Skeleton } from '@/components/Skeleton';
 import { Numeral, OnSurface, Text } from '@/components/Text';
 import { fetchBoard } from '@/board/boards';
-import { speedForDisplay, type UnitPref } from '@/drive/units';
+import { distanceForDisplay, type UnitPref } from '@/drive/units';
 import { useProfile } from '@/state/profile';
 import { color, font, glyph, radius, space, textStyle, type } from '@/theme/tokens';
 import { IntroPage } from './IntroPage';
@@ -13,6 +13,7 @@ import {
   boardAttempts,
   GLOBAL_LABEL,
   type IntroBoard,
+  INTRO_BOARD_METRIC,
   type IntroBoardRow,
   INTRO_BOARD_SIZE,
   ordinal,
@@ -36,15 +37,15 @@ const AVATAR = 32;
 const LIVE_DOT = 8;
 /** The SAMPLE chip is a badge, not reading text (as on the Board tab). */
 const CHIP_MAX_SCALE = 2;
-/** Rank and speed are display figures in a fixed-width card; they cap here. */
+/** Rank and distance are display figures in a fixed-width card; they cap here. */
 const FIGURE_MAX_SCALE = 2;
 
 /**
  * Text scale above which the row stops fitting one line, the Board tab's own
  * threshold (iOS AX1 is ~1.79). Past it, the scope label drops under the
- * card's title and each row stacks its speed under the name, without the
+ * card's title and each row stacks its distance under the name, without the
  * avatar. At the largest size the one-line layout gave the title a letter's
- * width, so "Top speed" ran down the card one letter per line.
+ * width, so the title ran down the card one letter per line.
  */
 const LARGE_TEXT = 1.5;
 
@@ -55,16 +56,17 @@ const RANK_COLOR: Record<number, string> = {
 };
 
 /**
- * The real top-speed board, verified runs only (the Board tab's default and
- * the pitch on page one: "Verified, then ranked"), else the sample. Never
- * rejects: an error, a timeout or no backend at all is the sample.
+ * The real distance board, verified drives only (the board the Ranks tab
+ * opens on, and the pitch on page one: "Verified, then ranked"), else the
+ * sample. Never rejects: an error, a timeout or no backend at all is the
+ * sample.
  */
 async function loadIntroBoard(country: string | null): Promise<IntroBoard> {
   const deadline = Date.now() + BOARD_WAIT_MS;
   for (const attempt of boardAttempts(country)) {
     const result = await settleWithin(
       fetchBoard(
-        { metric: 'top_speed', scope: attempt.scope, period: 'all', verifiedOnly: true },
+        { metric: INTRO_BOARD_METRIC, scope: attempt.scope, period: 'all', verifiedOnly: true },
         null,
         country,
       ),
@@ -88,7 +90,8 @@ type Props = {
 };
 
 /**
- * Page 2, "See where you stack up": a "Top speed" card with three rows.
+ * Page 2, "See where you stack up": a "Distance" card with three rows, each
+ * a driver's longest verified drive (./introBoard explains why distance).
  *
  * Real rows when the server has three or more on the board, otherwise the
  * Board tab's own sample rows wearing its SAMPLE treatment (docs/ONBOARDING.md
@@ -131,7 +134,7 @@ export function BoardPage({ copy, width, hidden, seen, onVerticalDrag }: Props) 
             style={[styles.cardHeader, large && styles.cardHeaderLarge]}
             accessible
             accessibilityRole="header"
-            accessibilityLabel={`Top speed, ${scopeLabel === GLOBAL_LABEL ? 'global' : scopeLabel}${
+            accessibilityLabel={`Distance, ${scopeLabel === GLOBAL_LABEL ? 'global' : scopeLabel}${
               board?.sample ? ', sample board' : ''
             }`}
           >
@@ -139,7 +142,7 @@ export function BoardPage({ copy, width, hidden, seen, onVerticalDrag }: Props) 
                 on one still loading, would claim what the SAMPLE chips deny. */}
             <View style={[styles.liveDot, board && !board.sample ? styles.liveDotOn : null]} />
             <Text variant="caption" style={styles.cardTitle}>
-              Top speed
+              Distance
             </Text>
             <Text variant="legal" style={[styles.scope, large && styles.scopeLarge]}>
               {scopeLabel}
@@ -186,17 +189,18 @@ function BoardRowView({
   /** Stacked layout for large text (see LARGE_TEXT). */
   large: boolean;
 }) {
-  const speed = speedForDisplay(row.speed, unitPref);
-  const value = Math.round(speed.value);
+  const distance = distanceForDisplay(row.distance, unitPref);
+  const value = Math.round(distance.value);
   const tint = RANK_COLOR[row.rank] ?? color.text1;
-  const unitWords = speed.unit === 'mph' ? 'miles per hour' : 'kilometres per hour';
+  // In words: VoiceOver reads "mi" and "km" letter by letter.
+  const unitWords = `${distance.unit === 'mi' ? 'mile' : 'kilometre'}${value === 1 ? '' : 's'}`;
   const figure = (
     <View style={large ? styles.valueInline : styles.value}>
       <Numeral size={type.cardTitle.size} color={tint} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
         {value}
       </Numeral>
       <Text variant="legal" style={styles.unit} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
-        {speed.unit.toUpperCase()}
+        {distance.unit.toUpperCase()}
       </Text>
     </View>
   );

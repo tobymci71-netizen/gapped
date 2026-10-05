@@ -3,8 +3,10 @@ import { Button } from '@/components/Button';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
 import { countryByCode } from '@/data/countries';
 import { CountryProof } from '@/onboarding/place/CountryProof';
+import { countryTitle } from '@/onboarding/place/countryCopy';
 import { CountrySheet } from '@/onboarding/place/CountrySheet';
 import { useArrival } from '@/onboarding/place/useArrival';
+import { useCountryProof } from '@/onboarding/place/useCountryProof';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
 import { useProfile } from '@/state/profile';
 
@@ -20,6 +22,10 @@ import { useProfile } from '@/state/profile';
  * The country decides which national board a driver is ranked on, so it is
  * never guessed for them: the phone's region is offered as the sheet's first
  * row, and Continue waits for a real choice.
+ *
+ * The headline follows the count line's answer (countryTitle): "You're in
+ * good company" only over a real count, "Start the {Country} board" where the
+ * board is still early. Both read the one proof fetched here.
  */
 export default function CountryStep() {
   const advance = useOnboardingAdvance('/onboarding/country');
@@ -42,13 +48,14 @@ export default function CountryStep() {
   const closeSheet = useCallback(() => setSheetChoice(false), []);
 
   const chosen = countryByCode(country);
+  const proof = useCountryProof(chosen?.code ?? null);
 
   return (
     <>
       <OnboardingFrame
         route="/onboarding/country"
         centered
-        title={chosen ? "You're in good company" : 'Where do you drive?'}
+        title={countryTitle(proof, chosen ?? null)}
         subtitle={chosen ? undefined : "Your country decides which national board you're ranked on."}
         footer={
           chosen ? (
@@ -60,7 +67,12 @@ export default function CountryStep() {
           )
         }
       >
-        <CountryProof country={chosen ?? null} onChange={openSheet} play={arrived} />
+        <CountryProof
+          country={chosen ?? null}
+          proof={proof}
+          onChange={openSheet}
+          play={arrived}
+        />
       </OnboardingFrame>
       <CountrySheet
         visible={sheetOpen}

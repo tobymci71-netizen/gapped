@@ -3,6 +3,7 @@ import {
   availabilityFrom,
   USERNAME_HELPER,
   USERNAME_INVALID,
+  USERNAME_NOT_ALLOWED,
   USERNAME_TAKEN,
   usernameFieldState,
   withTimeout,
@@ -105,6 +106,49 @@ describe('usernameFieldState', () => {
       expect(state('to', true, a).canContinue).toBe(false);
       expect(state('to-by', true, a).canContinue).toBe(false);
     }
+  });
+
+  it('refuses a blocked word at once: no further typing can remove it', () => {
+    expect(state('shitbox', false)).toMatchObject({
+      tone: 'error',
+      caption: USERNAME_NOT_ALLOWED,
+      canContinue: false,
+    });
+  });
+
+  it('waits for a pause before refusing a whole-word term, which may be the start of another', () => {
+    expect(state('admin', false)).toMatchObject({ tone: 'neutral', caption: USERNAME_HELPER });
+    expect(state('admin', true)).toMatchObject({
+      tone: 'error',
+      caption: USERNAME_NOT_ALLOWED,
+      canContinue: false,
+    });
+    expect(state('admiral', true, 'available').canContinue).toBe(true);
+  });
+
+  it('waits for a pause before refusing a term that finishing an innocent word would cut out', () => {
+    // "scunt" on the way to "scunthorpe": no orange flash mid-word.
+    expect(state('scunt', false)).toMatchObject({ tone: 'neutral', caption: USERNAME_HELPER });
+    expect(state('scunt', true)).toMatchObject({ tone: 'error', caption: USERNAME_NOT_ALLOWED });
+    expect(state('scunthorpe', true, 'available').canContinue).toBe(true);
+  });
+
+  it('never opens Continue for a refused name, whatever the availability check said', () => {
+    for (const a of ['available', 'unknown'] as const) {
+      expect(state('admin', true, a).canContinue).toBe(false);
+      expect(state('fuck_it', true, a).canContinue).toBe(false);
+    }
+  });
+
+  it("shows the server's refusal from a save as not allowed", () => {
+    expect(state('toby', true, 'not_allowed')).toEqual({
+      name: 'toby',
+      tone: 'error',
+      caption: USERNAME_NOT_ALLOWED,
+      checking: false,
+      canContinue: false,
+    });
+    expect(USERNAME_NOT_ALLOWED).toBe("That username isn't allowed. Pick another.");
   });
 
   it('uses the exact copy from docs/ONBOARDING.md', () => {

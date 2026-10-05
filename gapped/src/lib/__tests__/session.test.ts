@@ -59,6 +59,23 @@ test('a stored session that failed to refresh is not replaced with a new user', 
   });
   expect(await ensureUserId()).toBeNull();
   expect(mockAuth.signInAnonymously).not.toHaveBeenCalled();
+  // It asked twice, and the session was still there both times.
+  expect(mockAuth.getSession).toHaveBeenCalledTimes(2);
+});
+
+test('a session the server refused for good is replaced at once', async () => {
+  // The account is gone (deleted, or purged after 30 days unused): auth-js
+  // rejects the refresh token and removes the stored session itself, so the
+  // second look finds cleanly none.
+  mockAuth.getSession
+    .mockResolvedValueOnce({
+      data: { session: null },
+      error: { message: 'Invalid Refresh Token: Refresh Token Not Found' },
+    })
+    .mockResolvedValueOnce({ data: { session: null }, error: null });
+  mockAuth.signInAnonymously.mockResolvedValue({ data: { session: session('fresh') }, error: null });
+  expect(await ensureUserId()).toBe('fresh');
+  expect(mockAuth.getSession).toHaveBeenCalledTimes(2);
 });
 
 test('a failed sign-in is retried by the next call, not remembered', async () => {

@@ -32,12 +32,16 @@ export function vehicleAdd(extraCount: number, noun: Noun, access: Access): Vehi
 }
 
 /**
- * The step's subtitle. Open, it is the step's own. Locked, it stops at "keep
- * going": "build your garage later" is something a Free garage can do only
- * by going Pro, and the row below already says that.
+ * The step's subtitle. Open, it invites adding more now. Locked, it stops at
+ * "keep going": the row below already says more are Pro.
+ *
+ * Neither says "later". It used to end "and build your garage later", but
+ * this step is the only place a vehicle is added: the Garage tab shows the
+ * main one and edits nothing, so "later" was a promise with no screen behind
+ * it.
  */
 export function garageStepSubtitle(noun: Noun, add: VehicleAdd): string {
   return add.kind === 'open'
-    ? `Optional. Your main ${noun} is set, so you can keep going and build your garage later.`
+    ? `Optional. Your main ${noun} is set. Add any others you drive, or keep going.`
     : `Optional. Your main ${noun} is set, so you can keep going.`;
 }

@@ -269,16 +269,16 @@ function TopSpeedCard({ context, play }: { context: ProofContext; play: boolean 
 // ─── 0–60: a sample timer running to 60 ────────────────────────────────────
 
 /** The run, compressed: a stopwatch at real speed would hold the step for five seconds. */
-const LAUNCH_MS = duration.epic + duration.base;
+const RUN_MS = duration.epic + duration.base;
 
 function ZeroSixtyCard({ play }: { play: boolean }) {
-  const t = useProgress(LAUNCH_MS, play);
-  // The clock runs straight; the speed climbs fast and tapers, as a launch does.
+  const t = useProgress(RUN_MS, play);
+  // The clock runs straight; the speed climbs fast and tapers, as a 0–60 does.
   const seconds = (SAMPLE_ZERO_SIXTY_S * t).toFixed(2);
   const speed = easeOutCubic(t);
   return (
     <Card
-      label={`Sample launch: zero to sixty miles per hour in ${SAMPLE_ZERO_SIXTY_S} seconds, from a standstill of at least two seconds with a one-foot rollout.`}
+      label={`Sample measurement: zero to sixty miles per hour in ${SAMPLE_ZERO_SIXTY_S} seconds, from a standstill of at least two seconds with a one-foot rollout.`}
       title={
         <Text variant="caption" style={styles.cardTitleText}>
           0–60 mph

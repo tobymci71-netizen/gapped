@@ -8,10 +8,11 @@ import {
   Inter_600SemiBold,
 } from '@expo-google-fonts/inter';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { AppState, Platform, View } from 'react-native';
+import { ErrorFallback } from '@/components/ErrorFallback';
 import { UpdateRequired } from '@/components/UpdateRequired';
 import { initObservability, track } from '@/lib/observability';
 import { checkVersionGate, type VersionGate } from '@/lib/version-gate';
@@ -57,6 +58,19 @@ const GATE_TIMEOUT_MS = 3000;
 
 const GATE_OK: VersionGate = { status: 'ok' };
 
+/**
+ * Whether startup has run the recorder's init() in this process.
+ *
+ * RootLayout can mount more than once: the error boundary's Try again
+ * (ErrorBoundary below) renders it from scratch, and so does Fast Refresh.
+ * The recorder outlives it — a drive keeps recording behind the fallback
+ * screen — and init() opens with WAL recovery, which closes every drive still
+ * marked recording. Run again, that is the live drive. So init() runs once
+ * per process, and a later mount only re-arms what it owns (the gate, sync,
+ * the listeners).
+ */
+let recorderArmed = false;
+
 type Profile = ReturnType<typeof useProfile.getState>;
 
 /**
@@ -80,6 +94,23 @@ function identityChanged(next: Profile, prev: Profile): boolean {
 const subscribeProfileHydration = (onChange: () => void) =>
   useProfile.persist.onFinishHydration(onChange);
 const profileHydrated = () => useProfile.persist.hasHydrated();
+
+/**
+ * The app's error boundary. expo-router wraps this layout — and so every
+ * screen under it that has no boundary of its own — in it, and renders it in
+ * place of whatever threw. Without one, a render error in a release build is
+ * a fatal JavaScript exception: the app closes, which is all App Review needs
+ * to see. Retry mounts this layout again from scratch, which re-asks the
+ * version gate but does not re-run the recorder's init() (recorderArmed).
+ */
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return (
+    <>
+      <StatusBar style="light" />
+      <ErrorFallback {...props} />
+    </>
+  );
+}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -122,8 +153,9 @@ export default function RootLayout() {
         haltSync();
         // A verdict that lands after the wait finds the recorder already armed:
         // a live drive, the watchers and possibly background GPS, all running
-        // behind Update Required. Turn every one of them off.
-        if (started) useDriveStore.getState().shutdown().catch(() => undefined);
+        // behind Update Required. Turn every one of them off — including when
+        // an earlier mount armed it (recorderArmed).
+        if (recorderArmed) useDriveStore.getState().shutdown().catch(() => undefined);
       }
       if (live) setGate(g);
     });
@@ -146,8 +178,12 @@ export default function RootLayout() {
         started = true;
         // Cold-start WAL recovery: an interrupted drive is finalised, never
         // lost. Its first step is synchronous, so it has run before the screens
-        // that can start a drive are let in below.
-        init();
+        // that can start a drive are let in below. Once per process — see
+        // recorderArmed.
+        if (!recorderArmed) {
+          recorderArmed = true;
+          init();
+        }
         syncNow();
       } else {
         // init() is also what stops a background location session left running
@@ -249,7 +285,8 @@ export default function RootLayout() {
           falls back to the first allowed screen when its routes are all
           removed. index stays outside both groups — it is the cold-start
           redirect. Any new root screen that assumes a finished profile goes in
-          the first group.
+          the first group — as hidden-drivers and edit-username are: both act
+          on a finished profile's account.
 
           plans is in neither: it is the published matrix and assumes nothing
           about the profile, and it is where every Pro lock leads (useGoPro),
@@ -262,6 +299,8 @@ export default function RootLayout() {
           <Stack.Screen name="settings" />
           <Stack.Screen name="friends" />
           <Stack.Screen name="drive/[id]" />
+          <Stack.Screen name="hidden-drivers" />
+          <Stack.Screen name="edit-username" />
         </Stack.Protected>
         <Stack.Protected guard={!onboarded}>
           <Stack.Screen name="onboarding" />

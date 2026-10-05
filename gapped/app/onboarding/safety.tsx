@@ -1,74 +1,68 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, {
-  interpolateColor,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 import { Button } from '@/components/Button';
 import { Entrance } from '@/components/Entrance';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
-import { PressableScale } from '@/components/PressableScale';
 import { OnSurface, Text } from '@/components/Text';
-import { haptic } from '@/lib/haptics';
 import {
-  CheckGlyph,
   EyeGlyph,
   GaugeGlyph,
   ParkGlyph,
   PhoneGlyph,
 } from '@/onboarding/identity/glyphs';
+import { ConsentCheck, LinkedSentence } from '@/onboarding/place/Consent';
+import {
+  AGE_CHECK,
+  canAgree,
+  GUIDELINES_CHECK,
+  SAFETY_LINE,
+  TERMS_SENTENCE,
+} from '@/onboarding/place/consentCopy';
+import { FlagIcon } from '@/onboarding/place/icons';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
 import { useProfile } from '@/state/profile';
-import { duration, easing } from '@/theme/motion';
 import { color, radius, space } from '@/theme/tokens';
 
 /** The lime glyph tiles beside each guideline. */
 const TILE = 40;
-/** The acknowledgement's box. */
-const BOX = 26;
 
 /**
- * The guidelines, word for word as they were. Each emoji they used to lead
- * with is now a drawn glyph: docs/ONBOARDING.md rules out emoji in the flow's
- * chrome, and the emoji also rendered differently on every OS version.
+ * The guidelines. The first is the line the public top-speed board rests on
+ * (SAFETY_LINE): where those runs belong. The four after it are word for word
+ * as they were. Each emoji they used to lead with is now a drawn glyph:
+ * docs/ONBOARDING.md rules out emoji in the flow's chrome, and the emoji also
+ * rendered differently on every OS version.
  */
 const GUIDELINES: { Glyph: typeof GaugeGlyph; text: string }[] = [
+  { Glyph: FlagIcon, text: SAFETY_LINE },
   { Glyph: GaugeGlyph, text: 'Obey local traffic laws and speed limits. Never drive recklessly.' },
   { Glyph: ParkGlyph, text: 'Start and stop recording only while safely parked.' },
   { Glyph: PhoneGlyph, text: 'Use a phone holder, just like with any navigation app.' },
   { Glyph: EyeGlyph, text: 'Never touch your phone while driving. Eyes on the road.' },
 ];
 
-const ACKNOWLEDGEMENT = 'I acknowledge these guidelines and agree to drive responsibly.';
-
 /**
  * The road-safety acknowledgement (docs/ONBOARDING.md, step 13, rule 4): the
- * app's record that a public speed board was accepted for responsible use.
- * The last question before setup, so it is the last thing read before the app
- * opens.
+ * app's record that a public speed board was accepted for responsible use,
+ * and — as the last question before setup — where the driver agrees to the
+ * Terms of Use and Privacy Policy and confirms they are 18 or older with a
+ * valid driving licence. Whenever this step is in the flow it is the one that
+ * asks (TERMS_ROUTE, src/onboarding/flow.ts).
  *
- * Restyled to the flow — surface2 cards, lime glyphs, the white pill — and
- * otherwise unchanged in meaning: the same four guidelines, the same box that
- * must be ticked, the same `acceptSafety()` on agreeing, and the same line
- * that the driving is the driver's responsibility. With SAFETY_ACKNOWLEDGEMENT
- * off the flow never reaches this step, and `safetyAccepted` stays false.
+ * Two boxes, both required: the guidelines, and the age and licence. "I
+ * agree" records both — `acceptSafety()` and `acceptTerms()`, the timestamp
+ * sync sends to `onboarding_answers.terms_accepted_at` — and the sentence
+ * under the boxes names the two documents, each a link to its page. With
+ * SAFETY_ACKNOWLEDGEMENT off the flow never reaches this step,
+ * `safetyAccepted` stays false, and the trust step asks for the terms instead.
  */
 export default function SafetyStep() {
   const advance = useOnboardingAdvance('/onboarding/safety');
   const acceptSafety = useProfile((s) => s.acceptSafety);
-  const [checked, setChecked] = useState(false);
-
-  const on = useSharedValue(0);
-  useEffect(() => {
-    on.set(withTiming(checked ? 1 : 0, { duration: duration.fast, easing: easing.standard }));
-  }, [checked, on]);
-  const box = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(on.value, [0, 1], [color.surface2, color.accent]),
-    borderColor: interpolateColor(on.value, [0, 1], [color.text3, color.accent]),
-  }));
-  const tick = useAnimatedStyle(() => ({ opacity: on.value }));
+  const acceptTerms = useProfile((s) => s.acceptTerms);
+  const [guidelines, setGuidelines] = useState(false);
+  const [age, setAge] = useState(false);
+  const agreed = canAgree([guidelines, age]);
 
   return (
     <OnboardingFrame
@@ -79,9 +73,10 @@ export default function SafetyStep() {
         <Button
           label="I agree"
           variant="light"
-          disabled={!checked}
+          disabled={!agreed}
           onPress={() => {
             acceptSafety();
+            acceptTerms();
             advance();
           }}
         />
@@ -104,32 +99,20 @@ export default function SafetyStep() {
         </View>
       </Entrance>
 
-      <Entrance index={1}>
-        <PressableScale
-          silent
-          onPress={() => {
-            haptic.selection();
-            setChecked((c) => !c);
-          }}
-          accessibilityRole="checkbox"
-          accessibilityLabel={ACKNOWLEDGEMENT}
-          accessibilityState={{ checked }}
-          style={styles.ack}
-        >
-          <Animated.View style={[styles.box, box]}>
-            <Animated.View style={tick}>
-              <CheckGlyph size={18} color={color.onAccent} />
-            </Animated.View>
-          </Animated.View>
-          <OnSurface>
-            <Text variant="body" style={styles.ackLabel}>
-              {ACKNOWLEDGEMENT}
-            </Text>
-          </OnSurface>
-        </PressableScale>
+      <Entrance index={1} style={styles.checks}>
+        <ConsentCheck
+          label={GUIDELINES_CHECK}
+          checked={guidelines}
+          onToggle={() => setGuidelines((c) => !c)}
+        />
+        <ConsentCheck label={AGE_CHECK} checked={age} onToggle={() => setAge((c) => !c)} />
       </Entrance>
 
       <Entrance index={2}>
+        <LinkedSentence runs={TERMS_SENTENCE} />
+      </Entrance>
+
+      <Entrance index={3}>
         <Text variant="legal">
           You are solely responsible for your driving. Gapped is a tracking tool and does not
           encourage speeding or dangerous driving.
@@ -156,22 +139,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   guideline: { flex: 1, color: color.text1 },
-  ack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    minHeight: 56,
-    padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: color.surface2,
-  },
-  box: {
-    width: BOX,
-    height: BOX,
-    borderRadius: 8,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ackLabel: { flex: 1, color: color.text1 },
+  checks: { gap: space.md },
 });

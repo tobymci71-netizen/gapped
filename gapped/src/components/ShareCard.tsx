@@ -35,6 +35,13 @@ export type ShareCardProps = {
 };
 
 /**
+ * The card's standing line. A share card is the one artefact that travels
+ * without the app around it, so the reminder travels with it: on every card,
+ * branded or clean, verified or not.
+ */
+export const SHARE_CARD_SAFETY_LINE = 'Drive within the law';
+
+/**
  * Every Text on the card. The card is a fixed 360pt square captured as an
  * image, so its type must not follow the SHARER's Dynamic Type setting: at
  * accessibility sizes the stack outgrew the square and the export lost its
@@ -140,6 +147,7 @@ export function ShareCard({
             ? 'Re-derived from raw GPS on our servers'
             : 'Not server-verified'}
         </CardText>
+        <CardText style={styles.footerNote}>{SHARE_CARD_SAFETY_LINE}</CardText>
       </View>
     </View>
   );

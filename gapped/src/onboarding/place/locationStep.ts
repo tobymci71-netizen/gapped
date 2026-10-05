@@ -10,6 +10,7 @@
  */
 
 import type { LocationAccess } from '@/drive/permission';
+import type { BackgroundPermission } from '@/drive/recorder';
 
 export type LocationStatus = 'notRequested' | 'allowed' | 'notAllowed';
 
@@ -78,4 +79,50 @@ export function locationCaption(action: LocationAction): string {
     default:
       return 'Optional now. Recording a drive needs location.';
   }
+}
+
+/**
+ * The line under the card about recording with the screen locked
+ * (docs/ONBOARDING.md, "Location"), or null.
+ *
+ *   chooseAlways  before and during the request: what to pick when iOS asks
+ *                 about Always, so a drive is not cut off at the first screen
+ *                 lock. Shown while the dialogs are up, which is when it is
+ *                 needed.
+ *   screenLock    location is allowed, but only while Gapped is open. Said
+ *                 plainly, with the way to fix it; never a block. Recording
+ *                 works on screen, and Continue stays.
+ *   null          Always is on, or location is off altogether (the caption
+ *                 already covers that).
+ */
+export type LocationNote = 'chooseAlways' | 'screenLock';
+
+export function locationNote(
+  access: Pick<LocationAccess, 'permission'> & { background: BackgroundPermission },
+  action: LocationAction,
+  asking: boolean,
+): LocationNote | null {
+  if (asking) return 'chooseAlways';
+  if (access.permission === 'granted') {
+    // Anything but granted: iOS reports While Using as 'undetermined' in a
+    // later process (recorder.ts, BackgroundPermission).
+    return access.background === 'granted' ? null : 'screenLock';
+  }
+  return action === 'enable' || action === 'retry' ? 'chooseAlways' : null;
+}
+
+export const LOCATION_NOTE_TEXT: Record<LocationNote, string> = {
+  chooseAlways:
+    'When iOS asks, choose Change to Always Allow so a drive keeps recording with the screen locked. Gapped only records during a drive.',
+  screenLock:
+    'Location is on only while Gapped is open, so a drive will stop recording when the screen locks. To fix it, open Settings, tap Location and choose Always.',
+};
+
+/**
+ * Whether the step moves on by itself once the OS has answered. Not when it
+ * has just said recording stops at screen lock: a warning that slid away
+ * after a second would not have been said at all. Continue is right there.
+ */
+export function advancesOnAnswer(note: LocationNote | null): boolean {
+  return note !== 'screenLock';
 }

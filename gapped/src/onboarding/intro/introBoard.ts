@@ -1,16 +1,23 @@
 /**
- * The "Top speed" card on the carousel's second page: three rows of the real
+ * The "Distance" card on the carousel's second page: three rows of the real
  * board when there are three to show, otherwise three sample rows that say
  * they are samples (docs/ONBOARDING.md, rule 1, "No invented numbers").
+ *
+ * Distance, not top speed. It used to be the top-speed board, the Board tab's
+ * default at the time; the Ranks tab now opens on Distance, and the first
+ * board anyone sees should not make a contest of speed on public roads.
  *
  * No backend here: the fetch lives with the page (./BoardPage), and only types
  * come from the board module, so these rules are tested without one.
  */
 
+import type { BoardMetric, BoardRow } from '@/board/types';
 import type { BoardResult } from '@/board/boards';
 import { SAMPLE_BOARD_ROWS } from '@/board/sampleRows';
-import { MS_PER_MPH } from '@/drive/units';
-import { mps, raw, type MetresPerSecond } from '@/types/units';
+import { metres, raw, type Metres } from '@/types/units';
+
+/** The board the card shows: the longest verified drive, all time. */
+export const INTRO_BOARD_METRIC: BoardMetric = 'distance';
 
 /** Rows on the card. The reference shows a podium, and so does this. */
 export const INTRO_BOARD_SIZE = 3;
@@ -21,7 +28,8 @@ export type IntroBoardRow = {
   name: string;
   /** Second line: the driver's country on a real row, the car on a sample. */
   detail: string | null;
-  speed: MetresPerSecond;
+  /** The drive's distance: one drive, the longest, not a running total. */
+  distance: Metres;
   sample: boolean;
 };
 
@@ -34,15 +42,15 @@ export type IntroBoard = {
 
 /**
  * The Board tab's own pre-first-drive sample (src/board/sampleRows.ts), top
- * three: the same names, cars and speeds, so the sample someone meets here is
- * the one they meet again on the Board tab. Road-legal speeds, labelled SAMPLE
- * on every row, never presented as people.
+ * three: the same names, cars and distances, so the sample someone meets
+ * here is the one they meet again on the Board tab's Distance board.
+ * Labelled SAMPLE on every row, never presented as people.
  */
-export const INTRO_SAMPLE_ROWS: readonly { name: string; vehicle: string; mph: number }[] =
+export const INTRO_SAMPLE_ROWS: readonly { name: string; vehicle: string; km: number }[] =
   SAMPLE_BOARD_ROWS.slice(0, INTRO_BOARD_SIZE).map((s) => ({
     name: s.username,
     vehicle: s.vehicle,
-    mph: s.mph,
+    km: s.km,
   }));
 
 export const GLOBAL_LABEL = 'Global';
@@ -60,10 +68,11 @@ export const GLOBAL_LABEL = 'Global';
  */
 export function realBoardRows(result: BoardResult | null | undefined): IntroBoardRow[] | null {
   if (!result || result.source !== 'server' || result.isSample) return null;
+  // A type guard, so the metric check narrows each row's value to metres.
   const people = result.rows.filter(
-    (r) =>
+    (r): r is Extract<BoardRow, { metric: 'distance' }> =>
       (r.kind === 'user' || r.kind === 'you') &&
-      r.metric === 'top_speed' &&
+      r.metric === 'distance' &&
       Number.isFinite(raw(r.value)) &&
       raw(r.value) > 0,
   );
@@ -73,9 +82,7 @@ export function realBoardRows(result: BoardResult | null | undefined): IntroBoar
     rank: i + 1,
     name: r.username,
     detail: r.country,
-    // Narrowed by the metric filter above, but the type can't see through
-    // a filter, so the speed is re-read from the tagged value.
-    speed: r.metric === 'top_speed' ? r.value : mps(0),
+    distance: r.value,
     sample: false,
   }));
 }
@@ -90,7 +97,7 @@ export function sampleIntroBoard(scopeLabel: string = GLOBAL_LABEL): IntroBoard 
       rank: i + 1,
       name: s.name,
       detail: s.vehicle,
-      speed: mps(s.mph * MS_PER_MPH),
+      distance: metres(s.km * 1000),
       sample: true,
     })),
   };

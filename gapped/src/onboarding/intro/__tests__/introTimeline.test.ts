@@ -13,8 +13,10 @@ import {
   CORNERING_END_G,
   CORNERING_LEFT_PEAK_G,
   CORNERING_START_G,
+  corneringDemoLabel,
   corneringG,
   ctaFor,
+  DIAL_DEMO_MS,
   dialDemoLabel,
   DIAL_SWEEP_MS,
   dotEmphasis,
@@ -29,6 +31,7 @@ import {
   landingFor,
   litEnd,
   litStart,
+  marksPro,
   nearestPage,
   onScreenMask,
   pageAnnouncement,
@@ -39,7 +42,9 @@ import {
   SPLASH_START_SCALE,
   wordmarkOpacity,
 } from '../introTimeline';
+import { SHOW_PRO } from '@/config/flags';
 import { PLAN_MATRIX } from '@/config/plans';
+import { msToKmh, msToMph } from '@/drive/units';
 
 /** Timeline progress from 0 to 1 in 1% steps. */
 const STEPS = Array.from({ length: 101 }, (_, i) => i / 100);
@@ -48,7 +53,7 @@ describe('carousel copy (docs/ONBOARDING.md, "Carousel")', () => {
   test('four pages, in order, with the documented titles and buttons', () => {
     expect(INTRO_PAGE_COUNT).toBe(4);
     expect(INTRO_PAGES.map((p) => [p.title, p.subtitle, p.cta])).toEqual([
-      ['Track every drive', 'Your top speed and 0–60 times. Verified, then ranked.', 'Get started'],
+      ['Track every drive', 'Distance, top speed and 0–60. Verified, then ranked.', 'Get started'],
       ['See where you stack up', 'Your drives. Your friends. Your place on the board.', 'Next'],
       ['See more in every drive.', null, 'Next'],
       ['Built by drivers', 'From drivers. For drivers.', 'Set up my car'],
@@ -59,6 +64,15 @@ describe('carousel copy (docs/ONBOARDING.md, "Carousel")', () => {
     for (const p of INTRO_PAGES) {
       expect(`${p.title} ${p.subtitle ?? ''} ${p.cta}`).not.toMatch(/!/);
     }
+  });
+
+  test('calm: no page makes a contest of speed on public roads', () => {
+    for (const p of INTRO_PAGES) {
+      const words = `${p.title} ${p.subtitle ?? ''} ${p.spokenSubtitle ?? ''} ${p.cta}`;
+      expect(words).not.toMatch(/fastest|faster|beat|race|win\b|compet|launch|record-breaking/i);
+    }
+    // Page 1 leads with distance, the board the Ranks tab opens on.
+    expect(INTRO_PAGES[0].subtitle).toMatch(/^Distance\b/);
   });
 
   test('"0–60" has a spoken form, as the focus step gives it', () => {
@@ -83,8 +97,10 @@ describe('carousel copy (docs/ONBOARDING.md, "Carousel")', () => {
 
   test('a button-driven page change is announced with its title and position', () => {
     expect(pageAnnouncement(1)).toBe('See where you stack up. Page 2 of 4.');
-    // The title's own full stop is not doubled, and the Pro page says so.
-    expect(pageAnnouncement(2)).toBe('Gapped Pro. See more in every drive. Page 3 of 4.');
+    // The title's own full stop is not doubled, and the Pro page says so
+    // while Pro is shown.
+    expect(pageAnnouncement(2, true)).toBe('Gapped Pro. See more in every drive. Page 3 of 4.');
+    expect(pageAnnouncement(2, false)).toBe('See more in every drive. Page 3 of 4.');
   });
 });
 
@@ -106,10 +122,33 @@ describe('carousel and the plans (src/config/plans.ts)', () => {
     expect(INTRO_PAGES.filter((p) => p.proFeature).map((p) => p.key)).toEqual(['corner']);
   });
 
-  test('VoiceOver hears "Gapped Pro" where the chip is only seen', () => {
-    expect(spokenTitle(INTRO_PAGES[2])).toBe('Gapped Pro. See more in every drive.');
+  test('VoiceOver hears "Gapped Pro" where the chip is only seen, while Pro is shown', () => {
+    expect(spokenTitle(INTRO_PAGES[2], true)).toBe('Gapped Pro. See more in every drive.');
     // Unmarked pages read their title as printed.
-    expect(spokenTitle(INTRO_PAGES[0])).toBe('Track every drive');
+    expect(spokenTitle(INTRO_PAGES[0], true)).toBe('Track every drive');
+  });
+
+  test('with Pro hidden, no page wears the chip or says "Gapped Pro"', () => {
+    // The corner page still knows which row it demos; it just does not say so.
+    for (const p of INTRO_PAGES) {
+      expect(marksPro(p, false)).toBe(false);
+      expect(spokenTitle(p, false)).toBe(p.title);
+    }
+    for (let i = 0; i < INTRO_PAGE_COUNT; i++) {
+      expect(pageAnnouncement(i, false)).not.toMatch(/\bPro\b/);
+    }
+    expect(corneringDemoLabel(false)).not.toMatch(/\bPro\b/);
+  });
+
+  test('this build marks Pro exactly when SHOW_PRO is on', () => {
+    // SHOW_PRO is off until purchases work, so the committed carousel says
+    // nothing about Pro: no chip (IntroPage reads marksPro), no spoken plan.
+    const corner = INTRO_PAGES[2];
+    expect(marksPro(corner)).toBe(SHOW_PRO);
+    expect(spokenTitle(corner).startsWith('Gapped Pro')).toBe(SHOW_PRO);
+    expect(pageAnnouncement(2).startsWith('Gapped Pro')).toBe(SHOW_PRO);
+    expect(CORNERING_DEMO_LABEL.startsWith('Gapped Pro')).toBe(SHOW_PRO);
+    expect(CORNERING_DEMO_LABEL).toBe(corneringDemoLabel(SHOW_PRO));
   });
 
   test('the free pages promise nothing that is Pro', () => {
@@ -289,18 +328,51 @@ describe('cornering demo', () => {
   });
 
   test('the welcome dial is a demo too, with its unit in words', () => {
-    expect(dialDemoLabel(86.9, 'mph')).toBe('Demo. Speedometer reading 87 miles per hour.');
-    expect(dialDemoLabel(140.04, 'km/h')).toBe(
-      'Demo. Speedometer reading 140 kilometres per hour.',
+    expect(dialDemoLabel(60.04, 'mph')).toBe('Demo. Speedometer reading 60 miles per hour.');
+    expect(dialDemoLabel(96.56, 'km/h')).toBe(
+      'Demo. Speedometer reading 97 kilometres per hour.',
     );
     // Nothing for VoiceOver to spell out letter by letter.
-    expect(dialDemoLabel(87, 'mph')).not.toMatch(/mph|km\/h/);
+    expect(dialDemoLabel(60, 'mph')).not.toMatch(/mph|km\/h/);
   });
 
-  test('VoiceOver hears a Pro demo, with the pose it holds', () => {
-    expect(CORNERING_DEMO_LABEL.startsWith('Gapped Pro demo.')).toBe(true);
-    expect(CORNERING_DEMO_LABEL).toContain('0.94 g');
-    expect(CORNERING_DEMO_LABEL).toContain('left 0.88 g');
-    expect(CORNERING_DEMO_LABEL).toContain('right 0.94 g');
+  test('the welcome dial sweeps to a legal 60 mph, not 87', () => {
+    // The first screen anyone sees. 87 mph (140 km/h) is over the national
+    // limit in the UK and most countries; 60 mph is the top of the 0–60.
+    expect(Math.round(msToMph(DIAL_DEMO_MS))).toBe(60);
+    expect(Math.round(msToKmh(DIAL_DEMO_MS))).toBe(97);
+    expect(msToMph(DIAL_DEMO_MS)).toBeLessThanOrEqual(60 + 1e-9);
+  });
+
+  test('VoiceOver hears a demo, with the pose it holds, and the plan while Pro is shown', () => {
+    for (const showPro of [true, false]) {
+      const label = corneringDemoLabel(showPro);
+      expect(label.startsWith(showPro ? 'Gapped Pro demo.' : 'Demo.')).toBe(true);
+      expect(label).toContain('0.94 g');
+      expect(label).toContain('left 0.88 g');
+      expect(label).toContain('right 0.94 g');
+    }
+  });
+});
+
+describe('with SHOW_PRO flipped on, as the purchases build will ship', () => {
+  test('the cornering page wears the chip and says "Gapped Pro" again', () => {
+    let timeline: typeof import('../introTimeline') | undefined;
+    jest.isolateModules(() => {
+      jest.doMock('@/config/flags', () => ({
+        ...jest.requireActual('@/config/flags'),
+        SHOW_PRO: true,
+        PRO_LIMITS_ENFORCED: true,
+      }));
+      timeline = jest.requireActual<typeof import('../introTimeline')>('../introTimeline');
+    });
+    jest.dontMock('@/config/flags');
+    const t = timeline as typeof import('../introTimeline');
+    const corner = t.INTRO_PAGES.find((p) => p.key === 'corner');
+    expect(corner && t.marksPro(corner)).toBe(true);
+    expect(t.pageAnnouncement(2)).toBe('Gapped Pro. See more in every drive. Page 3 of 4.');
+    expect(t.CORNERING_DEMO_LABEL.startsWith('Gapped Pro demo.')).toBe(true);
+    // Only the corner page: the others never name a plan.
+    expect(t.INTRO_PAGES.filter((p) => t.marksPro(p)).map((p) => p.key)).toEqual(['corner']);
   });
 });

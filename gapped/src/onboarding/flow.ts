@@ -93,6 +93,14 @@ export type OnboardingFlow = {
   nextRoute: (current: OnboardingRoute) => OnboardingRoute | null;
   /** The route's bar position, or null where the bar is hidden. */
   progressFor: (route: OnboardingRoute) => number | null;
+  /**
+   * The step that asks for the Terms of Use, Privacy Policy and the 18+ /
+   * driving licence confirmation, and calls acceptTerms(). The safety step
+   * when it is on, as the last question before setup; otherwise the trust
+   * step, which already says what is public. Exactly one step asks, so no
+   * set of flags can finish onboarding without agreeing — or ask twice.
+   */
+  termsRoute: '/onboarding/safety' | '/onboarding/trust';
 };
 
 /** Builds the flow for a given set of flags. Exported for the tests. */
@@ -115,6 +123,7 @@ export function createFlow(options: FlowOptions): OnboardingFlow {
       const i = index.get(route);
       return i === undefined ? null : steps[i].progress;
     },
+    termsRoute: options.safety ? '/onboarding/safety' : '/onboarding/trust',
   };
 }
 
@@ -139,6 +148,13 @@ export const nextRoute = FLOW.nextRoute;
 export const progressFor = FLOW.progressFor;
 
 /**
+ * Where this build asks for the terms and the age confirmation
+ * (OnboardingFlow.termsRoute). The safety and trust steps both read it, so
+ * turning SAFETY_ACKNOWLEDGEMENT off moves the question rather than dropping it.
+ */
+export const TERMS_ROUTE = FLOW.termsRoute;
+
+/**
  * "car" or "bike", for copy that names the vehicle ("Add another car",
  * "Getting your car ready"). docs/ONBOARDING.md: choosing Motorbike swaps the
  * noun on the ride step and every step after it. Before a kind is chosen the
@@ -161,13 +177,25 @@ export type ChoiceOption<K extends string> = {
   spoken?: string;
 };
 
-/** "What matters to your drive?" — single select, required. */
+/**
+ * "What matters to your drive?" — single select, required.
+ *
+ * The keys are stored and checked by the database (`onboarding_answers.focus`,
+ * 0017), so only the words change. They describe what is measured, never a
+ * reason to go fast: top speed says where it belongs (src/onboarding/place
+ * consentCopy.ts, SAFETY_LINE says the same on the safety step), and 0–60 is a
+ * measurement rather than "launches" to time.
+ */
 export const FOCUS_OPTIONS: readonly ChoiceOption<Focus>[] = [
-  { key: 'topSpeed', label: 'Top speed', sublabel: 'Track your verified top speed' },
+  {
+    key: 'topSpeed',
+    label: 'Top speed',
+    sublabel: 'Verified, on tracks and closed roads',
+  },
   {
     key: 'zeroToSixty',
     label: '0–60',
-    sublabel: 'Time your launches',
+    sublabel: 'Your acceleration, measured',
     spoken: 'Zero to sixty',
   },
   { key: 'localRanking', label: 'Local ranking', sublabel: 'See where you rank' },

@@ -2,8 +2,8 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import { captureRef } from 'react-native-view-shot';
+import { Alert, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { captureRef, releaseCapture } from 'react-native-view-shot';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { HideBadgeRow } from '@/components/HideBadgeRow';
@@ -11,6 +11,7 @@ import { ProBadge, useGoPro } from '@/components/ProBadge';
 import { ProLockedStat } from '@/components/ProLockedStat';
 import { RoutePath } from '@/components/RoutePath';
 import { Screen } from '@/components/Screen';
+import { SettingsRow, SettingsSection } from '@/components/SettingsRow';
 import { Stat } from '@/components/Stat';
 import { ShareCard, SHARE_CARD_SIZE } from '@/components/ShareCard';
 import { Text } from '@/components/Text';
@@ -23,6 +24,7 @@ import {
   proLabel,
   shareCardBranded,
 } from '@/drive/driveAccess';
+import { deleteDrive, discardExportFile, type DeleteDriveResult } from '@/drive/deleteDrive';
 import { exportStamp, toCsv, toGpx } from '@/drive/export';
 import { trimRouteForSharing } from '@/drive/privacy';
 import { useAccess } from '@/lib/entitlements';
@@ -30,36 +32,93 @@ import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { checkPlausibility } from '@/drive/plausibility';
 import { distanceForDisplay, formatDuration, formatSpeed } from '@/drive/units';
+import { useDriveStore } from '@/drive/recorder';
 import { listDrives, readFixes } from '@/drive/wal';
+import { notRankedLine, type RankingCeiling } from '@/drive/notRanked';
 import { useProfile } from '@/state/profile';
 import { color, gutter, space } from '@/theme/tokens';
 
 type Verification = 'verified' | 'unverified' | 'pending' | null;
 
+/**
+ * What the server decided about a drive. `topSpeedRanked` is verify-drive's
+ * verification_meta.top_speed_ranked: false when the drive's top speed was
+ * above its country's national limit, so it was kept off the public top-speed
+ * boards (it stays in the driver's own history). Null when the server has not
+ * said — no row yet, not verified yet, or verified before the flag existed.
+ */
+type ServerVerdict = {
+  verification: Verification;
+  topSpeedRanked: boolean | null;
+  /** What the ranking was held to, when the server recorded it (notRankedLine). */
+  ceiling: RankingCeiling;
+};
+
+const NO_CEILING: RankingCeiling = { ceilingMs: null, country: null };
+const NO_VERDICT: ServerVerdict = { verification: null, topSpeedRanked: null, ceiling: NO_CEILING };
+
 /** How often, and for how long, to re-ask while the server's verdict is out. */
 const VERIFY_POLL_MS = 4000;
 const VERIFY_POLL_TRIES = 15;
 
+/** The Alert for each way a deletion can stop short. Nothing was deleted in any of them but the last. */
+const DELETE_FAILURE: Record<Exclude<DeleteDriveResult, 'deleted'>, [string, string]> = {
+  recording: ['Finish this drive first', 'A drive is still recording. Stop it, then delete this one.'],
+  unreachable: [
+    'Connection needed',
+    'Deleting a drive also removes it from our servers, so it needs a connection. Nothing was deleted. Try again when you are online.',
+  ],
+  signedOut: [
+    'Drive not deleted',
+    'This drive was uploaded from an account this phone is no longer signed in to, so it cannot be removed from our servers here. Nothing was deleted. Contact us from Settings with your username and we will remove it.',
+  ],
+  localFailed: [
+    'Removed from our servers',
+    'The drive is gone from our servers and the leaderboards, but this phone could not remove its copy. Try deleting it again.',
+  ],
+};
+
 /**
- * The server's verdict on a drive: null when it has no row (not uploaded yet,
- * or offline-only), undefined when the question could not be asked — in which
- * case the caller keeps what it had.
+ * The server's verdict on a drive: NO_VERDICT when it has no row (not
+ * uploaded yet, or offline-only), undefined when the question could not be
+ * asked — in which case the caller keeps what it had.
  */
-async function fetchVerification(id: string): Promise<Verification | undefined> {
+async function fetchVerification(id: string): Promise<ServerVerdict | undefined> {
   if (!supabase) return undefined;
   try {
+    // The flag is read out of the JSON rather than selecting the whole of
+    // verification_meta, which is the server's working notes on the drive.
     const { data, error } = await supabase
       .from('drives')
-      .select('verification')
+      .select(
+        'verification, top_speed_ranked:verification_meta->top_speed_ranked, top_speed_ceiling_ms:verification_meta->top_speed_ceiling_ms, ranking_country:verification_meta->>ranking_country',
+      )
       .eq('id', id)
       .maybeSingle();
     if (error) return undefined;
-    return (data?.verification as Verification | undefined) ?? null;
+    if (!data) return NO_VERDICT;
+    const row = data as {
+      verification?: unknown;
+      top_speed_ranked?: unknown;
+      top_speed_ceiling_ms?: unknown;
+      ranking_country?: unknown;
+    };
+    return {
+      verification: (row.verification as Verification | undefined) ?? null,
+      topSpeedRanked: typeof row.top_speed_ranked === 'boolean' ? row.top_speed_ranked : null,
+      ceiling: {
+        ceilingMs: typeof row.top_speed_ceiling_ms === 'number' ? row.top_speed_ceiling_ms : null,
+        country: typeof row.ranking_country === 'string' ? row.ranking_country : null,
+      },
+    };
   } catch {
     // A thrown fetch (no network at all) is the same "could not ask".
     return undefined;
   }
 }
+
+/** The destructive row's glyph tile: color.danger at low alpha, as in Settings. */
+const DANGER_TINT = 'rgba(255, 59, 48, 0.18)';
 
 /** Resolves after the next two frames: one to commit a state change, one to draw it. */
 const nextPaint = () =>
@@ -86,6 +145,9 @@ export default function DriveDetail() {
   // a badge it cannot back up — so it stays unverified until the server says
   // otherwise, rather than assuming the happy case.
   const [verification, setVerification] = useState<Verification>(null);
+  const [topSpeedRanked, setTopSpeedRanked] = useState<boolean | null>(null);
+  const [ceiling, setCeiling] = useState<RankingCeiling>(NO_CEILING);
+  const [deleting, setDeleting] = useState(false);
 
   // Free's history window is measured from when the screen opened, so a drive
   // cannot lock under someone part-way through reading it.
@@ -113,8 +175,13 @@ export default function DriveDetail() {
       const ask = async () => {
         const v = await fetchVerification(id);
         if (!live) return;
-        if (v !== undefined) setVerification(v);
-        if ((v == null || v === 'pending') && ++tries < VERIFY_POLL_TRIES) {
+        if (v !== undefined) {
+          setVerification(v.verification);
+          setTopSpeedRanked(v.topSpeedRanked);
+          setCeiling(v.ceiling);
+        }
+        const settled = v?.verification === 'verified' || v?.verification === 'unverified';
+        if (!settled && ++tries < VERIFY_POLL_TRIES) {
           timer = setTimeout(ask, VERIFY_POLL_MS);
         }
       };
@@ -203,8 +270,8 @@ export default function DriveDetail() {
       // now rather than trusting whatever this screen last heard — and let the
       // card redraw with it before view-shot reads its pixels.
       const fresh = await fetchVerification(id);
-      if (fresh !== undefined && fresh !== verification) {
-        setVerification(fresh);
+      if (fresh !== undefined && fresh.verification !== verification) {
+        setVerification(fresh.verification);
         await nextPaint();
       }
       const uri = await captureRef(cardRef, {
@@ -213,11 +280,17 @@ export default function DriveDetail() {
         width: SHARE_CARD_SIZE,
         height: SHARE_CARD_SIZE,
       });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'image/png',
-          dialogTitle: 'Share drive',
-        });
+      try {
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'image/png',
+            dialogTitle: 'Share drive',
+          });
+        }
+      } finally {
+        // The picture is a temporary file; the share sheet has what it needs
+        // once it closes.
+        releaseCapture(uri);
       }
     } catch {
       haptic.error();
@@ -229,10 +302,14 @@ export default function DriveDetail() {
   const shareFile = async (kind: 'gpx' | 'csv') => {
     // Was unguarded: a filesystem failure made the button appear to do nothing.
     // Its sibling shareCard has always caught and reported.
+    //
+    // The file is the full, untrimmed route, so it lives only as long as the
+    // share sheet needs it. Left in the cache, every export stayed on the
+    // phone after the drive — or the account — was deleted.
+    const file = new File(Paths.cache, `gapped-${stamp}.${kind}`);
     try {
       const content =
         kind === 'gpx' ? toGpx(fixes, `Gapped drive ${stamp}`) : toCsv(fixes);
-      const file = new File(Paths.cache, `gapped-${stamp}.${kind}`);
       if (file.exists) file.delete();
       file.create();
       file.write(content);
@@ -245,7 +322,52 @@ export default function DriveDetail() {
       });
     } catch {
       haptic.error();
+    } finally {
+      discardExportFile(file);
     }
+  };
+
+  const confirmDelete = () => {
+    if (deleting || !id) return;
+    // Checked before asking, so nobody confirms a deletion that is then
+    // refused. deleteDrive checks again.
+    if (useDriveStore.getState().driveId != null) {
+      haptic.error();
+      Alert.alert(...DELETE_FAILURE.recording);
+      return;
+    }
+    haptic.press();
+    Alert.alert(
+      'Delete this drive?',
+      'This removes the drive from this phone and from our servers, including its leaderboard entries, and your records are recalculated without it. It cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setDeleting(true);
+            deleteDrive(id)
+              .then((result) => {
+                if (result === 'deleted') {
+                  // Nothing left to show. The tabs underneath re-read the
+                  // drives as they regain focus.
+                  goBack();
+                  return;
+                }
+                setDeleting(false);
+                haptic.error();
+                Alert.alert(...DELETE_FAILURE[result]);
+              })
+              .catch(() => {
+                setDeleting(false);
+                haptic.error();
+                Alert.alert(...DELETE_FAILURE.unreachable);
+              });
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -276,6 +398,17 @@ export default function DriveDetail() {
           unit={formatSpeed(s.avgSpeedMs, unitPref).split(' ')[1]}
         />
       </View>
+      {/*
+        Only on the server's word. A top speed above the country's national
+        limit is kept off the public boards (verify-drive), and the figure
+        above is still this driver's own — so the line says where it does not
+        count, not that it was wrong.
+      */}
+      {topSpeedRanked === false ? (
+        <Text variant="caption" style={styles.note}>
+          {notRankedLine(ceiling, unitPref)}
+        </Text>
+      ) : null}
       <View style={styles.grid}>
         {/* "Cornering G & full telemetry" is Pro; the figures around it are not. */}
         {peakG.kind === 'locked' ? (
@@ -295,11 +428,12 @@ export default function DriveDetail() {
       </View>
       {s.zeroTo60S == null ? (
         <Text variant="caption" style={styles.note}>
-          0–60 shows only when a clean standstill launch was detected — we never estimate.
+          0–60 shows only when a drive pulls away from a standstill and reaches 60 mph without
+          slowing on the way — we never estimate it.
         </Text>
       ) : (
         <Text variant="caption" style={styles.note}>
-          1-foot rollout, interpolated crossing. Methodology is published — check us.
+          Timed from a 1-foot rollout, with the 60 mph crossing interpolated between GPS fixes.
         </Text>
       )}
 
@@ -363,6 +497,17 @@ export default function DriveDetail() {
       <Text variant="legal" style={styles.note}>
         {exporting.note}
       </Text>
+
+      <SettingsSection title="Drive">
+        <SettingsRow
+          glyph="🗑️"
+          tint={DANGER_TINT}
+          label="Delete drive"
+          value={deleting ? 'Deleting…' : undefined}
+          destructive
+          onPress={confirmDelete}
+        />
+      </SettingsSection>
 
       {/*
         Off-screen at natural size so view-shot captures it crisply — collapsed

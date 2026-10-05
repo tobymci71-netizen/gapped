@@ -72,6 +72,25 @@ export function countryLine(proof: CountryProof, country: Pick<Country, 'code' |
   }
 }
 
+/**
+ * The step's headline, from the same proof as the count line, so the two
+ * never disagree (docs/ONBOARDING.md, "Country").
+ *
+ * "You're in good company" only over a real count: under the early variant it
+ * would claim a crowd the line below says is not there yet. There the
+ * headline asks for the first run instead. While the count is still coming,
+ * it names the board, which is true whichever way the answer goes.
+ */
+export function countryTitle(
+  proof: CountryProof | 'loading' | null,
+  country: Pick<Country, 'code' | 'name'> | null,
+): string {
+  if (!country) return 'Where do you drive?';
+  // "The {Country} board", as the early detail line words it: the bare name.
+  if (!proof || proof === 'loading') return `The ${country.name} board`;
+  return proof.kind === 'early' ? `Start the ${country.name} board` : "You're in good company";
+}
+
 /** The whole line as VoiceOver should read it, number included. */
 export function spokenCountryLine(line: CountryLine): string {
   return line.kind === 'count' ? `${formatCount(line.n)} ${line.text}` : `${line.text}. ${line.detail}`;

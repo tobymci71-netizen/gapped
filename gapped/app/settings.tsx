@@ -1,24 +1,28 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, Linking, StyleSheet, View } from 'react-native';
-import { countryByCode } from '@/data/countries';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Linking, Share, StyleSheet, View } from 'react-native';
+import { INTERNAL_TOOLS } from '@/config/flags';
+import { ACKNOWLEDGEMENTS_URL, PRIVACY_URL, SUPPORT_URL, TERMS_URL } from '@/config/links';
+import { countryByCode, type CountryCode } from '@/data/countries';
 import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
 import { SettingsRow, SettingsSection } from '@/components/SettingsRow';
 import { Text } from '@/components/Text';
+import { sweepExportFiles } from '@/drive/deleteDrive';
 import { speedForDisplay } from '@/drive/units';
 import { mps } from '@/types/units';
 import { useDriveStore } from '@/drive/recorder';
 import { clearAll } from '@/drive/wal';
 import { haptic } from '@/lib/haptics';
-import { supabase } from '@/lib/supabase';
+import { ensureUserId, supabase } from '@/lib/supabase';
+import { syncIdentity } from '@/lib/sync';
 import { useRecords } from '@/state/records';
-import { triggerTestCrash } from '@/lib/observability';
+import { CountrySheet } from '@/onboarding/place/CountrySheet';
 import { rearmLocaleUnitDefault } from '@/onboarding/vehicle/deviceUnits';
 import { discardVehiclePhoto } from '@/onboarding/vehicle/vehiclePhoto';
 import { useProfile } from '@/state/profile';
-import { color, space } from '@/theme/tokens';
+import { color, glyph, space, textStyle } from '@/theme/tokens';
 
 /** Glyph-tile tints: palette colours at low alpha, plus surface3 for neutral rows. */
 const tint = {
@@ -27,8 +31,29 @@ const tint = {
   danger: 'rgba(255, 59, 48, 0.18)', // color.danger
 } as const;
 
-const VERSION = Constants.expoConfig?.version ?? '0.1.0';
+const VERSION = Constants.expoConfig?.version ?? '1.0.0';
 
+/** How much of the account id the row shows; the share sheet sends all of it. */
+const ACCOUNT_ID_PREVIEW = 8;
+
+/**
+ * A statement in a settings card: drawn like a SettingsRow without a press,
+ * but allowed to wrap. SettingsRow holds its label to one line, which suits a
+ * control's name and cuts a sentence off ("Routes never shown to oth…") — and
+ * half a privacy promise is not one.
+ */
+function StatementRow({ icon, tileColor, label }: { icon: string; tileColor: string; label: string }) {
+  return (
+    <View style={styles.statement} accessible accessibilityLabel={label}>
+      <View style={[styles.statementTile, { backgroundColor: tileColor }]}>
+        <Text style={styles.statementGlyph}>{icon}</Text>
+      </View>
+      <Text variant="bodyMedium" style={styles.statementLabel}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 /** SettingsRow presses are silent, so each handler owns its haptic. */
 function openURL(url: string): void {
@@ -80,6 +105,13 @@ async function deleteAccount(): Promise<void> {
   };
 
   step('sqlite', clearAll);
+
+  // GPX/CSV exports are deleted once shared, but one whose share was cut off
+  // (the app killed with the sheet up) is still in the cache, carrying a full
+  // route.
+  step('exports', () => {
+    sweepExportFiles();
+  });
 
   // The car photo from onboarding is a file the profile only names
   // (Documents/vehicle-photos, kept there so iOS cannot purge it), so reset()
@@ -136,11 +168,29 @@ export class LocalWipeError extends Error {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { unitPref, country, setUnitPref, debugHud, toggleDebugHud } = useProfile();
+  const { unitPref, country, setUnitPref, setCountry, debugHud, toggleDebugHud } = useProfile();
   // A deletion can sit for up to ~30 s while auth-js retries a token refresh,
   // with nothing on screen; a second confirm in that window would start a
   // second deletion over the first.
   const [deleting, setDeleting] = useState(false);
+  const [countryOpen, setCountryOpen] = useState(false);
+  // The id support needs to find an account: there is no email or phone
+  // number to look someone up by. Undefined while it is being read, null when
+  // it could not be (offline with no usable session).
+  const [accountId, setAccountId] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let live = true;
+    // ensureUserId rather than a bare getSession: it is what every other
+    // screen uses to reach the account, and it never throws.
+    ensureUserId().then((id) => {
+      if (live) setAccountId(id);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   // From units.ts so a unit rename cannot leave this label behind.
   const unitLabel = speedForDisplay(mps(0), unitPref).unit;
@@ -152,6 +202,25 @@ export default function SettingsScreen() {
   const toggleUnits = () => {
     haptic.selection();
     setUnitPref(unitPref === 'imperial' ? 'metric' : 'imperial');
+  };
+
+  // The sheet fires its own selection haptic on a pick.
+  const closeCountry = useCallback(() => setCountryOpen(false), []);
+  const chooseCountry = useCallback(
+    (code: CountryCode) => {
+      setCountry(code);
+      // The root layout also pushes on a country change; this is the same
+      // push, deduplicated in sync.ts, made here so the change does not wait
+      // on that subscription to reach the server.
+      syncIdentity().catch(() => undefined);
+    },
+    [setCountry],
+  );
+
+  const shareAccountId = () => {
+    if (!accountId) return;
+    haptic.press();
+    Share.share({ message: accountId }).catch(() => undefined);
   };
 
   const confirmDelete = () => {
@@ -237,49 +306,40 @@ export default function SettingsScreen() {
           value={unitLabel}
           onPress={toggleUnits}
         />
-        <SettingsRow glyph="🌍" tint={tint.neutral} label="Country" value={countryValue} />
         {/*
-          Shows IMU rate and gravity-removed G on the drive HUD. Kept in the
-          shipping build rather than behind __DEV__ because the thing it
-          verifies — adaptive sampling and the gravity fix — only happens in a
-          moving vehicle, which is not where a debug build usually is.
+          The country picks the national board a driver's runs are ranked on.
+          Runs already ranked keep the board they were ranked on; the next
+          verified run goes to the new one.
         */}
+        <SettingsRow
+          glyph="🌍"
+          tint={tint.neutral}
+          label="Country"
+          value={countryValue}
+          onPress={() => {
+            haptic.press();
+            setCountryOpen(true);
+          }}
+        />
         {/*
-          Confirms in one tap that a build reports crashes and that the Hermes
-          stack symbolicated. Ships in TestFlight builds deliberately: the thing
-          being verified is the release pipeline (source-map upload, dSYMs), and
-          a dev build cannot verify it. Hidden behind Debug HUD so an ordinary
-          user never meets it.
+          Shows IMU rate and gravity-removed G on the drive HUD. Development
+          builds only (INTERNAL_TOOLS): a TestFlight build is the App Store
+          binary, and App Review reads a debug switch as an unfinished app.
+          The test-crash row that lived here is gone for the same reason, and
+          because no release build has a crash reporter for it to test.
         */}
-        {debugHud ? (
+        {INTERNAL_TOOLS ? (
           <SettingsRow
-            glyph="💥"
-            tint={tint.danger}
-            label="Send test crash"
-            value="Sentry"
+            glyph="📈"
+            tint={tint.neutral}
+            label="Debug HUD"
+            value={debugHud ? 'On' : 'Off'}
             onPress={() => {
-              haptic.press();
-              Alert.alert(
-                'Send a test crash?',
-                'The app will crash on purpose so the report can be checked in Sentry. Nothing is lost — drives are written to disk as they are recorded.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Crash', style: 'destructive', onPress: triggerTestCrash },
-                ],
-              );
+              haptic.selection();
+              toggleDebugHud();
             }}
           />
         ) : null}
-        <SettingsRow
-          glyph="📈"
-          tint={tint.neutral}
-          label="Debug HUD"
-          value={debugHud ? 'On' : 'Off'}
-          onPress={() => {
-            haptic.selection();
-            toggleDebugHud();
-          }}
-        />
         <SettingsRow
           glyph="👥"
           tint={tint.neutral}
@@ -292,7 +352,17 @@ export default function SettingsScreen() {
       </SettingsSection>
 
       <SettingsSection title="Privacy">
-        <SettingsRow glyph="🛡️" tint={tint.accent} label="Private by default" />
+        {/*
+          Was "Private by default", which the leaderboards make untrue: a
+          username, country and run results are public. What is private is the
+          route — drives are readable by their owner only (RLS on drives), and
+          the boards carry figures, never coordinates.
+        */}
+        <StatementRow
+          icon="🛡️"
+          tileColor={tint.accent}
+          label="Routes never shown to other drivers"
+        />
         <SettingsRow
           glyph="📍"
           tint={tint.neutral}
@@ -302,55 +372,101 @@ export default function SettingsScreen() {
             Linking.openSettings().catch(() => undefined);
           }}
         />
+        <SettingsRow
+          glyph="🙈"
+          tint={tint.neutral}
+          label="Hidden drivers"
+          onPress={() => {
+            haptic.press();
+            router.push('/hidden-drivers');
+          }}
+        />
         <SettingsRow glyph="🚫" tint={tint.neutral} label="No ads, no data resale" />
       </SettingsSection>
       {/*
-        Says where drives go, on every plan. "Recorded on your device" alone,
-        under Privacy, read as if they stayed there; every account's drives
-        upload so the server can verify them (src/lib/sync.ts), and the Pro
-        row about drives is restoring them on a new phone, not keeping them.
+        Says where drives go, on every plan, and what of them is public.
+        "Recorded on your device" alone, under Privacy, read as if they stayed
+        there; every account's drives upload so the server can verify them
+        (src/lib/sync.ts). The second sentence is the share card, which is the
+        only picture of a route that leaves the phone, and only when its owner
+        sends it.
       */}
       <Text variant="legal" style={styles.note}>
         Drives are recorded on your device and sent to our servers, which verify them before they
-        count. Routes are trimmed near your start and end points before a drive is shared or
-        ranked.
+        count. A share card you send yourself shows the route trimmed near its start and end.
+        Your username, country and run results (top speed, distance, 0-60 and the date) are
+        public on the leaderboards.
       </Text>
 
+      {/*
+        Every page is a links.ts URL (GitHub Pages). Contact and feedback go
+        to the support page rather than an email link: the address is not
+        settled, and the page can change without an app release.
+      */}
       <SettingsSection title="About">
         <SettingsRow glyph="🏁" tint={tint.accent} label="Gapped" value={VERSION} />
+        {supabase ? (
+          <SettingsRow
+            glyph="🪪"
+            tint={tint.neutral}
+            label="Account ID"
+            value={
+              accountId
+                ? `${accountId.slice(0, ACCOUNT_ID_PREVIEW)}…`
+                : accountId === null
+                  ? 'Unavailable offline'
+                  : '—'
+            }
+            onPress={accountId ? shareAccountId : undefined}
+          />
+        ) : null}
         <SettingsRow
           glyph="🔒"
           tint={tint.neutral}
           label="Privacy Policy"
-          onPress={() => openURL('https://gapped.app/privacy')}
+          onPress={() => openURL(PRIVACY_URL)}
         />
         <SettingsRow
           glyph="📄"
           tint={tint.neutral}
           label="Terms of Use"
-          onPress={() => openURL('https://gapped.app/terms')}
+          onPress={() => openURL(TERMS_URL)}
         />
         <SettingsRow
           glyph="💬"
           tint={tint.neutral}
           label="Leave feedback"
-          onPress={() => openURL('mailto:hello@gapped.app?subject=Gapped%20feedback')}
+          onPress={() => openURL(SUPPORT_URL)}
         />
         <SettingsRow
           glyph="✉️"
           tint={tint.neutral}
           label="Contact us"
-          onPress={() => openURL('mailto:hello@gapped.app')}
+          onPress={() => openURL(SUPPORT_URL)}
         />
         <SettingsRow
           glyph="📦"
           tint={tint.neutral}
           label="Acknowledgements"
-          onPress={() => openURL('https://gapped.app/acknowledgements')}
+          onPress={() => openURL(ACKNOWLEDGEMENTS_URL)}
         />
       </SettingsSection>
+      {accountId ? (
+        <Text variant="legal" style={styles.note}>
+          Tap Account ID to share it. It is how we find your account if you contact us.
+        </Text>
+      ) : null}
 
       <SettingsSection title="Account">
+        <SettingsRow
+          glyph="✏️"
+          tint={tint.neutral}
+          label="Change username"
+          onPress={() => {
+            haptic.press();
+            router.push('/edit-username');
+          }}
+        />
         <SettingsRow
           glyph="🗑️"
           tint={tint.danger}
@@ -365,10 +481,27 @@ export default function SettingsScreen() {
         our servers, including any leaderboard entries. If the server cannot be reached, nothing is
         deleted and we say so, rather than wiping this device and leaving the rest behind.
       </Text>
+      {/*
+        An anonymous account lives in this app's storage and nowhere else a
+        person could sign back in from, so uninstalling strands the data
+        rather than deleting it. Saying so is the difference between someone
+        believing they left and actually having left.
+      */}
+      <Text variant="legal" style={styles.note}>
+        Uninstalling Gapped does not delete your data. Delete your account here first. If you have
+        lost access, contact us with your username or Account ID.
+      </Text>
 
       <Text variant="legal" style={styles.footer}>
-        © 2026 Gapped · Every number in this app is measured, never estimated.
+        © 2026 Toby Mcintosh · Every number in this app is measured, never estimated.
       </Text>
+
+      <CountrySheet
+        visible={countryOpen}
+        selected={country}
+        onSelect={chooseCountry}
+        onClose={closeCountry}
+      />
     </Screen>
   );
 }
@@ -383,8 +516,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backGlyph: { fontSize: 30, lineHeight: 34, color: color.text1 },
+  backGlyph: { ...textStyle(glyph.display), color: color.text1 },
   title: { textAlign: 'center' },
   note: { marginTop: space.sm },
   footer: { marginTop: space.xxl, textAlign: 'center' },
+  // SettingsRow's metrics (src/components/SettingsRow.tsx), so the statement
+  // sits in the card like the rows around it.
+  statement: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    gap: space.md,
+  },
+  statementTile: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statementGlyph: { ...textStyle(glyph.lg), color: color.text1, textAlign: 'center' },
+  statementLabel: { flex: 1 },
 });

@@ -8,6 +8,7 @@ import {
   draftReady,
   EMPTY_DRAFT,
   finishDraft,
+  makeRefused,
   vehicleName,
   vehicleTitle,
   withMake,
@@ -22,6 +23,34 @@ describe('cleanName', () => {
   it('treats missing values as empty', () => {
     expect(cleanName(null)).toBe('');
     expect(cleanName(undefined)).toBe('');
+  });
+
+  it('removes the invisible characters the server refuses (0019), which a paste brings', () => {
+    expect(cleanName('Golf\u200B GTI')).toBe('Golf GTI');
+    expect(cleanName('\uFEFFBMW')).toBe('BMW');
+    expect(cleanName('M\u202E3')).toBe('M3');
+    expect(cleanName('Mini\u0007')).toBe('Mini');
+    // Ordinary letters and punctuation stay.
+    expect(cleanName('Citroën – DS')).toBe('Citroën – DS');
+  });
+});
+
+describe('a make the server would refuse', () => {
+  it('holds Continue back and is never saved', () => {
+    const draft = { make: 'Shitbox Motors', model: 'Mk1' };
+    expect(makeRefused(draft.make)).toBe(true);
+    expect(draftReady(draft)).toBe(false);
+    expect(finishDraft(draft, 'car')).toBeNull();
+  });
+
+  it('an empty make is not refused, only not chosen', () => {
+    expect(makeRefused('')).toBe(false);
+    expect(makeRefused(null)).toBe(false);
+  });
+
+  it('catalogue makes pass', () => {
+    expect(makeRefused('BMW')).toBe(false);
+    expect(draftReady({ make: 'BAD ASS Choppers', model: 'Custom' })).toBe(true);
   });
 });
 

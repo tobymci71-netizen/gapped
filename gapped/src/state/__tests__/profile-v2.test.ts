@@ -44,6 +44,7 @@ describe('migrateProfile', () => {
       vehiclePhotoUri: null,
       focus: null,
       attribution: null,
+      termsAcceptedAt: null,
     });
   });
 
@@ -58,8 +59,13 @@ describe('migrateProfile', () => {
   });
 
   test('the current version passes through untouched', () => {
-    const v1 = { ...V0_STATE, nickname: 'Hachi', focus: 'topSpeed' };
-    expect(migrateProfile(v1, PROFILE_VERSION)).toEqual(v1);
+    const current = {
+      ...V0_STATE,
+      nickname: 'Hachi',
+      focus: 'topSpeed',
+      termsAcceptedAt: '2026-10-05T09:00:00.000Z',
+    };
+    expect(migrateProfile(current, PROFILE_VERSION)).toEqual(current);
   });
 });
 
@@ -81,6 +87,7 @@ describe('upgrading an installed profile', () => {
     expect(s.extraVehicles).toEqual([]);
     expect(s.focus).toBeNull();
     expect(s.attribution).toBeNull();
+    expect(s.termsAcceptedAt).toBeNull();
   });
 
   test('the next write stores the new version', async () => {

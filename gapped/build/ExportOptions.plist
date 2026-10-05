@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists/PLIST-1.0.dtd">
+<!--
+  Export options for an App Store Connect upload from a local archive:
+
+    xcodebuild -exportArchive -archivePath <Gapped.xcarchive> \
+      -exportOptionsPlist build/ExportOptions.plist -exportPath build/export
+
+  manageAppVersionAndBuildNumber is false so the upload carries exactly the
+  version and build number app.json set (expo.version, ios.buildNumber), the
+  same numbers the app shows in Settings; Xcode must not bump them on the way.
+-->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>upload</string>
+	<key>teamID</key>
+	<string>X3YGYXTB3F</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+</dict>
+</plist>

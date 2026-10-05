@@ -29,16 +29,19 @@ describe('earlyCopy', () => {
   it('invites without a number', () => {
     const copy = earlyCopy('BSA');
     expect(copy.title).toBe('Be one of the first BSA drivers on the board');
-    expect(copy.body).toBe(
-      'Every verified BSA run lands on the board. Yours can be the one to beat.',
-    );
+    expect(copy.body).toBe('Each verified BSA drive is added to the board as it comes in.');
     expect(`${copy.title} ${copy.body}`).not.toMatch(/\d/);
   });
 
   it('reads cleanly with no make at all', () => {
     expect(earlyCopy(null).title).toBe('Be one of the first drivers on the board');
-    expect(earlyCopy('   ').body).toBe(
-      'Every verified run lands on the board. Yours can be the one to beat.',
-    );
+    expect(earlyCopy('   ').body).toBe('Each verified drive is added to the board as it comes in.');
+  });
+
+  it('does not frame a drive as a race', () => {
+    for (const make of ['BSA', null]) {
+      const { title, body } = earlyCopy(make);
+      expect(`${title} ${body}`).not.toMatch(/beat|race|fastest|win\b|compet/i);
+    }
   });
 });

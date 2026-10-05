@@ -44,3 +44,11 @@ supabase/functions/.env
 # generated native folders
 /ios
 /android
+
+# Release builds: archives, exported IPAs and symbols land in build/. Only the
+# export options are source — they decide how an archive is uploaded.
+/build/*
+!/build/ExportOptions.plist
+*.ipa
+*.xcarchive
+*.dSYM.zip

@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { PressableScale } from '@/components/PressableScale';
@@ -8,6 +8,8 @@ import { ProBadge, useGoPro } from '@/components/ProBadge';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { bracketsLocked } from '@/board/bracketAccess';
+import { SHOW_PRO } from '@/config/flags';
+import { SUPPORT_URL } from '@/config/links';
 import { modifiedFromBracketKey } from '@/lib/bracket-flag';
 import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
@@ -17,7 +19,7 @@ import { useProfile } from '@/state/profile';
 import { bracketKey, bracketLabel } from '@/vehicles/brackets';
 import { decodeVin, fetchPrimaryVehicle, setModified, VehicleSpecs } from '@/vehicles/specs';
 import { checkVin } from '@/vehicles/vin';
-import { color, radius, space } from '@/theme/tokens';
+import { color, radius, space, textStyle, type } from '@/theme/tokens';
 
 function SpecRow({ label, value }: { label: string; value: string }) {
   return (
@@ -56,10 +58,13 @@ const OFFLINE = 'Could not reach our servers. Check your connection and try agai
  * a full Free garage gets the PRO row and keeps every vehicle already in it.
  */
 export default function GarageScreen() {
-  const { vehicleKind, vehicleMake, vehicleModel, vehicleId } = useProfile();
+  const { vehicleKind, vehicleMake, vehicleModel, vehicleId, vehicleRefused } = useProfile();
   // The class itself is Free (runs are recorded in it either way); the board
   // that ranks them by class is Pro, so a locked account is told where it is.
-  const classBoardLocked = bracketsLocked(useAccess());
+  // Never while Pro is hidden (SHOW_PRO): a line that leads to a plan nobody
+  // can buy. The two flags are one today, so this only says so out loud.
+  const access = useAccess();
+  const classBoardLocked = SHOW_PRO && bracketsLocked(access);
   const goPro = useGoPro();
   // Specs are held with the vehicle they describe, so a vehicle change — or
   // the profile reset of an account deletion — cannot leave the previous
@@ -94,7 +99,7 @@ export default function GarageScreen() {
   }, [vehicleId]);
 
   // On every focus, not once per mount: tab screens stay mounted for the life
-  // of the process, so a load that failed offline used to leave "Unlock your
+  // of the process, so a load that failed offline used to leave "Set your
   // class" up until the app was killed.
   useFocusEffect(
     useCallback(() => {
@@ -193,10 +198,40 @@ export default function GarageScreen() {
     <Screen>
       <Text variant="headline">Garage</Text>
 
-      {!name ? (
+      {/*
+        The server refused this car's row (sync.ts, vehicleRefused), so its
+        drives cannot upload. Nothing here can rename the main car, so the
+        card says what happened, that nothing is lost, and where to ask.
+      */}
+      {vehicleRefused && name ? (
         <Card style={styles.card}>
-          <Text variant="cardTitle">No vehicles yet</Text>
-          <Text variant="body">Add your ride during onboarding, or here once editing ships.</Text>
+          <Text variant="cardTitle">Drives in this car aren&apos;t uploading</Text>
+          <Text variant="body">
+            Our server didn&apos;t accept this car&apos;s name, &ldquo;{name}&rdquo;, so drives in it
+            can&apos;t be uploaded or ranked yet. They are kept on this phone and upload once
+            it&apos;s sorted. Contact us and we&apos;ll look at it.
+          </Text>
+          <Button
+            label="Contact us"
+            variant="secondary"
+            onPress={() => {
+              Linking.openURL(SUPPORT_URL).catch(() => undefined);
+            }}
+            style={styles.decodeBtn}
+          />
+        </Card>
+      ) : null}
+
+      {!name ? (
+        // Only for a profile with no make and model, which the ride step does
+        // not allow. Nothing here edits a vehicle, so it promises nothing: it
+        // used to say "or here once editing ships".
+        <Card style={styles.card}>
+          <Text variant="cardTitle">No vehicle yet</Text>
+          <Text variant="body">
+            Your main vehicle is the one chosen during onboarding, and it shows here with its
+            class.
+          </Text>
         </Card>
       ) : (
         <>
@@ -233,7 +268,7 @@ export default function GarageScreen() {
 
           {currentBracket ? (
             <Card style={styles.card}>
-              <Text variant="caption">COMPETING IN</Text>
+              <Text variant="caption">YOUR CLASS</Text>
               <Text variant="cardTitle" style={{ color: color.accent }}>
                 {bracketLabel(currentBracket)}
               </Text>
@@ -287,13 +322,13 @@ export default function GarageScreen() {
           ) : (
             <Card style={styles.card}>
               <Text variant="cardTitle">
-                {specs?.specSource === 'vin' ? 'Update from VIN' : 'Unlock your class'}
+                {specs?.specSource === 'vin' ? 'Update from VIN' : 'Set your class'}
               </Text>
               <Text variant="body" style={styles.blurb}>
-                Without a VIN every run competes in the open class, against everything. Your VIN is
-                decoded by NHTSA on our servers to get drivetrain, power and weight — we never store
-                the VIN itself, and we do not accept these figures typed in by hand, because that
-                would let anyone pick an easier class.
+                Without a VIN, every drive goes in the open class, alongside every other vehicle.
+                Your VIN is decoded by NHTSA on our servers to get drivetrain, power and weight — we
+                never store the VIN itself, and we do not accept these figures typed in by hand,
+                because that would let anyone pick a class that is not theirs.
               </Text>
               <TextInput
                 value={vin}
@@ -362,7 +397,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: color.hairline,
     color: color.text1,
-    fontSize: 16, lineHeight: 20,
+    ...textStyle(type.body),
     letterSpacing: 1,
   },
   decodeBtn: { marginTop: space.md, marginBottom: space.sm },

@@ -14,24 +14,14 @@ import { useReducedMotion } from '@/lib/useReducedMotion';
 import { useProfile } from '@/state/profile';
 import { easing } from '@/theme/motion';
 import { space } from '@/theme/tokens';
-import { mps } from '@/types/units';
 import { IntroPage } from './IntroPage';
 import {
+  DIAL_DEMO_MS,
   DIAL_SWEEP_MS,
   dialDemoLabel,
   type IntroPageCopy,
   SPLASH_START_SCALE,
 } from './introTimeline';
-
-/**
- * Demo speed the hero dial sweeps to, m/s (≈ 87 mph / 140 km/h).
- *
- * Branded. This constant is where the 313 km/h bug lived: it briefly held 87,
- * a value already in display units (mph), which speedForDisplay then converted
- * a second time. With MetresPerSecond on the parameter, a bare 87 no longer
- * compiles here — the mistake is now caught at build time, not on a screenshot.
- */
-const DEMO_MS = mps(38.9);
 
 /** Dial ceilings per unit, matching the unit step and the live drive HUD. */
 const DIAL_MAX_MPH = 160;
@@ -64,7 +54,8 @@ type Props = {
 export function DialPage({ copy, width, hidden, play, reveal, onVerticalDrag }: Props) {
   const reduced = useReducedMotion();
   const unitPref = useProfile((s) => s.unitPref);
-  const demo = speedForDisplay(DEMO_MS, unitPref);
+  // 60 mph, in the person's unit (DIAL_DEMO_MS, ./introTimeline).
+  const demo = speedForDisplay(DIAL_DEMO_MS, unitPref);
 
   // The dial sizes to the viewport: a fixed 280 overflowed the hero on a 667pt
   // device, so the bottom of the pitch went under the footer.

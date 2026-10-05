@@ -1,5 +1,5 @@
 import { type NativeStackNavigationProp, useIsFocused, useNavigation } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -18,19 +18,10 @@ import Animated, {
 import { Button } from '@/components/Button';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
 import { Text } from '@/components/Text';
-import { isUsernameAvailable } from '@/lib/sync';
-import { isValidUsername, normaliseUsername } from '@/lib/username';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { CheckGlyph, PersonGlyph } from '@/onboarding/identity/glyphs';
 import { useKeyboardShown } from '@/onboarding/identity/useKeyboardShown';
-import {
-  type Availability,
-  availabilityFrom,
-  USERNAME_CHECK_TIMEOUT_MS,
-  USERNAME_SETTLE_MS,
-  usernameFieldState,
-  withTimeout,
-} from '@/onboarding/identity/usernameField';
+import { useUsernameField } from '@/onboarding/identity/useUsernameField';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
 import { useProfile } from '@/state/profile';
 import { duration, easing } from '@/theme/motion';
@@ -55,84 +46,26 @@ const AVATAR_MAX_FONT_SCALE = 1.3;
 /**
  * "Choose a username" (docs/ONBOARDING.md, step 10).
  *
- * The rules are the server's (src/lib/username.ts) and the availability check
- * is the real one (isUsernameAvailable), asked live once typing pauses rather
- * than after Continue: the reference shows the taken state while the person is
- * still at the keyboard, and finding out on the tap means a dead button press
- * followed by a correction. usernameField.ts decides every state; this screen
- * only draws it.
+ * The rules are the server's (src/lib/username.ts, which also mirrors the
+ * server's denylist, so "That username isn't allowed" shows while typing) and
+ * the availability check is the real one (isUsernameAvailable), asked live
+ * once typing pauses rather than after Continue: the reference shows the
+ * taken state while the person is still at the keyboard, and finding out on
+ * the tap means a dead button press followed by a correction.
+ * useUsernameField runs the check (shared with app/edit-username.tsx) and
+ * usernameField.ts decides every state; this screen only draws it.
  *
  * Offline or with no backend the answer is "unknown", which lets the person
  * continue — the You tab's "choose another" card still catches a late clash,
- * exactly as before.
+ * exactly as before, and a name the server's longer denylist refuses on the
+ * first sync (sync.ts treats it as taken).
  */
 export default function UsernameStep() {
   const advance = useOnboardingAdvance('/onboarding/username');
   const stored = useProfile((s) => s.username);
   const setUsername = useProfile((s) => s.setUsername);
 
-  const [value, setValue] = useState(stored ?? '');
-  const [settledValue, setSettledValue] = useState(value);
-  const [verdicts, setVerdicts] = useState<Readonly<Record<string, Availability>>>({});
-
-  const name = normaliseUsername(value);
-  const field = usernameFieldState({
-    raw: value,
-    settled: settledValue === value,
-    availability: verdicts[name] ?? 'unchecked',
-  });
-
-  // Callbacks below read these; render never does.
-  const asked = useRef(new Set<string>());
-  const alive = useRef(true);
-  const latestName = useRef(name);
-  useEffect(() => {
-    latestName.current = name;
-  }, [name]);
-  // Set on every mount, not only cleared on unmount: development remounts
-  // each screen once, and a flag that was only ever cleared stayed false after
-  // that, dropping every verdict and leaving the spinner up for good.
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
-
-  const check = useCallback((n: string) => {
-    if (asked.current.has(n)) return;
-    asked.current.add(n);
-    setVerdicts((v) => ({ ...v, [n]: 'checking' }));
-    void withTimeout(isUsernameAvailable(n), USERNAME_CHECK_TIMEOUT_MS, null).then((free) => {
-      if (!alive.current) return;
-      const verdict = availabilityFrom(free);
-      setVerdicts((v) => ({ ...v, [n]: verdict }));
-      // "Available" changes no words on screen (the helper stays; only the
-      // tick appears), so it is announced here, for the name still in the
-      // field. "Taken" is a caption change, announced with the others below.
-      if (verdict === 'available' && n === latestName.current) {
-        AccessibilityInfo.announceForAccessibility(`${n} is available`);
-      }
-      // "Could not ask" is not remembered: retyping the name asks again.
-      if (verdict === 'unknown') asked.current.delete(n);
-    });
-  }, []);
-
-  // Typing has paused (or the field let go): a short name may now be called
-  // out, and a well-formed one is asked about.
-  const settle = useCallback(
-    (raw: string) => {
-      setSettledValue(raw);
-      const n = normaliseUsername(raw);
-      if (isValidUsername(n)) check(n);
-    },
-    [check],
-  );
-
-  useEffect(() => {
-    const timer = setTimeout(() => settle(value), USERNAME_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [value, settle]);
+  const { value, setValue, field, settle } = useUsernameField(stored ?? '');
 
   // Straight to the keyboard on a first visit, once the push has finished:
   // focusing during the slide raised the keyboard against the moving screen.

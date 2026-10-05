@@ -26,6 +26,13 @@ export * from './proofVariants';
 export type OnboardingAnswers = {
   focus: Focus | null;
   attribution: Attribution | null;
+  /**
+   * When the driver agreed to the Terms of Use and Privacy Policy (the
+   * profile store's termsAcceptedAt, ISO 8601), sent as
+   * `onboarding_answers.terms_accepted_at`. Optional so callers that only
+   * have the two answers need not say so; absent or null sends nothing.
+   */
+  termsAcceptedAt?: string | null;
 };
 
 /**
@@ -185,7 +192,9 @@ export async function fetchCountryActivity(
  * Only the answers that are set are sent. supabase-js's upsert updates exactly
  * the columns it is given, so saving the attribution later cannot blank a
  * focus saved earlier — the same rule pushIdentity follows for the country.
- * Nothing to send counts as saved.
+ * The terms acceptance rides along under the same rule: a later write without
+ * it cannot clear one the server already holds. Nothing to send counts as
+ * saved.
  *
  * Shared with sync.ts, which retries the stored answers on every sync pass
  * until one of these succeeds.
@@ -198,6 +207,7 @@ export async function upsertOnboardingAnswers(
   const given = {
     ...(answers.focus ? { focus: answers.focus } : {}),
     ...(answers.attribution ? { attribution: answers.attribution } : {}),
+    ...(answers.termsAcceptedAt ? { terms_accepted_at: answers.termsAcceptedAt } : {}),
   };
   if (Object.keys(given).length === 0) return true;
   try {
@@ -211,8 +221,9 @@ export async function upsertOnboardingAnswers(
 }
 
 /**
- * Upserts the person's focus and attribution into `onboarding_answers` (own
- * row only; never `profiles`, which is world-readable). Best effort: resolves
+ * Upserts the person's focus, attribution and terms acceptance into
+ * `onboarding_answers` (own row only; never `profiles`, which is
+ * world-readable). Best effort: resolves
  * whether or not the write reached the server, within PROOF_FETCH_TIMEOUT_MS,
  * and never rejects, because nothing in onboarding may wait on it or fail
  * because of it. A write still in flight at the deadline is left to finish.

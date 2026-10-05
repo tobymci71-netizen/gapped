@@ -5,10 +5,13 @@
  */
 
 import {
+  advancesOnAnswer,
   LOCATION_ACTION_LABEL,
+  LOCATION_NOTE_TEXT,
   LOCATION_STATUS_LABEL,
   locationAction,
   locationCaption,
+  locationNote,
   locationStatus,
 } from '../locationStep';
 
@@ -69,5 +72,57 @@ describe('locationCaption', () => {
     expect(locationCaption('settings')).toMatch(/^Optional now\./);
     expect(locationCaption('settings')).toMatch(/Settings/);
     expect(locationCaption('retry')).toMatch(/try again/);
+  });
+});
+
+describe('locationNote: recording with the screen locked', () => {
+  test('before the tap, it says what to pick when iOS asks about Always', () => {
+    expect(locationNote({ permission: 'unknown', background: 'undetermined' }, 'enable', false)).toBe(
+      'chooseAlways',
+    );
+    expect(LOCATION_NOTE_TEXT.chooseAlways).toBe(
+      'When iOS asks, choose Change to Always Allow so a drive keeps recording with the screen locked. Gapped only records during a drive.',
+    );
+  });
+
+  test('while the dialogs are up it keeps saying so, even with foreground already in', () => {
+    // Foreground answered, background not yet: not a warning, a dialog away.
+    expect(locationNote({ permission: 'granted', background: 'undetermined' }, 'continue', true)).toBe(
+      'chooseAlways',
+    );
+  });
+
+  test('While Using only: says recording stops at screen lock, and how to fix it', () => {
+    for (const background of ['denied', 'undetermined'] as const) {
+      expect(locationNote({ permission: 'granted', background }, 'continue', false)).toBe('screenLock');
+    }
+    expect(LOCATION_NOTE_TEXT.screenLock).toMatch(/stop recording when the screen locks/);
+    expect(LOCATION_NOTE_TEXT.screenLock).toMatch(/Settings/);
+    expect(LOCATION_NOTE_TEXT.screenLock).toMatch(/Always/);
+  });
+
+  test('Always: nothing to say', () => {
+    expect(locationNote({ permission: 'granted', background: 'granted' }, 'continue', false)).toBeNull();
+  });
+
+  test('location off: the caption covers it, except where asking is still the way in', () => {
+    expect(locationNote({ permission: 'denied', background: 'denied' }, 'settings', false)).toBeNull();
+    expect(locationNote({ permission: 'denied', background: 'denied' }, 'continue', false)).toBeNull();
+    expect(locationNote({ permission: 'denied', background: 'denied' }, 'enable', false)).toBe('chooseAlways');
+    expect(locationNote({ permission: 'unknown', background: 'undetermined' }, 'retry', false)).toBe(
+      'chooseAlways',
+    );
+  });
+
+  test('the step waits on the warning, and moves on by itself otherwise', () => {
+    expect(advancesOnAnswer('screenLock')).toBe(false);
+    expect(advancesOnAnswer(null)).toBe(true);
+    expect(advancesOnAnswer('chooseAlways')).toBe(true);
+  });
+
+  test('never claims Gapped records outside a drive', () => {
+    for (const text of Object.values(LOCATION_NOTE_TEXT)) {
+      expect(text).not.toMatch(/all the time|always records|in the background at all times/i);
+    }
   });
 });

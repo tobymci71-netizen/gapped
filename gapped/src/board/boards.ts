@@ -148,6 +148,35 @@ export function periodPhrase(period: BoardPeriod): string {
 }
 
 /**
+ * The safety line a board carries, or null when its metric needs none.
+ *
+ * Top speed and 0–60 are the two numbers a driver could chase on a public
+ * road, so both boards say where the line is. The top-speed sentence is a
+ * statement of fact, not a warning: verify-drive leaves any top speed above
+ * the ranking limit of the driver's own country off every public board
+ * (supabase/functions/_shared/speedLimits.ts), and keeps it only in the
+ * driver's own history. "Ranking limit", not "speed limit": it is the
+ * highest posted limit in the country, or 130 km/h where there is no
+ * general limit (Germany) or no figure in the map, and for a country whose
+ * real maximum is lower and not yet in the map, "the speed limit" would be
+ * untrue. The driver's country, not the reader's: on the
+ * global board a US driver's 80 mph is under the US ceiling and ranked, so
+ * "your country's limit" read by someone in the UK, where the limit is 70,
+ * would have been contradicted by the rows beneath it.
+ */
+export function boardSafetyLine(metric: BoardMetric): string | null {
+  switch (metric) {
+    case 'top_speed':
+      return "Top speeds above the ranking limit for the driver's country (its highest speed limit, or 130 km/h) are never ranked. Always drive within the law.";
+    case 'zero_to_60':
+      return 'Only time acceleration where it is legal and safe, never in traffic.';
+    case 'distance':
+    case 'trip_count':
+      return null;
+  }
+}
+
+/**
  * Footer for a server board with nobody on it: says which slice is empty,
  * because "No entries yet" alone cannot tell an empty friends list from a
  * quiet week. Every clause is a filter the query really applied.
@@ -246,24 +275,31 @@ export function buildLocalBoard(query: BoardQuery, username: string | null, now:
   const rows: BoardRow[] = [];
 
   if (drives.length === 0) {
-    // SAMPLE board — labelled, swapped for real data on first drive.
-    if (query.metric === 'top_speed') {
-      SAMPLE_BOARD_ROWS.forEach((s, i) =>
-        rows.push({
-          id: `sample-${i}`,
-          rank: i + 1,
-          username: s.username,
-          country: null,
-          vehicle: s.vehicle,
-          metric: 'top_speed',
-          value: mps(s.mph * MS_PER_MPH),
-          // Not a measurement at all, so never coloured as a verified one.
-          verification: 'unverified',
-          kind: 'sample',
-          note: 'SAMPLE — replaced by real drivers after your first drive',
-        }),
-      );
-    }
+    // SAMPLE board — labelled, swapped for real data on first drive. Distance
+    // as well as top speed: the tab opens on Distance, and a SAMPLE banner
+    // over an empty list read as a board that was broken rather than waiting.
+    const sampleValue = (s: (typeof SAMPLE_BOARD_ROWS)[number]): BoardValue | null =>
+      query.metric === 'top_speed'
+        ? { metric: 'top_speed', value: mps(s.mph * MS_PER_MPH) }
+        : query.metric === 'distance'
+          ? { metric: 'distance', value: metres(s.km * 1000) }
+          : null;
+    SAMPLE_BOARD_ROWS.forEach((s, i) => {
+      const value = sampleValue(s);
+      if (value == null) return;
+      rows.push({
+        id: `sample-${i}`,
+        rank: i + 1,
+        username: s.username,
+        country: null,
+        vehicle: s.vehicle,
+        ...value,
+        // Not a measurement at all, so never coloured as a verified one.
+        verification: 'unverified',
+        kind: 'sample',
+        note: 'SAMPLE — replaced by real drivers after your first drive',
+      });
+    });
     return {
       rows,
       isSample: true,
@@ -427,6 +463,7 @@ export async function fetchBoard(
     username: e.username ?? 'driver',
     country: e.country ?? null,
     vehicle: null,
+    profileId: e.profile_id ?? null,
     // The network boundary: `value` arrives as a bare JSON number whose unit
     // is fixed by the metric we asked for, so it is tagged here on the way in.
     ...boardValue(query.metric, e.value),

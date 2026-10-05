@@ -307,6 +307,33 @@ describe('saveOnboardingAnswers', () => {
     expect(mockWrites).toHaveLength(0);
   });
 
+  test('the terms acceptance rides along as terms_accepted_at when there is one', async () => {
+    await saveOnboardingAnswers({
+      focus: 'localRanking',
+      attribution: 'friend',
+      termsAcceptedAt: '2026-10-05T08:30:00.000Z',
+    });
+    expect(mockWrites[0].payload).toEqual({
+      profile_id: 'user-1',
+      focus: 'localRanking',
+      attribution: 'friend',
+      terms_accepted_at: '2026-10-05T08:30:00.000Z',
+    });
+  });
+
+  test('no acceptance sends no column, so it can never blank one the server holds', async () => {
+    await saveOnboardingAnswers({ focus: 'topSpeed', attribution: null, termsAcceptedAt: null });
+    await saveOnboardingAnswers({ focus: 'topSpeed', attribution: null });
+    for (const w of mockWrites) expect(w.payload).not.toHaveProperty('terms_accepted_at');
+  });
+
+  test('an acceptance alone is still worth a write', async () => {
+    await saveOnboardingAnswers({ focus: null, attribution: null, termsAcceptedAt: '2026-10-05T08:30:00.000Z' });
+    expect(mockWrites.map((w) => w.payload)).toEqual([
+      { profile_id: 'user-1', terms_accepted_at: '2026-10-05T08:30:00.000Z' },
+    ]);
+  });
+
   test('never rejects: not on an error, a throw, no backend or no session', async () => {
     mockWrite = () => ({ error: { code: '42501', message: 'permission denied' } });
     await expect(saveOnboardingAnswers({ focus: 'topSpeed', attribution: null })).resolves.toBeUndefined();

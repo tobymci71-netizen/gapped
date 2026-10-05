@@ -1,7 +1,8 @@
 /**
  * The recorder's watcher lifecycle: the orphaned background session stopped at
  * cold start, the foreground stream torn down and re-armed after an error, and
- * permission re-read on every return from Settings.
+ * permission — foreground and background — re-read on every return from
+ * Settings.
  *
  * The platform modules are replaced by small fakes that record what was asked
  * of them. Each test loads a fresh recorder, because the watcher, the sensor
@@ -29,6 +30,10 @@ const DENIED_FOR_GOOD = {
 
 const mockLocation = {
   fg: GRANTED as object,
+  /** What getBackgroundPermissionsAsync answers, or an Error it throws. */
+  bg: { status: 'denied' } as { status: string } | Error,
+  /** What requestBackgroundPermissionsAsync answers, or an Error it throws. */
+  bgAnswer: { status: 'denied' } as { status: string } | Error,
   bgRunning: false,
   /** Order of the calls that matter: background stop vs foreground watch. */
   calls: [] as string[],
@@ -55,9 +60,13 @@ jest.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: async () => mockLocation.fg,
   requestBackgroundPermissionsAsync: async () => {
     mockLocation.calls.push('backgroundPermission');
-    return { status: 'denied' };
+    if (mockLocation.bgAnswer instanceof Error) throw mockLocation.bgAnswer;
+    return mockLocation.bgAnswer;
   },
-  getBackgroundPermissionsAsync: async () => ({ status: 'denied' }),
+  getBackgroundPermissionsAsync: async () => {
+    if (mockLocation.bg instanceof Error) throw mockLocation.bg;
+    return mockLocation.bg;
+  },
   hasStartedLocationUpdatesAsync: async () => mockLocation.bgRunning,
   stopLocationUpdatesAsync: async () => {
     mockLocation.calls.push('stopBackground');
@@ -163,6 +172,8 @@ const liveWatchers = () => mockLocation.watchers.filter((w) => !w.removed);
 beforeEach(() => {
   jest.useFakeTimers();
   mockLocation.fg = GRANTED;
+  mockLocation.bg = { status: 'denied' };
+  mockLocation.bgAnswer = { status: 'denied' };
   mockLocation.bgRunning = false;
   mockLocation.calls = [];
   mockLocation.watchers = [];
@@ -326,6 +337,87 @@ describe('return from Settings', () => {
     await useDriveStore.getState().init();
     await useDriveStore.getState().init();
     expect(mockAppState.listeners).toHaveLength(1);
+  });
+});
+
+describe('background ("Always") permission', () => {
+  test('starts undetermined, and init reads it alongside foreground', async () => {
+    mockLocation.bg = { status: 'granted' };
+    const { useDriveStore } = loadRecorder();
+    expect(useDriveStore.getState().backgroundPermission).toBe('undetermined');
+
+    await useDriveStore.getState().init();
+    await settle();
+    expect(useDriveStore.getState().permission).toBe('granted');
+    expect(useDriveStore.getState().backgroundPermission).toBe('granted');
+  });
+
+  test('While Using in a later process reads undetermined, which is still not granted', async () => {
+    mockLocation.bg = { status: 'undetermined' };
+    const { useDriveStore } = loadRecorder();
+    await useDriveStore.getState().init();
+    await settle();
+    expect(useDriveStore.getState().backgroundPermission).toBe('undetermined');
+  });
+
+  test('a change to Always in Settings shows on return, and back again', async () => {
+    const { useDriveStore } = loadRecorder();
+    await useDriveStore.getState().init();
+    await settle();
+    expect(useDriveStore.getState().backgroundPermission).toBe('denied');
+
+    mockLocation.bg = { status: 'granted' };
+    returnToForeground();
+    await settle();
+    expect(useDriveStore.getState().backgroundPermission).toBe('granted');
+
+    mockLocation.bg = { status: 'denied' };
+    returnToForeground();
+    await settle();
+    expect(useDriveStore.getState().backgroundPermission).toBe('denied');
+  });
+
+  test('a failed background read keeps the last answer and still arms', async () => {
+    mockLocation.bg = { status: 'granted' };
+    const { useDriveStore } = loadRecorder();
+    await useDriveStore.getState().init();
+    await settle();
+
+    mockLocation.bg = new Error('no CoreLocation');
+    returnToForeground();
+    await settle();
+    expect(useDriveStore.getState().backgroundPermission).toBe('granted');
+    expect(liveWatchers()).toHaveLength(1);
+  });
+
+  test('the answer to the request is in the store before the request resolves', async () => {
+    mockLocation.bgAnswer = { status: 'granted' };
+    const { useDriveStore } = loadRecorder();
+    await expect(useDriveStore.getState().requestPermissions()).resolves.toBe(true);
+    expect(useDriveStore.getState().backgroundPermission).toBe('granted');
+  });
+
+  test('Keep Only While Using is stored as denied', async () => {
+    mockLocation.bgAnswer = { status: 'denied' };
+    const { useDriveStore } = loadRecorder();
+    await useDriveStore.getState().requestPermissions();
+    expect(useDriveStore.getState().backgroundPermission).toBe('denied');
+  });
+
+  test('a request that throws falls back to reading the current answer, and still arms', async () => {
+    mockLocation.bgAnswer = new Error('ERR_LOCATION_INFO_PLIST');
+    mockLocation.bg = { status: 'undetermined' };
+    const { useDriveStore } = loadRecorder();
+    await expect(useDriveStore.getState().requestPermissions()).resolves.toBe(true);
+    expect(useDriveStore.getState().backgroundPermission).toBe('undetermined');
+    expect(liveWatchers()).toHaveLength(1);
+  });
+
+  test('readBackgroundPermission maps the three statuses', () => {
+    const { readBackgroundPermission } = loadRecorder();
+    expect(readBackgroundPermission({ status: 'granted' })).toBe('granted');
+    expect(readBackgroundPermission({ status: 'denied' })).toBe('denied');
+    expect(readBackgroundPermission({ status: 'undetermined' })).toBe('undetermined');
   });
 });
 

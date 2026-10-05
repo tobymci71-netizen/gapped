@@ -120,3 +120,29 @@ describe('fetchBoard: your rows are yours by account, not by name', () => {
     expect(r.rows.map((row) => row.kind)).toEqual(['user', 'you']);
   });
 });
+
+describe('fetchBoard: every server row names its account', () => {
+  test('profileId comes from profile_id, so a report or a hide can name the driver', async () => {
+    mockUserId = 'me-id';
+    mockRpc.mockResolvedValue({
+      data: [
+        { id: 'e1', profile_id: 'other-id', username: 'them', country: 'GB', value: 31, verification: 'verified', bracket_key: null },
+        { id: 'e2', profile_id: 'me-id', username: 'me', country: 'GB', value: 30, verification: 'verified', bracket_key: null },
+        { id: 'e3', username: 'old', country: 'GB', value: 29, verification: 'verified', bracket_key: null },
+      ],
+      error: null,
+    });
+    const r = await fetchBoard(query(), 'me', 'GB');
+    expect(r.rows.map((row) => [row.kind, row.profileId])).toEqual([
+      ['user', 'other-id'],
+      ['you', 'me-id'],
+      ['user', null],
+    ]);
+  });
+
+  test('ranks through board_top, never a direct read of leaderboard_entries', async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+    await fetchBoard(query({ metric: 'distance' }), 'me', 'GB');
+    expect(mockRpc).toHaveBeenCalledWith('board_top', expect.objectContaining({ p_metric: 'distance' }));
+  });
+});

@@ -16,15 +16,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ensureUserId, supabase } from './supabase';
 import { attestationFor } from './attestation';
+import { type UsernameRejection, usernameRejection, vehicleRejected } from './username';
 import * as wal from '@/drive/wal';
 import { Fix } from '@/drive/types';
 import { upsertOnboardingAnswers } from '@/onboarding/socialProof';
 import { useProfile } from '@/state/profile';
 
 const FIX_BATCH = 500;
-
-/** Postgres unique_violation. */
-const UNIQUE_VIOLATION = '23505';
 
 export type SyncResult = { uploaded: number; failed: number };
 
@@ -95,10 +93,12 @@ export function haltSync(): void {
  * keys, so without this a drive upload fails outright; decode-vin looks the
  * vehicle up by id, and add_friend looks the driver up by username.
  *
- * Throws when something other than a taken username fails — except for the
- * garage's extra vehicles and the bookkeeping of which car is the main one.
- * No drive references either, so a failure there leaves the identity to be
- * pushed again next time rather than holding back the drives.
+ * Throws when something other than a refused username (taken, or not
+ * allowed) fails — a refused main vehicle included, recorded as
+ * vehicleRefused — except for the garage's extra vehicles and the bookkeeping
+ * of which car is the main one. No drive references either, so a failure
+ * there leaves the identity to be pushed again next time rather than holding
+ * back the drives.
  */
 async function pushIdentity(client: SupabaseClient, userId: string): Promise<void> {
   const p = useProfile.getState();
@@ -139,13 +139,19 @@ async function pushIdentity(client: SupabaseClient, userId: string): Promise<voi
       .from('profiles')
       .update({ username: p.username })
       .eq('id', userId);
-    if (nameErr && nameErr.code !== UNIQUE_VIOLATION) throw nameErr;
-    // On a clash another driver holds the name. Drives still upload — the
-    // name is not part of any key — and the You tab asks for another. The
-    // verdict is recorded either way, because the flag is persisted: a name
-    // refused at one launch and accepted at a later one must not go on being
-    // reported as taken. Only if the name is still the current one, though —
-    // the user may have picked a new one while this request was in flight.
+    // A refusal of the name itself is a verdict, not a failure: another
+    // driver holds it (23505), or the server's filter will not have it
+    // (23514 'username_not_allowed'). Both are handled the same way. Thrown,
+    // a refused name failed the whole identity push, which held back every
+    // drive and was retried on every pass, forever, for a name that could
+    // never succeed.
+    if (nameErr && !usernameRejection(nameErr)) throw nameErr;
+    // Drives still upload — the name is not part of any key — and the You
+    // tab asks for another. The verdict is recorded either way, because the
+    // flag is persisted: a name refused at one launch and accepted at a later
+    // one must not go on being reported as taken. Only if the name is still
+    // the current one, though — the user may have picked a new one while this
+    // request was in flight.
     if (useProfile.getState().username === p.username) {
       useProfile.getState().setUsernameTaken(nameErr != null);
     }
@@ -179,6 +185,21 @@ async function pushIdentity(client: SupabaseClient, userId: string): Promise<voi
       },
       { onConflict: 'id', ignoreDuplicates: true },
     );
+    // A refusal of the row itself (23514: a make on the server's denylist, or
+    // text it cannot store) is a verdict, recorded so the Garage tab can say
+    // why this car's drives are not uploading — they reference a row the
+    // server does not have, so they wait on this phone. It still throws: no
+    // drive in this car can upload, and the next pass asks again, which is
+    // what picks up the owner widening the list. The onboarding fields hold
+    // a refused make back with the same list, so this is the rare make only
+    // the server's longer list catches. Re-sending a row the server already
+    // has is never refused (0019), so the flag cannot stick on an old car.
+    // Only recorded for the car this push sent, as for the username, and only
+    // on an answer: a request that got none says nothing either way.
+    const refused = vehicleErr == null ? false : vehicleRejected(vehicleErr) ? true : null;
+    if (refused != null && useProfile.getState().vehicleId === p.vehicleId) {
+      useProfile.getState().setVehicleRefused(refused);
+    }
     if (vehicleErr) throw vehicleErr;
 
     // One main car per driver. A new make/model is a new row (see above), and
@@ -225,8 +246,9 @@ async function pushIdentity(client: SupabaseClient, userId: string): Promise<voi
 }
 
 /**
- * Send the stored onboarding answers (focus, attribution) to the driver's own
- * `onboarding_answers` row, until the server has them.
+ * Send the stored onboarding answers (focus, attribution) and the time the
+ * Terms were accepted to the driver's own `onboarding_answers` row, until the
+ * server has them.
  *
  * The answer screens save them as they are given, but best effort: onboarding
  * never waits for that write, so a first run offline, or one whose anonymous
@@ -234,14 +256,20 @@ async function pushIdentity(client: SupabaseClient, userId: string): Promise<voi
  * keeps them, and this sends whatever it holds on every sync pass — once per
  * process, and again whenever an answer changes — until a write succeeds.
  *
+ * One upsert of the own row carries all three (upsertOnboardingAnswers), and
+ * only what has been given is sent, so a later write can never blank an
+ * earlier answer, or the record of when the Terms were accepted: the profile
+ * store's `termsAcceptedAt`, set at the Terms step. A change to any of the
+ * three sends them again.
+ *
  * Never throws, and never holds anything else back: no other row depends on
  * the answers.
  */
 async function pushAnswers(client: SupabaseClient, userId: string): Promise<void> {
-  const { focus, attribution } = useProfile.getState();
-  const fingerprint = JSON.stringify([userId, focus, attribution]);
+  const { focus, attribution, termsAcceptedAt } = useProfile.getState();
+  const fingerprint = JSON.stringify([userId, focus, attribution, termsAcceptedAt]);
   if (fingerprint === lastAnswers) return;
-  if (await upsertOnboardingAnswers(client, userId, { focus, attribution })) {
+  if (await upsertOnboardingAnswers(client, userId, { focus, attribution, termsAcceptedAt })) {
     lastAnswers = fingerprint;
   }
 }
@@ -293,6 +321,51 @@ export async function isUsernameAvailable(name: string): Promise<boolean | null>
     .limit(1);
   if (error || !data) return null;
   return data.every((row: { id: string }) => row.id === userId);
+}
+
+/**
+ * What became of a username change: 'saved', refused by the server ('taken',
+ * 'not_allowed'), or 'failed' — no answer, so nothing was changed anywhere.
+ */
+export type UsernameChange = 'saved' | UsernameRejection | 'failed';
+
+/**
+ * Change the username now and report the server's verdict, for the screen
+ * where a driver renames themselves (app/edit-username.tsx).
+ *
+ * The opposite order to onboarding. There the name is kept locally first and
+ * the server is told later, because nobody can be held up on a first run with
+ * no signal; a late refusal surfaces on the You tab. A rename has a working
+ * name to fall back on, so the server is asked first and the profile store
+ * changes only once it has said yes: a refused or unsent rename leaves the
+ * old name in place on both sides, rather than a new name on this phone that
+ * the boards never show.
+ *
+ * Queued with the identity pushes (inTurn), so a push already under way with
+ * the old name cannot land after this one. The store change then sets off the
+ * root layout's own push, which sends the same name again and clears the
+ * taken flag. With no backend at all there is nobody to clash with, and the
+ * name is simply kept.
+ */
+export async function changeUsername(name: string): Promise<UsernameChange> {
+  const client = supabase;
+  if (!client) {
+    useProfile.getState().setUsername(name);
+    return 'saved';
+  }
+  if (halted) return 'failed';
+  const userId = await ensureUserId();
+  if (!userId) return 'failed';
+  return inTurn(async (): Promise<UsernameChange> => {
+    try {
+      const { error } = await client.from('profiles').update({ username: name }).eq('id', userId);
+      if (error) return usernameRejection(error) ?? 'failed';
+    } catch {
+      return 'failed';
+    }
+    useProfile.getState().setUsername(name);
+    return 'saved';
+  });
 }
 
 /**

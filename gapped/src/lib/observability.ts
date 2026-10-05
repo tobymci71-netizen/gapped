@@ -4,6 +4,11 @@
  * Both Sentry and PostHog initialise only when their keys are present, so a
  * checkout without credentials stays silent rather than erroring.
  *
+ * Neither key is set for the App Store release, and that is a promise rather
+ * than an omission: the privacy policy and app.json's privacy manifest say no
+ * crash or analytics data is collected, and `npm run check:release` refuses a
+ * production build that sets either. Turning one on means changing all three.
+ *
  * Env (never committed — see .env.example):
  *   EXPO_PUBLIC_SENTRY_DSN
  *   EXPO_PUBLIC_POSTHOG_API_KEY
@@ -22,10 +27,17 @@ const posthogKey = process.env.EXPO_PUBLIC_POSTHOG_API_KEY;
 
 export let posthog: PostHog | null = null;
 
+/**
+ * Whether Sentry.init ran. Everything that reports checks it, so a build
+ * without a DSN neither sends nor pretends to: the test crash below used to
+ * crash such a build for real, with nowhere for the report to go.
+ */
+let sentryReady = false;
+
 // ── Init ────────────────────────────────────────────────────────────────────
 
 export function initObservability(): void {
-  if (sentryDsn) {
+  if (sentryDsn && !sentryReady) {
     Sentry.init({
       dsn: sentryDsn,
       tracesSampleRate: 0.1,
@@ -53,9 +65,10 @@ export function initObservability(): void {
         return scrub(breadcrumb) as typeof breadcrumb;
       },
     });
+    sentryReady = true;
   }
 
-  if (posthogKey) {
+  if (posthogKey && !posthog) {
     posthog = new PostHog(posthogKey, {
       host: process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com',
     });
@@ -64,9 +77,12 @@ export function initObservability(): void {
 
 /**
  * Product analytics. Deliberately anonymous: `identify()` is never called, so
- * PostHog holds a device-scoped id and no link to a Gapped account. The App
- * Privacy manifest declares Product Interaction as unlinked on that basis — if
- * identify() is ever added, app.json must change with it.
+ * PostHog holds a device-scoped id and no link to a Gapped account.
+ *
+ * Off for the App Store release (no key), so app.json's privacy manifest
+ * declares no Product Interaction at all. Setting a key means declaring it
+ * there (unlinked, Analytics) and in the privacy policy first — and if
+ * identify() is ever added, as linked.
  */
 export function track(
   event: string,
@@ -76,14 +92,30 @@ export function track(
 }
 
 /**
+ * Report an error the app caught and recovered from (the error boundary's
+ * fallback screen). A no-op unless Sentry was initialised; scrubbed by
+ * beforeSend like everything else when it was.
+ */
+export function reportError(error: unknown): void {
+  if (!sentryReady) return;
+  Sentry.captureException(error);
+}
+
+/**
  * Deliberate crash, for confirming that a build reports and that the stack
- * symbolicates. Reachable from Settings.
+ * symbolicates. Nothing in the app calls it now; it is kept for a developer
+ * to call from a dev build that has a DSN.
+ *
+ * A no-op unless Sentry was initialised. Without a DSN there is no report to
+ * check, and the "test" was just a real crash in front of the person using
+ * the app.
  *
  * Throws asynchronously so it escapes the React event handler and lands as an
  * unhandled error — a caught throw would be swallowed and prove nothing.
  */
 export function triggerTestCrash(): void {
+  if (!sentryReady) return;
   setTimeout(() => {
-    throw new Error('Gapped test crash — deliberate, triggered from Settings');
+    throw new Error('Gapped test crash — deliberate');
   }, 0);
 }

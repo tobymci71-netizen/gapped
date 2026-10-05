@@ -31,6 +31,7 @@ import { useProfile } from '@/state/profile';
 // jest.mock calls below are hoisted above these imports by babel-jest.
 import {
   __resetSyncStateForTests,
+  changeUsername,
   haltSync,
   isUsernameAvailable,
   syncFinalizedDrives,
@@ -252,6 +253,35 @@ describe('identity', () => {
     expect(useProfile.getState().usernameTaken).toBe(false);
   });
 
+  test("a name the server's filter refuses is handled exactly like a taken one", async () => {
+    onboard();
+    mockUnsynced.push(finalizedDrive('d1'));
+    mockRespond = (c) =>
+      c.table === 'profiles' && (c.payload as { username?: string }).username
+        ? { error: { code: '23514', message: 'username_not_allowed' } }
+        : { error: null };
+
+    // Not a failed push: the drives still go up, and the You tab asks for
+    // another name.
+    expect(await syncFinalizedDrives()).toEqual({ uploaded: 1, failed: 0 });
+    expect(useProfile.getState().usernameTaken).toBe(true);
+    expect(of('vehicles', 'upsert')).toHaveLength(1);
+  });
+
+  test('a refused name is not retried in a loop', async () => {
+    onboard();
+    mockRespond = (c) =>
+      c.table === 'profiles' && (c.payload as { username?: string }).username
+        ? { error: { code: '23514', message: 'username_not_allowed' } }
+        : { error: null };
+
+    expect(await syncIdentity()).toBe(true);
+    await syncIdentity();
+    await syncFinalizedDrives();
+    // Sent once. The next attempt is the next launch, or a new name.
+    expect(of('profiles', 'update').filter((c) => 'username' in (c.payload as object))).toHaveLength(1);
+  });
+
   test('a failed profile write is reported, not swallowed, and holds back the drives', async () => {
     onboard();
     mockUnsynced.push(finalizedDrive('d1'));
@@ -364,6 +394,64 @@ describe('the main vehicle', () => {
     // And once it has gone through, an unchanged identity is left alone.
     await syncIdentity();
     expect(of('vehicles', 'update')).toHaveLength(2);
+  });
+});
+
+describe('a main vehicle the server refuses', () => {
+  const refuseMain = (message: string) => (c: Call) =>
+    c.table === 'vehicles' && c.op === 'upsert' && !Array.isArray(c.payload)
+      ? { error: { code: '23514', message } }
+      : { error: null };
+
+  test('is recorded, and its drives wait on the phone rather than failing upload', async () => {
+    onboard();
+    mockUnsynced.push(finalizedDrive('d1'));
+    mockRespond = refuseMain('make_not_allowed');
+
+    expect(await syncFinalizedDrives()).toEqual({ uploaded: 0, failed: 1 });
+    expect(useProfile.getState().vehicleRefused).toBe(true);
+    // Nothing referencing the missing row was sent.
+    expect(of('drives', 'upsert')).toHaveLength(0);
+    // The username and country still went up, ahead of the vehicle.
+    expect(of('profiles', 'update')).toHaveLength(2);
+  });
+
+  test('so is a CHECK on the make or model text', async () => {
+    onboard();
+    mockRespond = refuseMain(
+      'new row for relation "vehicles" violates check constraint "vehicles_model_text"',
+    );
+    expect(await syncIdentity()).toBe(false);
+    expect(useProfile.getState().vehicleRefused).toBe(true);
+  });
+
+  test('is asked about again next pass, and cleared once the server takes the row', async () => {
+    onboard();
+    mockUnsynced.push(finalizedDrive('d1'));
+    mockRespond = refuseMain('make_not_allowed');
+    await syncFinalizedDrives();
+
+    mockRespond = () => ({ error: null });
+    expect(await syncFinalizedDrives()).toEqual({ uploaded: 1, failed: 0 });
+    expect(useProfile.getState().vehicleRefused).toBe(false);
+  });
+
+  test('a request with no answer leaves the verdict as it was', async () => {
+    onboard();
+    useProfile.getState().setVehicleRefused(true);
+    mockRespond = (c) =>
+      c.table === 'vehicles' && c.op === 'upsert'
+        ? { error: { message: 'TypeError: Network request failed' } }
+        : { error: null };
+    expect(await syncIdentity()).toBe(false);
+    expect(useProfile.getState().vehicleRefused).toBe(true);
+  });
+
+  test('a new car clears it before the server has said anything', () => {
+    onboard();
+    useProfile.getState().setVehicleRefused(true);
+    useProfile.getState().setVehicle('Honda', 'Civic');
+    expect(useProfile.getState().vehicleRefused).toBe(false);
   });
 });
 
@@ -513,6 +601,44 @@ describe('onboarding answers', () => {
     mockRespond = (c) =>
       c.table === 'onboarding_answers' ? { error: { message: 'relation does not exist' } } : { error: null };
     expect(await syncFinalizedDrives()).toEqual({ uploaded: 1, failed: 0 });
+  });
+
+  test('the Terms acceptance rides along in the same upsert', async () => {
+    onboard();
+    useProfile.getState().setFocus('topSpeed');
+    useProfile.setState({ termsAcceptedAt: '2026-10-05T09:30:00.000Z' });
+    await syncIdentity();
+
+    expect(answerWrites()).toHaveLength(1);
+    expect(answerWrites()[0].payload).toEqual({
+      profile_id: 'user-1',
+      focus: 'topSpeed',
+      terms_accepted_at: '2026-10-05T09:30:00.000Z',
+    });
+    expect(answerWrites()[0].options).toEqual({ onConflict: 'profile_id' });
+  });
+
+  test('the Terms acceptance alone is still sent', async () => {
+    onboard();
+    useProfile.getState().acceptTerms();
+    await syncIdentity();
+    const [write] = answerWrites();
+    expect(Object.keys(write.payload as object).sort()).toEqual(['profile_id', 'terms_accepted_at']);
+    expect((write.payload as { terms_accepted_at: string }).terms_accepted_at).toBe(
+      useProfile.getState().termsAcceptedAt,
+    );
+  });
+
+  test('accepting the Terms after the answers went up sends them again', async () => {
+    onboard();
+    useProfile.getState().setFocus('topSpeed');
+    await syncIdentity();
+    expect(answerWrites()[0].payload).not.toHaveProperty('terms_accepted_at');
+
+    useProfile.setState({ termsAcceptedAt: '2026-10-05T09:30:00.000Z' });
+    await syncIdentity();
+    expect(answerWrites()).toHaveLength(2);
+    expect(answerWrites()[1].payload).toMatchObject({ terms_accepted_at: '2026-10-05T09:30:00.000Z' });
   });
 
   test('a version-blocked build sends none', async () => {
@@ -674,5 +800,68 @@ describe('isUsernameAvailable', () => {
   test('unknown when the check cannot run', async () => {
     mockRespond = () => ({ error: { message: 'Network request failed' }, data: null });
     expect(await isUsernameAvailable('toby')).toBeNull();
+  });
+});
+
+describe('changeUsername', () => {
+  const nameWrites = () =>
+    of('profiles', 'update').filter((c) => 'username' in (c.payload as object));
+
+  test('asks the server first, then keeps the name once it has said yes', async () => {
+    onboard();
+    useProfile.getState().setUsernameTaken(true);
+
+    expect(await changeUsername('toby_new')).toBe('saved');
+    expect(nameWrites()[0].payload).toEqual({ username: 'toby_new' });
+    expect(nameWrites()[0].filters).toEqual([['id', 'user-1']]);
+    expect(useProfile.getState().username).toBe('toby_new');
+    expect(useProfile.getState().usernameTaken).toBe(false);
+  });
+
+  test('a taken name changes nothing on this phone', async () => {
+    onboard();
+    mockRespond = () => ({ error: { code: '23505', message: 'duplicate key value' } });
+    expect(await changeUsername('someone_else')).toBe('taken');
+    expect(useProfile.getState().username).toBe('toby');
+  });
+
+  test("a name the server's filter refuses comes back as not allowed", async () => {
+    onboard();
+    mockRespond = () => ({ error: { code: '23514', message: 'username_not_allowed' } });
+    expect(await changeUsername('rude_name')).toBe('not_allowed');
+    expect(useProfile.getState().username).toBe('toby');
+  });
+
+  test('an unanswered save fails and changes nothing, returned or thrown', async () => {
+    onboard();
+    mockRespond = () => ({ error: { message: 'TypeError: Network request failed' } });
+    expect(await changeUsername('toby_new')).toBe('failed');
+    mockRespond = () => Promise.reject(new TypeError('Network request failed'));
+    expect(await changeUsername('toby_new')).toBe('failed');
+    expect(useProfile.getState().username).toBe('toby');
+  });
+
+  test('waits its turn behind an identity push already under way', async () => {
+    onboard();
+    const order: string[] = [];
+    mockRespond = (c) => {
+      order.push(JSON.stringify(c.payload));
+      return new Promise<Reply>((resolve) => setTimeout(() => resolve({ error: null }), 0));
+    };
+    const push = syncIdentity();
+    const rename = changeUsername('toby_new');
+    await Promise.all([push, rename]);
+    // The old name went first; the rename landed after it, so it stands.
+    const names = order.filter((p) => p.includes('username'));
+    expect(names[0]).toBe(JSON.stringify({ username: 'toby' }));
+    expect(names[1]).toBe(JSON.stringify({ username: 'toby_new' }));
+  });
+
+  test('a version-blocked build changes nothing', async () => {
+    onboard();
+    haltSync();
+    expect(await changeUsername('toby_new')).toBe('failed');
+    expect(mockCalls).toHaveLength(0);
+    expect(useProfile.getState().username).toBe('toby');
   });
 });

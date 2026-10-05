@@ -3,6 +3,7 @@
  * words it, and samples that behave like the boards they imitate.
  */
 
+import { SAMPLE_BOARD_ROWS } from '@/board/sampleRows';
 import { msToKmh, msToMph } from '@/types/units';
 import { FOCUS_OPTIONS } from '../../flow';
 import {
@@ -11,6 +12,7 @@ import {
   rankPosition,
   SAMPLE_FRIENDS,
   SAMPLE_RANK,
+  SAMPLE_SPEED_CAP_MPH,
   SAMPLE_TOP_SPEED_ROW,
   SAMPLE_ZERO_SIXTY_S,
 } from '../focusProof';
@@ -29,10 +31,16 @@ describe('focusProofCopy', () => {
   test('worded as the doc words it', () => {
     expect(focusProofCopy('topSpeed', 'car')).toEqual({
       title: 'Your top speed, verified',
-      body: 'Every run is re-checked on our servers before it counts. No spoofed GPS, no typed-in numbers.',
+      body: "Every run is re-checked on our servers before it counts. No spoofed GPS, no typed-in numbers, and no top speed over its country's ranking limit makes the boards.",
     });
-    expect(focusProofCopy('zeroToSixty', 'car').title).toBe('Measured, not guessed');
-    expect(focusProofCopy('beatFriends', 'car').title).toBe('Friends make it a race');
+    expect(focusProofCopy('zeroToSixty', 'car')).toEqual({
+      title: 'Measured, not guessed',
+      body: 'From a standstill of at least two seconds, with a one-foot rollout. No clean start, no number.',
+    });
+    expect(focusProofCopy('beatFriends', 'car')).toEqual({
+      title: 'See how you compare',
+      body: "Add friends by username and compare real drive stats. Following is one-way, so nobody lands on a stranger's screen.",
+    });
     expect(focusProofCopy('localRanking', 'car')).toEqual({
       title: 'Your country, your board',
       body: "Every verified run places on your country's board and the global one, so you can see where you and your car stand.",
@@ -48,6 +56,19 @@ describe('focusProofCopy', () => {
     expect(`${title} ${body}`).not.toMatch(/class|like yours/i);
   });
 
+  test('friends compare, nobody races, and nothing is a launch', () => {
+    for (const o of FOCUS_OPTIONS) {
+      const { title, body } = focusProofCopy(o.key, 'car');
+      expect(`${title} ${body}`).not.toMatch(/\brac(e|es|ing)\b|launch|fastest/i);
+    }
+  });
+
+  test('top speed says what is never ranked', () => {
+    expect(focusProofCopy('topSpeed', 'bike').body).toMatch(
+      /no top speed over its country's ranking limit makes the boards/,
+    );
+  });
+
   test('no copy promises a multiplier or a made-up figure', () => {
     for (const o of FOCUS_OPTIONS) {
       const { title, body } = focusProofCopy(o.key, 'car');
@@ -61,11 +82,24 @@ describe('focusProofCopy', () => {
 });
 
 describe('samples', () => {
-  test('the top-speed row is the Board tab sample, in either unit', () => {
-    expect(SAMPLE_TOP_SPEED_ROW.name).toBe('sample_driver_1');
-    expect(SAMPLE_TOP_SPEED_ROW.vehicle).toBe('BMW M240i');
-    expect(Math.round(msToMph(SAMPLE_TOP_SPEED_ROW.topSpeed))).toBe(82);
-    expect(Math.round(msToKmh(SAMPLE_TOP_SPEED_ROW.topSpeed))).toBe(132);
+  test('the top-speed row is a Board tab sample, in either unit', () => {
+    const row = SAMPLE_BOARD_ROWS.find((r) => r.username === SAMPLE_TOP_SPEED_ROW.name);
+    expect(row).toBeDefined();
+    expect(SAMPLE_TOP_SPEED_ROW.vehicle).toBe(row?.vehicle);
+    expect(Math.round(msToMph(SAMPLE_TOP_SPEED_ROW.topSpeed))).toBe(row?.mph);
+    // The first within the cap, so it is the Board tab's fastest sample a
+    // national board could rank.
+    expect(row).toBe(SAMPLE_BOARD_ROWS.find((r) => r.mph <= SAMPLE_SPEED_CAP_MPH));
+  });
+
+  test('no sample on the step is a speed the copy beside it says is never ranked', () => {
+    // "nothing over the national speed limit is ranked": the UK's is 70 mph,
+    // and verify-drive's default ceiling is 130 km/h.
+    expect(SAMPLE_SPEED_CAP_MPH).toBe(70);
+    for (const ms of [SAMPLE_TOP_SPEED_ROW.topSpeed, ...SAMPLE_FRIENDS.map((f) => f.topSpeed)]) {
+      expect(msToMph(ms)).toBeLessThanOrEqual(SAMPLE_SPEED_CAP_MPH);
+      expect(msToKmh(ms)).toBeLessThanOrEqual(130);
+    }
   });
 
   test('no sample speed is faster than the board sample it borrows from', () => {
@@ -75,7 +109,7 @@ describe('samples', () => {
     for (const f of SAMPLE_FRIENDS) expect(msToMph(f.topSpeed)).toBeLessThan(ceiling);
   });
 
-  test('the launch is the fixture the server measures', () => {
+  test('the 0–60 sample is the fixture the server measures', () => {
     expect(SAMPLE_ZERO_SIXTY_S).toBe(5.02);
   });
 

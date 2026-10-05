@@ -2,14 +2,14 @@
   "expo": {
     "name": "Gapped",
     "slug": "gapped",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "scheme": "gapped",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0A0A0A",
     "ios": {
-      "buildNumber": "4",
+      "buildNumber": "5",
       "appleTeamId": "X3YGYXTB3F",
       "bundleIdentifier": "com.tobym.gapped",
       "supportsTablet": false,
@@ -17,11 +17,8 @@
         "UIBackgroundModes": [
           "location"
         ],
-        "NSLocationWhenInUseUsageDescription": "Gapped records your drives from GPS — route, speed and distance. Your runs are uploaded so they can appear on the leaderboards you choose.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Always access lets a drive keep recording with the screen off or the app in the background, which is how a whole journey is captured rather than the part you were watching. Recording only runs during a drive you or automatic detection started, never continuously.",
-        "NSLocationAlwaysUsageDescription": "Always access lets a drive keep recording with the screen off or the app in the background, which is how a whole journey is captured rather than the part you were watching. Recording only runs during a drive you or automatic detection started, never continuously.",
-        "NSMotionUsageDescription": "Gapped reads the accelerometer alongside GPS so a run can be checked as a real drive rather than a spoofed location. Motion data stays attached to that drive.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "RCTAsyncStorageExcludeFromBackup": false
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -56,6 +53,14 @@
             ]
           },
           {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeCoarseLocation",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeUserID",
             "NSPrivacyCollectedDataTypeLinked": true,
             "NSPrivacyCollectedDataTypeTracking": false,
@@ -64,7 +69,7 @@
             ]
           },
           {
-            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeOtherDataTypes",
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeContacts",
             "NSPrivacyCollectedDataTypeLinked": true,
             "NSPrivacyCollectedDataTypeTracking": false,
             "NSPrivacyCollectedDataTypePurposes": [
@@ -72,27 +77,20 @@
             ]
           },
           {
-            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeCrashData",
-            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeOtherUserContent",
+            "NSPrivacyCollectedDataTypeLinked": true,
             "NSPrivacyCollectedDataTypeTracking": false,
             "NSPrivacyCollectedDataTypePurposes": [
-              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
-            ]
-          },
-          {
-            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePerformanceData",
-            "NSPrivacyCollectedDataTypeLinked": false,
-            "NSPrivacyCollectedDataTypeTracking": false,
-            "NSPrivacyCollectedDataTypePurposes": [
-              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
-            ]
-          },
-          {
-            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeProductInteraction",
-            "NSPrivacyCollectedDataTypeLinked": false,
-            "NSPrivacyCollectedDataTypeTracking": false,
-            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality",
               "NSPrivacyCollectedDataTypePurposeAnalytics"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeFitness",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
             ]
           }
         ]
@@ -125,25 +123,26 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router",
+      "./plugins/withLocationOnlyBackgroundModes",
+      [
+        "expo-router",
+        {
+          "sitemap": false
+        }
+      ],
       "expo-sqlite",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Always access lets Gapped keep recording a drive when the app is in the background. Without it we can only track while the app is open.",
+          "locationWhenInUsePermission": "Gapped records your drives from GPS: route, speed and distance. Each drive is uploaded, verified and its results appear on public leaderboards under your username. Your route is never shown to other drivers.",
+          "locationAlwaysAndWhenInUsePermission": "Always access lets a drive keep recording when the screen is locked or the app is in the background. Gapped records location only during a drive, never continuously.",
+          "locationAlwaysPermission": "Always access lets a drive keep recording when the screen is locked or the app is in the background. Gapped records location only during a drive, never continuously.",
+          "motionUsagePermission": "Gapped records motion and barometric pressure readings with each drive and uploads them with it, so the drive can be checked as real rather than a spoofed location.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
       ],
       "expo-sharing",
-      [
-        "@sentry/react-native/expo",
-        {
-          "organization": "$SENTRY_ORG",
-          "project": "$SENTRY_PROJECT",
-          "url": "https://sentry.io/"
-        }
-      ],
       [
         "expo-audio",
         {

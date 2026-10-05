@@ -8,7 +8,14 @@
  * plans — the onboarding paywall's "what Pro adds" line — is checked against
  * the same rows (src/config/__tests__/plans.test.ts) instead of restating
  * them by hand.
+ *
+ * Nothing here is shown while SHOW_PRO is off (src/config/flags.ts), which it
+ * is until purchases work: /plans redirects, the paywall is never reached and
+ * no screen draws a PRO chip. The rows stay so the locks
+ * (src/lib/entitlements.ts) have something to enforce when it turns on.
  */
+
+import { ONBOARDING_PAYWALL, SHOW_PRO } from './flags';
 
 export type PlanFeatureKey =
   // Free (and Pro)
@@ -26,10 +33,8 @@ export type PlanFeatureKey =
   | 'classBrackets'
   | 'unlimitedFriends'
   | 'cleanShareCards'
-  | 'videoOverlay'
   | 'export'
-  | 'unlimitedGarage'
-  | 'cloudSync';
+  | 'unlimitedGarage';
 
 export type PlanFeature = { key: PlanFeatureKey; feature: string; free: boolean; pro: boolean };
 
@@ -51,13 +56,19 @@ export const FREE_LIMITS = {
  * Free keeps the habit loop — record, see your top speed and 0–60, place on
  * the boards, share — and Pro is depth: the whole history, the telemetry,
  * class brackets, more people and more cars. Privacy is never a Pro feature.
+ *
+ * Every row is something the app does today. The matrix used to promise a
+ * telemetry overlay on your video and restoring your drives on a new phone,
+ * neither of which exists; a published plan is a promise, and a paid row
+ * that cannot be delivered is one App Review rejects (2.1). They come back
+ * when they are built, with a lock in src/lib/__tests__/proLocks.test.ts.
  */
 export const PLAN_MATRIX: readonly PlanFeature[] = [
   { key: 'recordDrives', feature: 'Record unlimited drives', free: true, pro: true },
   { key: 'coreStats', feature: 'Top speed & 0–60, verified', free: true, pro: true },
-  // Free: the board is the product. Onboarding sells it ("Every verified run
-  // lands on the board", "{n} drivers from {Country} are on the board"), and
-  // a Free run that never placed would make those screens untrue.
+  // Free: the board is the product. Onboarding sells it ("Each verified drive
+  // is added to the board", "{n} drivers from {Country} are on the board"),
+  // and a Free run that never placed would make those screens untrue.
   {
     key: 'boardPlacement',
     feature: 'Place on the global & country boards',
@@ -77,7 +88,15 @@ export const PLAN_MATRIX: readonly PlanFeature[] = [
     pro: true,
   },
   { key: 'shareCards', feature: 'Share cards (with Gapped badge)', free: true, pro: true },
-  { key: 'privacy', feature: 'Privacy zones & route trimming', free: true, pro: true },
+  // Route trimming, not "privacy zones": the zone maths exists
+  // (src/drive/privacy.ts) but nothing in the app lets anyone draw one. The
+  // trimmed start and end are real, on every published route and share card.
+  {
+    key: 'privacy',
+    feature: 'Route start & end trimmed for privacy',
+    free: true,
+    pro: true,
+  },
   {
     key: 'garage',
     feature:
@@ -92,14 +111,8 @@ export const PLAN_MATRIX: readonly PlanFeature[] = [
   { key: 'classBrackets', feature: 'Vehicle-class brackets', free: false, pro: true },
   { key: 'unlimitedFriends', feature: 'Unlimited friends', free: false, pro: true },
   { key: 'cleanShareCards', feature: 'Clean share cards', free: false, pro: true },
-  { key: 'videoOverlay', feature: 'Telemetry overlay on your video', free: false, pro: true },
   { key: 'export', feature: 'GPX / CSV export', free: false, pro: true },
   { key: 'unlimitedGarage', feature: 'Unlimited garage', free: false, pro: true },
-  // Getting your drives back, not getting them to the server. Every account's
-  // drives already upload (src/lib/sync.ts): that is how they are verified and
-  // ranked. "Cloud sync & backup" as a Pro row read as if a Free account's
-  // drives stayed on the phone, which is false the other way round.
-  { key: 'cloudSync', feature: 'Restore your drives on a new phone', free: false, pro: true },
 ];
 
 /**
@@ -128,19 +141,48 @@ export type ProPlan = 'monthly' | 'weekly';
 
 /**
  * The ways Pro is sold, in the paywall's order; the first is preselected.
- * Monthly and weekly only, nothing longer, and no trial: what the Plans screen
- * promises (PRO_PRICING_NOTE) is checked against this list.
+ * Monthly and weekly only, nothing longer, and no trial.
  */
 export const PRO_PLANS: readonly { key: ProPlan; title: string; period: string }[] = [
   { key: 'monthly', title: 'Monthly', period: 'monthly' },
   { key: 'weekly', title: 'Weekly', period: 'weekly' },
 ];
 
+// ---------------------------------------------------------------------------
+// Where the Pro surfaces lead. Pure, over an explicit flag that defaults to
+// the build's, so both states are tested without rebuilding (plans.test.ts).
+
 /**
- * The Plans screen's pricing line. It used to promise "one monthly and one
- * annual price, 3-day free trial" and a paywall "only after your first
- * recorded drive"; the paywall offers neither an annual plan nor a trial, and
- * it ends onboarding. This says only what the paywall does.
+ * Where a "leads to Pro" tap goes (useGoPro, src/components/ProBadge.tsx):
+ * the published matrix while Pro is shown, and nowhere while it is not. A
+ * tap that opened /plans with SHOW_PRO off would only bounce off its
+ * redirect.
  */
-export const PRO_PRICING_NOTE =
-  'Pro pricing lands after the first release: one weekly and one monthly price. No discount wheels, no one-time offers, and the paywall always has a close button.';
+export function goProRoute(showPro: boolean = SHOW_PRO): '/plans' | null {
+  return showPro ? '/plans' : null;
+}
+
+/**
+ * Where /plans sends someone instead of drawing the matrix, or null to draw
+ * it. Kept as a screen for when Pro ships; until then a deep link or a stale
+ * push lands on the You tab. Not onboarded, it is onboarding: /plans sits
+ * outside both guards (app/_layout.tsx), and the tabs are behind one.
+ */
+export function plansRedirect(
+  onboarded: boolean,
+  showPro: boolean = SHOW_PRO,
+): '/(tabs)/you' | '/onboarding' | null {
+  if (showPro) return null;
+  return onboarded ? '/(tabs)/you' : '/onboarding';
+}
+
+/**
+ * Where the onboarding paywall sends someone when it is switched off, or null
+ * to draw it. The flow never routes there with the flag off; this is for a
+ * deep link. To the start of onboarding, not past its end: closing the
+ * paywall finishes onboarding, so a link straight to it would otherwise skip
+ * every step before it, the safety and terms steps among them.
+ */
+export function paywallRedirect(paywallOn: boolean = ONBOARDING_PAYWALL): '/onboarding' | null {
+  return paywallOn ? null : '/onboarding';
+}

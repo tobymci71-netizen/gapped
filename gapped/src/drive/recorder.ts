@@ -47,6 +47,27 @@ import { haversineM } from './stats';
 import { DriveSummary, Fix } from './types';
 import * as wal from './wal';
 
+/**
+ * Background ("Always") location, as the three answers the app acts on.
+ *
+ * Read with the foreground permission, never instead of it: background only
+ * matters once foreground is granted. Without it a drive records only while
+ * the app is on screen — startBackgroundUpdates (backgroundTask.ts) does not
+ * start — so the screen locking ends the fixes. Onboarding's location step
+ * and the Drive tab say so and point to Settings.
+ *
+ * On iOS a While Using grant reads 'undetermined' in a later process even
+ * after "Keep Only While Using" (expo-location only knows it asked within the
+ * process that asked), so callers treat anything but 'granted' as not
+ * granted.
+ */
+export type BackgroundPermission = 'granted' | 'denied' | 'undetermined';
+
+/** expo-location's background answer, read as a BackgroundPermission. */
+export function readBackgroundPermission(r: { status: string }): BackgroundPermission {
+  return r.status === 'granted' ? 'granted' : r.status === 'denied' ? 'denied' : 'undetermined';
+}
+
 type LiveState = {
   engineState: ReturnType<DriveEngine['getState']>;
   driveId: string | null;
@@ -67,6 +88,8 @@ type LiveState = {
   canAskAgain: boolean;
   /** False when location is granted but approximate; see permission.ts. */
   precise: boolean;
+  /** Whether drives can keep recording with the screen off (BackgroundPermission). */
+  backgroundPermission: BackgroundPermission;
   /**
    * Debug readout, surfaced on the HUD behind a settings toggle. Present so the
    * adaptive sampling and the gravity-removed magnitude can be confirmed on a
@@ -154,6 +177,7 @@ export const useDriveStore = create<LiveState & Actions>((set, get) => ({
   permission: 'unknown',
   canAskAgain: true,
   precise: true,
+  backgroundPermission: 'undetermined',
   imuHz: 1,
   lastAccelG: null,
 
@@ -216,8 +240,13 @@ export const useDriveStore = create<LiveState & Actions>((set, get) => ({
     // expo-location can resolve it while its dialog is still up (it infers
     // the answer from app-state notifications and a 1.5 s timer), and a
     // dialog asked for after it pushed it aside — iOS then showed it again on
-    // a later launch, over whatever screen that was.
-    await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
+    // a later launch, over whatever screen that was. The answer goes in the
+    // store before this resolves, so the location step reads it on return. A
+    // request that throws still leaves the current answer read.
+    const background = await Location.requestBackgroundPermissionsAsync()
+      .catch(() => Location.getBackgroundPermissionsAsync())
+      .catch(() => null);
+    if (background) set({ backgroundPermission: readBackgroundPermission(background) });
     // The only arm that comes from a tap, so the only one allowed to show
     // Android's "turn on device location" dialog.
     await startWatching(set, get, true);
@@ -268,13 +297,24 @@ function processFix(fix: Fix, set: Set, get: Get) {
  * Runs at init, on every return to the foreground, and after the location
  * stream fails — so a grant, a revocation or a Precise Location change made in
  * Settings takes effect without a relaunch or another tap.
+ *
+ * Background is read alongside and written in the same update, so nothing
+ * ever sees a fresh foreground grant beside a stale background answer. A
+ * failed background read keeps the last one rather than inventing one.
  */
 async function syncPermission(set: Set, get: Get): Promise<void> {
   if (isShutDown) return;
-  const response = await Location.getForegroundPermissionsAsync().catch(() => null);
+  const [response, background] = await Promise.all([
+    Location.getForegroundPermissionsAsync().catch(() => null),
+    Location.getBackgroundPermissionsAsync().catch(() => null),
+  ]);
   if (!response) return;
   const access = readLocationAccess(response);
-  set(access);
+  set(
+    background
+      ? { ...access, backgroundPermission: readBackgroundPermission(background) }
+      : access,
+  );
   if (access.permission === 'granted') await startWatching(set, get);
   else await stopWatching();
 }

@@ -78,7 +78,8 @@
     "verify:vin": "node scripts/verify-vin-decode.mjs",
     "generate:icon": "python3 scripts/generate-placeholder-icon.py",
     "eas-build-pre-install": "node scripts/check-build-env.mjs",
-    "check:buildenv": "node scripts/check-build-env.mjs"
+    "check:buildenv": "node scripts/check-build-env.mjs",
+    "check:release": "node --env-file-if-exists=.env scripts/check-build-env.mjs --release"
   },
   "private": true,
   "jest": {

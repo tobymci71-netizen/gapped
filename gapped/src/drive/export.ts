@@ -23,6 +23,13 @@ function xmlEscape(s: string): string {
 }
 
 /**
+ * The namespace of Gapped's GPX extension (gapped:speed). An identifier, never
+ * fetched, but a URL all the same: under the project's GitHub Pages site, as
+ * every public address the app names is (src/config/links.ts), not gapped.app.
+ */
+export const GPX_NAMESPACE = 'https://tobymci71-netizen.github.io/gapped/gpx/v1';
+
+/**
  * GPX 1.1 track. Includes speed via the GPX extensions namespace; altitude
  * only when present — absent data is omitted, never zero-filled.
  */
@@ -43,7 +50,7 @@ export function toGpx(fixes: Fix[], name: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Gapped"
      xmlns="http://www.topografix.com/GPX/1/1"
-     xmlns:gapped="https://gapped.app/gpx/v1">
+     xmlns:gapped="${GPX_NAMESPACE}">
   <trk>
     <name>${xmlEscape(name)}</name>
     <trkseg>
