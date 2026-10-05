@@ -17,13 +17,18 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { checkVin, curbWeightKgFromLb, normaliseDriveType, powerHpFrom } from '../_shared/vin.ts';
 import { bracketKey, type Drivetrain } from '../_shared/brackets.ts';
+import { serviceClientKey } from '../_server/keys.ts';
 
 const VPIC = 'https://vpic.nhtsa.dot.gov/api/vehicles';
 
-const json = (body: unknown, status = 200) =>
+/** Decodes allowed per profile per window. */
+const DECODE_RATE_LIMIT = 20;
+const DECODE_RATE_WINDOW_S = 3600;
+
+const json = (body: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
   });
 
 type VpicRow = Record<string, string | null>;
@@ -37,15 +42,56 @@ Deno.serve(async (req) => {
     return json({ error: parsed.reason ?? 'That does not look like a VIN.' }, 400);
   }
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-  );
+  const serviceKey = serviceClientKey(Deno.env);
+  if (!serviceKey) return json({ error: 'server key not configured' }, 500);
+  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey);
 
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   const { data: caller } = await supabase.auth.getUser(token);
   const uid = caller?.user?.id;
   if (!uid) return json({ error: 'unauthenticated' }, 401);
+
+  /*
+   * Rate limit. A decode makes a request to NHTSA's free public decoder on our
+   * behalf and writes a vehicle row, and a loop over it could get our requests
+   * throttled or blocked for every driver. A driver decodes a VIN once per
+   * car, so DECODE_RATE_LIMIT an hour leaves room for typos and retries and
+   * little else.
+   *
+   * Charged after authentication, against the caller's own profile — never a
+   * vehicle owner named in the request — so nobody can spend someone else's
+   * quota. It is charged before the ownership check, so probing other
+   * people's vehicle ids spends the prober's own quota. A malformed VIN was
+   * refused above without reaching here and costs nothing.
+   */
+  const { data: allowed, error: rlErr } = await supabase.rpc('consume_rate_limit', {
+    p_profile_id: uid,
+    p_bucket: 'decode_vin',
+    p_limit: DECODE_RATE_LIMIT,
+    p_window_s: DECODE_RATE_WINDOW_S,
+  });
+  // Fail CLOSED, as verify-drive does: a broken limiter must not become an
+  // open door to the upstream API. But say what happened — the driver is shown
+  // this message, and "too many lookups" would be untrue when the limiter
+  // could not be asked at all.
+  if (rlErr) {
+    return json(
+      { error: 'VIN lookup is not available right now. Try again in a few minutes.' },
+      503,
+      { 'Retry-After': '60' },
+    );
+  }
+  if (allowed === false) {
+    return json(
+      {
+        // Shown to the driver as-is by the app (src/vehicles/specs.ts).
+        error: 'Too many VIN lookups in the last hour. Try again later.',
+        retry_after_s: DECODE_RATE_WINDOW_S,
+      },
+      429,
+      { 'Retry-After': String(DECODE_RATE_WINDOW_S) },
+    );
+  }
 
   // Decoding someone else's vehicle would let one account rewrite another's
   // bracket. This function bypasses RLS, so ownership is checked explicitly.
@@ -104,6 +150,21 @@ Deno.serve(async (req) => {
       specs_updated_at: new Date().toISOString(),
     })
     .eq('id', vehicle_id);
+  // 23514 is the vehicles table refusing what NHTSA sent (0019): a make the
+  // denylist covers ('make_not_allowed'), or a make or model over 80
+  // characters or holding invisible characters (vehicles_make_text /
+  // vehicles_model_text). An answer about this VIN, not a fault to retry, and
+  // the app shows `error` as it stands, so it is written for the driver; the
+  // database's own words go in `detail`.
+  if (updateErr?.code === '23514') {
+    return json(
+      {
+        error: "NHTSA's details for this VIN can't be used, so your class is unchanged.",
+        detail: updateErr.message,
+      },
+      422,
+    );
+  }
   if (updateErr) return json({ error: updateErr.message }, 500);
 
   const bracket = bracketKey({

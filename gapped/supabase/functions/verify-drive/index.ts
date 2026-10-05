@@ -6,6 +6,12 @@
  * route, and writes leaderboard entries. The client's numbers are a UI
  * convenience; nothing the client sent is trusted here.
  *
+ * Top speed is ranked publicly only up to the national speed limit of the
+ * driver's country (_shared/speedLimits.ts). Above it the drive still
+ * verifies and keeps its top speed in the driver's own history, marked
+ * `verification_meta.top_speed_ranked = false`, but no top_speed board entry
+ * is written for it.
+ *
  * Runs with the service role (bypasses RLS) — deploy with:
  *   supabase functions deploy verify-drive
  *
@@ -22,11 +28,22 @@ import { trimRouteForSharing } from '../_shared/privacy.ts';
 import { encodePolyline } from '../_shared/polyline.ts';
 import { bracketKey, type Drivetrain } from '../_shared/brackets.ts';
 import {
-  b64ToBytes,
   verifyAppAttestAssertion,
   verifyPlayIntegrity,
   type AttestationVerdict,
 } from '../_server/attestation.ts';
+import { isServerKey, serviceClientKey } from '../_server/keys.ts';
+import {
+  boardEntries,
+  checkClock,
+  checkSpeedCeiling,
+  mergeChecks,
+  planBoard,
+  rankPurgedTopSpeed,
+  rankTopSpeed,
+  readAllPages,
+  recordedAt,
+} from '../_server/verify.ts';
 import type { Fix } from '../_shared/types.ts';
 import {
   readDegrees,
@@ -222,32 +239,138 @@ async function attestDriveInner(
 const VERIFY_RATE_LIMIT = 60;
 const VERIFY_RATE_WINDOW_S = 3600;
 
+const FIX_COLUMNS =
+  't, lat, lon, speed_ms, accuracy_m, altitude_m, heading, accel_x, accel_y, accel_z, pressure_hpa, is_mock';
+
+type DriveRow = {
+  id: string;
+  profile_id: string;
+  vehicle_id: string | null;
+  started_at: string;
+  max_speed_ms: number | null;
+  verification: string;
+  verification_meta: Record<string, unknown> | null;
+  fixes_purged_at: string | null;
+};
+
+/**
+ * The profile's country, the one its national ceiling and country boards go
+ * by. A failed read is an error, not "no country": read as null it would hold
+ * the drive to the default ceiling and drop its country boards, silently.
+ */
+async function profileCountry(
+  supabase: Db,
+  profileId: string,
+): Promise<{ country: string | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('country')
+    .eq('id', profileId)
+    .single();
+  if (error) return { country: null, error: error.message as string };
+  return { country: (data?.country as string | null) ?? null, error: null };
+}
+
 Deno.serve(async (req) => {
   const { drive_id, attestation } = await req.json().catch(() => ({}));
   if (!drive_id) return json({ error: 'drive_id required' }, 400);
 
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const serviceKey = serviceClientKey(Deno.env);
+  if (!serviceKey) return json({ error: 'server key not configured' }, 500);
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey);
 
-  const { data: drive, error: driveErr } = await supabase
+  const { data: driveData, error: driveErr } = await supabase
     .from('drives')
-    .select('id, profile_id, vehicle_id, started_at')
+    .select(
+      'id, profile_id, vehicle_id, started_at, max_speed_ms, verification, verification_meta, fixes_purged_at',
+    )
     .eq('id', drive_id)
     .single();
-  if (driveErr || !drive) return json({ error: 'drive not found' }, 404);
+  const drive = driveData as DriveRow | null;
+  // Only "no such row" (PGRST116 from .single(), or 22P02 for an id that is not
+  // a uuid at all) is a 404. Anything else — the database unreachable, a
+  // column this build expects that the schema does not have yet — is the
+  // server's failure, and a 500 the app retries. A 404 would tell the app to
+  // give up on the drive for good.
+  if (driveErr && driveErr.code !== 'PGRST116' && driveErr.code !== '22P02') {
+    return json({ error: `could not read drive: ${driveErr.message}` }, 500);
+  }
+  if (!drive) return json({ error: 'drive not found' }, 404);
 
   // Authorisation. This function runs with the service role and so bypasses
   // RLS entirely; without this check any authenticated user could name any
   // drive_id and drive someone else's verification. Callers are either the
-  // drive's owner (the app, after upload) or the service role (internal
-  // re-verification, e.g. after a maths fix).
+  // drive's owner (the app, after upload) or our own server (internal
+  // re-verification, e.g. after a maths fix) holding the legacy service-role
+  // key or one of the new secret keys — see _server/keys.ts.
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-  const isServiceCall = token === serviceKey;
+  const isServiceCall = isServerKey(token, Deno.env);
   if (!isServiceCall) {
     const { data: caller } = await supabase.auth.getUser(token);
     if (!caller?.user || caller.user.id !== drive.profile_id) {
       return json({ error: 'forbidden' }, 403);
     }
+  }
+
+  /*
+   * Fixes purged by the retention job. There is nothing left to re-derive
+   * from, and re-deriving from nothing would reject the drive and delete its
+   * board entries — so the verification made while the fixes existed stands,
+   * and is returned as stored. Answered before the rate limit: it is a couple
+   * of row reads, not a re-derivation.
+   *
+   * The national ceiling still applies, because it needs no fixes: a stored
+   * top speed over it loses its top-speed board place (_server/verify.ts
+   * rankPurgedTopSpeed). A drive purged before it was ever re-verified under
+   * the ceilings would otherwise keep that place for good.
+   *
+   * Fixes uploaded again after the purge are deleted. A phone that still held
+   * the drive unsent (its verify call never answered, or it was still pending
+   * at 90 days — 0021 purges those too) re-uploads them before asking here,
+   * and nothing else would ever remove them: the retention job never selects
+   * a purged drive again. Usually there are none, and this deletes nothing.
+   */
+  if (drive.fixes_purged_at != null) {
+    const meta = drive.verification_meta ?? {};
+    const { error: refixErr } = await supabase
+      .from('drive_fixes')
+      .delete()
+      .eq('drive_id', drive_id);
+    if (refixErr) return json({ error: `could not clear re-uploaded fixes: ${refixErr.message}` }, 500);
+    const { country: purgedCountry, error: purgedProfileErr } = await profileCountry(
+      supabase,
+      drive.profile_id,
+    );
+    if (purgedProfileErr) {
+      return json({ error: `could not read profile: ${purgedProfileErr}` }, 500);
+    }
+    const ranking = rankPurgedTopSpeed({
+      storedMeta: drive.verification_meta,
+      maxSpeedMs: drive.max_speed_ms,
+      country: purgedCountry,
+    });
+    if (ranking.withdraw) {
+      const { error: withdrawErr } = await supabase
+        .from('leaderboard_entries')
+        .delete()
+        .eq('drive_id', drive_id)
+        .eq('metric', 'top_speed');
+      if (withdrawErr) return json({ error: withdrawErr.message }, 500);
+    }
+    if (ranking.meta) {
+      const { error: metaErr } = await supabase
+        .from('drives')
+        .update({ verification_meta: ranking.meta })
+        .eq('id', drive_id);
+      if (metaErr) return json({ error: metaErr.message }, 500);
+    }
+    return json({
+      verification: drive.verification,
+      checks: Array.isArray(meta.checks) ? meta.checks : [],
+      top_speed_ranked: ranking.ranked,
+      fixes_purged: true,
+      achievements: [],
+    });
   }
 
   /*
@@ -282,14 +405,20 @@ Deno.serve(async (req) => {
     }
   }
 
-  const { data: fixRows, error: fixErr } = await supabase
-    .from('drive_fixes')
-    .select(
-      't, lat, lon, speed_ms, accuracy_m, altitude_m, heading, accel_x, accel_y, accel_z, pressure_hpa, is_mock',
-    )
-    .eq('drive_id', drive_id)
-    .order('t');
-  if (fixErr || !fixRows || fixRows.length < 2) {
+  // Every fix, in pages — a single select stops at PostgREST's row cap and
+  // would re-derive a long drive from its first 1000 fixes (_server/verify.ts).
+  const { rows: fixRows, error: fixErr } = await readAllPages<FixRow>((from, to, withCount) =>
+    supabase
+      .from('drive_fixes')
+      .select(FIX_COLUMNS, withCount ? { count: 'exact' } : undefined)
+      .eq('drive_id', drive_id)
+      .order('t')
+      .range(from, to),
+  );
+  // A failed or incomplete read says nothing about the drive. Answer 500, which
+  // the app retries, rather than rejecting a drive the server never saw whole.
+  if (fixErr) return json({ error: `could not read fixes: ${fixErr}` }, 500);
+  if (fixRows.length < 2) {
     await supabase
       .from('drives')
       .update({
@@ -304,14 +433,25 @@ Deno.serve(async (req) => {
     return json({ verification: 'rejected' });
   }
 
-  const fixes = (fixRows as FixRow[]).map(rowToFix);
+  // The country is the profile's as it stands now, at verification — the same
+  // one the country board entries are filed under. Read before attestation, so
+  // a failed read is retried before the device's assertion counter is spent.
+  const { country, error: profileErr } = await profileCountry(supabase, drive.profile_id);
+  if (profileErr) return json({ error: `could not read profile: ${profileErr}` }, 500);
+
+  const fixes = fixRows.map(rowToFix);
+  const nowMs = Date.now();
 
   // 1. Server-side re-derivation — the only numbers that count.
   const summary = summarize(fixes);
 
   // 2. Plausibility envelope. Never silently drop: the meta records exactly
   //    which checks ran and which failed, and the client shows it to the user.
+  //    The shared envelope is the one the phone previews; the absolute speed
+  //    ceiling and the clock check are the server's alone.
   const report = checkPlausibility(fixes);
+  const clockCheck = checkClock(Date.parse(drive.started_at), fixes, nowMs);
+  const checks = mergeChecks(report.checks, [checkSpeedCeiling(fixes), clockCheck]);
 
   // 2b. Attestation. Enforcement is a separate flag from verification on
   //     purpose: a verifier that wrongly rejects real hardware would quietly
@@ -320,9 +460,12 @@ Deno.serve(async (req) => {
   const attestVerdict = await attestDrive(supabase, attestation, drive_id, drive.profile_id);
   const attestationRequired = Deno.env.get('ATTESTATION_REQUIRED') === 'true';
 
-  const plausible = report.verdict === 'plausible';
+  const plausible = checks.every((c) => c.pass);
   const attestationBlocks = attestationRequired && attestVerdict.status !== 'passed';
   const verification = plausible && !attestationBlocks ? 'verified' : 'unverified';
+
+  // 2c. Ranking, against the national ceiling of the profile's country.
+  const topSpeed = rankTopSpeed(summary.maxSpeedMs, country);
 
   // 3. Privacy-trimmed route for anything public; full route stays server-side.
   const salt = Deno.env.get('TRIM_SALT') ?? 'gapped-default-trim-salt';
@@ -333,6 +476,8 @@ Deno.serve(async (req) => {
     .update({
       distance_m: summary.distanceM,
       duration_s: summary.durationS,
+      // The driver's own record keeps the real top speed even when it is over
+      // the limit; only the public board entry is withheld.
       max_speed_ms: summary.maxSpeedMs,
       avg_speed_ms: summary.avgSpeedMs,
       max_g: summary.maxG,
@@ -344,12 +489,17 @@ Deno.serve(async (req) => {
       route_polyline: trimmed.length >= 2 ? encodePolyline(trimmed) : null,
       verification,
       verification_meta: {
-        checks: report.checks,
+        checks,
         recomputed: true,
         // Say why, in the drive's own record. "unverified" with no stated
         // cause is the thing users are owed an answer about.
         attestation_enforced: attestationRequired,
         ...(attestationBlocks ? { blocked_by: 'attestation' } : {}),
+        // Whether the top speed was allowed onto the public boards, and the
+        // national ceiling it was held to, so the app can say which limit.
+        top_speed_ranked: topSpeed.ranked,
+        top_speed_ceiling_ms: topSpeed.ceilingMs,
+        ranking_country: country,
       },
       attestation: attestVerdict.status,
       attestation_meta: {
@@ -373,12 +523,6 @@ Deno.serve(async (req) => {
   }
 
   // 4. Leaderboard entries — denormalised, written only here.
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('country')
-    .eq('id', drive.profile_id)
-    .single();
-
   const { data: vehicle } = drive.vehicle_id
     ? await supabase
         .from('vehicles')
@@ -397,37 +541,28 @@ Deno.serve(async (req) => {
     isModified: vehicle?.is_modified ?? false,
   });
 
-  const metrics: { metric: string; value: number | null }[] = [
-    { metric: 'top_speed', value: summary.maxSpeedMs },
-    { metric: 'distance', value: summary.distanceM },
-    { metric: 'zero_to_60', value: summary.zeroTo60S },
-  ];
-  const scopes: { scope: string; country: string | null }[] = [
-    { scope: 'global', country: null },
-    ...(profile?.country ? [{ scope: 'country', country: profile.country }] : []),
-  ];
-  const periods = ['day', 'week', 'month', 'all'];
-
-  const entries = [];
-  for (const m of metrics) {
-    if (m.value == null) continue; // never fabricate a board entry
-    for (const s of scopes) {
-      for (const period of periods) {
-        entries.push({
-          drive_id,
-          profile_id: drive.profile_id,
-          metric: m.metric,
-          value: m.value,
-          scope: s.scope,
-          country: s.country,
-          bracket_key: bracket,
-          period,
-          verification,
-          recorded_at: drive.started_at,
-        });
-      }
-    }
+  // A drive from the future goes on no board at all; a top speed over the
+  // national limit goes on no top-speed board. Either way, entries an earlier
+  // verification wrote for what is no longer ranked are removed.
+  const plan = planBoard({ summary, clockPass: clockCheck.pass, topSpeedRanked: topSpeed.ranked });
+  if (plan.remove.length > 0) {
+    const { error: removeErr } = await supabase
+      .from('leaderboard_entries')
+      .delete()
+      .eq('drive_id', drive_id)
+      .in('metric', plan.remove);
+    if (removeErr) return json({ error: removeErr.message }, 500);
   }
+
+  const entries = boardEntries({
+    plan,
+    driveId: drive_id,
+    profileId: drive.profile_id,
+    country,
+    bracket,
+    verification,
+    recordedAt: recordedAt(drive.started_at, nowMs),
+  });
   if (entries.length > 0) {
     // Upsert, not insert. Re-verifying a drive used to duplicate every entry,
     // so one drive could hold several places on the same board; the unique
@@ -442,13 +577,14 @@ Deno.serve(async (req) => {
   //    as much as a verified run does. Unique per (profile, kind) — earning
   //    something twice is not an event — so these are plain upserts.
   const earned = verification === 'verified'
-    ? await grantAchievements(supabase, drive.profile_id, summary, profile?.country ?? null)
+    ? await grantAchievements(supabase, drive.profile_id, summary)
     : [];
 
   return json({
     verification,
     summary,
-    checks: report.checks,
+    checks,
+    top_speed_ranked: topSpeed.ranked,
     attestation: attestVerdict,
     achievements: earned,
   });
@@ -457,16 +593,19 @@ Deno.serve(async (req) => {
 /**
  * Award what this drive proves, and nothing it does not.
  *
- * Every criterion is checked against the leaderboard entries the server itself
- * wrote, never the client's numbers. `country_number_one` is deliberately
- * re-checked rather than assumed from this drive: holding the top spot is a
- * fact about the board, not about the run that just finished.
+ * Every criterion is checked against what the server itself derived, never
+ * the client's numbers.
+ *
+ * `country_number_one` ("Fastest in country") is no longer granted: an
+ * achievement for topping a country's top-speed board rewards speed for its
+ * own sake, which the public boards no longer do above the national limit.
+ * Rows granted before this change are left alone here; whether they are shown
+ * is the app's decision, and removing them is a migration's.
  */
 async function grantAchievements(
   supabase: Db,
   profileId: string,
   summary: { distanceM: number; maxSpeedMs: number; zeroTo60S: number | null },
-  country: string | null,
 ): Promise<string[]> {
   const kinds: { kind: string; payload: Record<string, unknown> }[] = [];
 
@@ -484,26 +623,6 @@ async function grantAchievements(
   }
   if (summary.zeroTo60S != null) {
     kinds.push({ kind: 'first_measured_launch', payload: { zero_to_60_s: summary.zeroTo60S } });
-  }
-
-  // Top of your country's all-time verified top-speed board.
-  if (country) {
-    const { data: top } = await supabase
-      .from('leaderboard_entries')
-      .select('profile_id, value')
-      .eq('metric', 'top_speed')
-      .eq('scope', 'country')
-      .eq('country', country)
-      .eq('period', 'all')
-      .eq('verification', 'verified')
-      .order('value', { ascending: false })
-      .limit(1);
-    if (top?.[0]?.profile_id === profileId) {
-      kinds.push({
-        kind: 'country_number_one',
-        payload: { country, value: top[0].value },
-      });
-    }
   }
 
   if (kinds.length === 0) return [];
