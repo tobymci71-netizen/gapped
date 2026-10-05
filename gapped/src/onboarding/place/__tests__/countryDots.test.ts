@@ -97,7 +97,7 @@ describe('the generated maps', () => {
   });
 
   test('countries the rules were written for come out as described', () => {
-    // Alaska borders Canada, so it is land, drawn lime with the rest; only
+    // Alaska borders Canada, so it is land, drawn bright with the rest; only
     // its offshore islands are dim. (Dim, Alaska alone would be ~30% of it.)
     const us = countryDots('US')!;
     expect(us.near.length).toBeLessThan(us.main.length / 5);

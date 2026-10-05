@@ -1,121 +1,32 @@
 import React from 'react';
-import Svg, { Circle, Path } from 'react-native-svg';
-import { color } from '@/theme/tokens';
+import { StyleSheet, View } from 'react-native';
+import { Icon } from '@/components/icons';
+import { alpha, color, glow, slant } from '@/theme/tokens';
 
 /**
- * Tab bar icons, drawn here rather than pulled from an icon library: the set is
- * four glyphs and shipping a font/library for them would cost more than the
- * paths do. Geometry is authored on a 24×24 grid and stroked only — a filled
- * icon reads as a chip against the near-black canvas.
+ * Tab bar icons: the Nightrun stroke set (components/icons.tsx), with the
+ * active tab's light — a small red slanted lamp on the bar's top edge, the
+ * one red thing in the bar (Nightrun-Drive, Nightrun-Ranks).
  */
 
 export type TabIconName = 'driving' | 'ranks' | 'garage' | 'you';
 
 /**
  * Tab tints, shared with the navigator's label tints so icon and label cannot
- * drift apart. Inactive is text2, not text3: the bar is surface1, where text3's
- * 4.30:1 fails AA for the 11pt labels, and an unselected tab is still a live
- * control rather than a disabled one.
+ * drift apart. Active is white, not red: the light above it carries the red.
+ * Inactive is text3, which clears AA on the night bar (6.32:1) for the 11pt
+ * labels — an unselected tab is still a live control, not a disabled one.
  */
-export const TAB_TINT = { active: color.accent, inactive: color.text2 } as const;
+export const TAB_TINT = { active: color.text1, inactive: color.text3 } as const;
 
 const SIZE = 24;
-const STROKE = 1.8;
 
-/** Wheel radius, kept in one place so the car's underside gaps line up with it. */
-const WHEEL_R = 1.8;
-
-function shape(name: TabIconName, stroke: string): React.JSX.Element {
-  switch (name) {
-    case 'driving':
-      return (
-        <>
-          {/* Cabin over bonnet, then the underside in three runs so the wheels
-              sit in the gaps rather than being drawn over the sill. */}
-          <Path
-            d="M3 16.4v-2c0-.6.2-1.1.6-1.5l2.1-2.4c.4-.5.9-.7 1.5-.7h9.6c.6 0 1.1.2 1.5.7l2.1 2.4c.4.4.6.9.6 1.5v2"
-            stroke={stroke}
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-          <Path
-            d="M3 16.4h2.2M8.8 16.4h6.4M18.8 16.4H21M6.5 12.6h11"
-            stroke={stroke}
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            fill="none"
-          />
-          <Circle cx={7} cy={16.4} r={WHEEL_R} stroke={stroke} strokeWidth={STROKE} fill="none" />
-          <Circle cx={17} cy={16.4} r={WHEEL_R} stroke={stroke} strokeWidth={STROKE} fill="none" />
-        </>
-      );
-    case 'ranks':
-      return (
-        <>
-          <Path
-            d="M7.6 4h8.8v4.6a4.4 4.4 0 0 1-8.8 0V4z"
-            stroke={stroke}
-            strokeWidth={STROKE}
-            strokeLinejoin="round"
-            fill="none"
-          />
-          <Path
-            d="M7.6 6H5.2v1.1a2.9 2.9 0 0 0 2.6 2.9M16.4 6h2.4v1.1a2.9 2.9 0 0 1-2.6 2.9"
-            stroke={stroke}
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-          <Path
-            d="M12 13.1v2.5M10 17.6h4l.9 2.4H9.1l.9-2.4z"
-            stroke={stroke}
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-        </>
-      );
-    case 'garage':
-      return (
-        <>
-          <Path
-            d="M2.8 10.3 12 4.6l9.2 5.7M5.2 10.6V20h13.6v-9.4"
-            stroke={stroke}
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-          {/* Up-and-over door, with one panel line so it doesn't read as a window. */}
-          <Path
-            d="M8.2 20v-5.4h7.6V20M8.2 17.3h7.6"
-            stroke={stroke}
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-        </>
-      );
-    case 'you':
-      return (
-        <>
-          <Circle cx={12} cy={8.2} r={3.5} stroke={stroke} strokeWidth={STROKE} fill="none" />
-          <Path
-            d="M4.9 20a7.1 7.1 0 0 1 14.2 0"
-            stroke={stroke}
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            fill="none"
-          />
-        </>
-      );
-  }
-}
+/**
+ * Where the bar's top edge is, measured up from the icon's top: the uikit tab
+ * item pads 5pt above its 28pt icon box, which centres this 24pt icon 2pt
+ * down, and the light sits over the 1pt border above that.
+ */
+const LIGHT_TOP = -(5 + 2 + 1);
 
 export function TabIcon({
   name,
@@ -124,9 +35,26 @@ export function TabIcon({
   name: TabIconName;
   focused: boolean;
 }): React.JSX.Element {
+  // The navigator draws the icon twice, focused and not, and cross-fades the
+  // two; the light belongs to the focused copy, so it fades with it.
   return (
-    <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} fill="none">
-      {shape(name, focused ? TAB_TINT.active : TAB_TINT.inactive)}
-    </Svg>
+    <View style={styles.box}>
+      {focused ? <View style={styles.light} /> : null}
+      <Icon name={name} size={SIZE} color={focused ? TAB_TINT.active : TAB_TINT.inactive} />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  box: { width: SIZE, height: SIZE, alignItems: 'center' },
+  light: {
+    position: 'absolute',
+    top: LIGHT_TOP,
+    width: 24,
+    height: 3,
+    borderRadius: 1,
+    backgroundColor: color.accent,
+    transform: slant.transform,
+    boxShadow: `0 0 ${glow.tight}px 1px ${alpha(color.accent, 0.85)}, 0 0 ${glow.soft}px 4px ${alpha(color.accent, 0.35)}`,
+  },
+});

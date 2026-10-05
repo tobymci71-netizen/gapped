@@ -9,11 +9,11 @@ import {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 import { Numeral, Text } from '@/components/Text';
 import { useReducedMotion } from '@/lib/useReducedMotion';
-import { color, font, gutter, space, type } from '@/theme/tokens';
+import { SlantLight } from '@/onboarding/ui/choice';
+import { color, gutter, slant, space, type } from '@/theme/tokens';
 import { CorneringGauge } from './CorneringGauge';
 import { IntroPage } from './IntroPage';
 import {
@@ -60,8 +60,9 @@ type Props = {
  * Page 3, "See more in every drive.": the cornering G demo.
  *
  * One ~2 s ease-in-out timeline drives everything that moves: the hero number
- * counts 0.12 g → 0.94 g, the marker swings right over the green-to-red arc,
- * the car rolls a few degrees, and the right-hand peak climbs with it. It
+ * counts 0.12 g → 0.94 g, the marker swings right and the arc lights red
+ * behind it, the car rolls a few degrees, and the right-hand peak climbs with
+ * it. It
  * plays when the page comes into view and holds its end pose. Leave the page
  * entirely and it rewinds out of sight, so it plays again on the way back.
  *
@@ -129,8 +130,8 @@ export function CorneringPage({
         onLayout={gaugeView.onBlockLayout}
       >
         <View style={styles.metricRow}>
-          <CorneringGlyph />
-          <Text variant="caption" style={styles.metricLabel}>
+          <SlantLight />
+          <Text variant="mono" style={styles.metricLabel}>
             Cornering G
           </Text>
         </View>
@@ -152,24 +153,25 @@ export function CorneringPage({
         </View>
 
         <View style={styles.peaks}>
-          <Text variant="caption">Peak cornering G</Text>
+          <Text variant="mono">Peak cornering G</Text>
           <View style={styles.peakRow}>
             <View style={styles.peak}>
+              <Text variant="mono">Left</Text>
               <View style={styles.peakValue}>
                 <Numeral size={type.headline.size} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
                   {formatG(gHundredths(CORNERING_LEFT_PEAK_G))}
                 </Numeral>
                 <PeakUnit />
               </View>
-              <Text variant="legal">Left</Text>
             </View>
+            {/* The logo's slant, as a divider. */}
             <View style={styles.peakRule} />
             <View style={[styles.peak, styles.peakRight]}>
+              <Text variant="mono">Right</Text>
               <View style={styles.peakValue}>
                 <LiveG value={rightPeak} size={type.headline.size} />
                 <PeakUnit />
               </View>
-              <Text variant="legal">Right</Text>
             </View>
           </View>
         </View>
@@ -262,31 +264,15 @@ function LiveG({ value, size }: { value: SharedValue<number>; size: number }) {
 /** The "g" after a peak figure, capped with it. */
 function PeakUnit() {
   return (
-    <Text variant="body" style={styles.peakUnit} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
+    <Text variant="title" style={styles.peakUnit} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
       g
     </Text>
   );
 }
 
-/** A small lime curve with an arrowhead: a corner, taken to the right. */
-function CorneringGlyph() {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 16 16">
-      <Path
-        d="M3 14.5V9.5a6 6 0 0 1 6-6h4.5M10.5 0.75 13.5 3.5l-3 2.75"
-        stroke={color.accent}
-        strokeWidth={1.75}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </Svg>
-  );
-}
-
 const styles = StyleSheet.create({
   metricRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  metricLabel: { fontFamily: font.bodyMedium, color: color.text1 },
+  metricLabel: { color: color.text2 },
   hero: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -299,13 +285,13 @@ const styles = StyleSheet.create({
     marginTop: space.lg,
     paddingTop: space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: color.hairline,
-    gap: space.xs,
+    borderTopColor: color.divider,
+    gap: space.sm,
   },
   peakRow: { flexDirection: 'row', alignItems: 'stretch' },
-  peak: { flex: 1 },
+  peak: { flex: 1, gap: 2 },
   peakRight: { alignItems: 'flex-end' },
   peakValue: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs },
   peakUnit: { color: color.text2 },
-  peakRule: { width: StyleSheet.hairlineWidth, backgroundColor: color.hairline },
+  peakRule: { width: 1, backgroundColor: color.hairline, transform: slant.transform },
 });

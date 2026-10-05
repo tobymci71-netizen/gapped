@@ -34,3 +34,25 @@ export const easing = {
 /** ms between children in a list entrance. Cap staggered rows at 8. */
 export const stagger = 45;
 export const STAGGER_CAP = 8;
+
+/**
+ * Nightrun's ambient loops (ms), from the approved mockups. These run only on
+ * hero scenes, only while the screen is focused, and never under Reduce
+ * Motion, where each scene shows its finished still frame instead.
+ */
+export const ambient = {
+  /** Film grain jumps to its next position (five per cycle). */
+  grainStep: 180,
+  /** A tail light's slow breathe, one way. */
+  breathe: 3600,
+  /** A mast's warning light: one blink per cycle. */
+  blink: 2600,
+  /** The horizon's anamorphic flare dimming and back, one way. */
+  shimmer: 4800,
+  /** The parked "GPS ready" pulse ring. */
+  pulse: 2400,
+  /** One road light rushing from the vanishing point past the camera. */
+  roadRush: 2200,
+  /** Drizzle in a street light's cone: one fall of the streaks (the Driving hero). */
+  rain: 550,
+} as const;

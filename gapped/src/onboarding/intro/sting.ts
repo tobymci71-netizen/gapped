@@ -1,7 +1,7 @@
 /**
  * The launch sting: the one sound in Gapped (docs/ONBOARDING.md, "Sound").
  *
- * Played once, when the splash wordmark lands, and never again in the life of
+ * Played once, when the splash G mark lands, and never again in the life of
  * the process. A second mount of the splash (a remount, a reset back into
  * onboarding) stays silent, because "once" is a promise about what the person
  * hears, not about how many times a component rendered.
@@ -57,7 +57,7 @@ let played = false;
 
 /**
  * Sets the audio session up and loads the sting, so it can start the moment
- * the wordmark lands. Safe to call more than once.
+ * the mark lands. Safe to call more than once.
  *
  * The session is AMBIENT (`playsInSilentMode: false`, `mixWithOthers`):
  *  - the ring/silent switch silences it, as the reference does. expo-audio's

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Button } from '@/components/Button';
+import { Icon, type IconName } from '@/components/icons';
 import { PressableScale } from '@/components/PressableScale';
 import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
@@ -20,7 +21,7 @@ import {
   reportDriver,
   type ReportReason,
 } from '@/social/moderation';
-import { color, glyph as glyphSize, radius, space, textStyle, type } from '@/theme/tokens';
+import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
 
 /** The driver a report or a hide is about. */
 export type ReportTarget = { profileId: string; username: string };
@@ -155,9 +156,12 @@ function ReportBody({
   if (step === 'reported' || step === 'hidden') {
     return (
       <Steps>
-        <Text variant="bodyMedium" accessibilityRole="header">
-          {step === 'reported' ? REPORTED_CONFIRMATION : HIDDEN_CONFIRMATION}
-        </Text>
+        <View style={styles.done}>
+          <Icon name={step === 'reported' ? 'check' : 'hidden'} size={24} color={color.text1} />
+          <Text variant="bodyMedium" accessibilityRole="header" style={styles.doneText}>
+            {step === 'reported' ? REPORTED_CONFIRMATION : HIDDEN_CONFIRMATION}
+          </Text>
+        </View>
         {step === 'reported' ? (
           <Button
             label={busy === 'hide' ? 'Hiding…' : `Hide ${name} too`}
@@ -168,7 +172,8 @@ function ReportBody({
           />
         ) : null}
         {errorLine}
-        <Button label="Done" onPress={onClose} style={styles.gap} />
+        {/* A routine close: the white plate, not the red one. */}
+        <Button label="Done" variant="light" onPress={onClose} style={styles.gap} />
       </Steps>
     );
   }
@@ -199,7 +204,7 @@ function ReportBody({
                 </View>
                 <Text
                   variant="bodyMedium"
-                  style={[styles.reasonLabel, selected && { color: color.accent }]}
+                  style={[styles.reasonLabel, { color: selected ? color.text1 : color.text2 }]}
                 >
                   {r.label}
                 </Text>
@@ -211,7 +216,7 @@ function ReportBody({
           value={details}
           onChangeText={setDetails}
           placeholder="Anything that would help us check (optional)"
-          placeholderTextColor={color.text2}
+          placeholderTextColor={color.text3}
           multiline
           maxLength={REPORT_DETAILS_MAX}
           editable={busy == null}
@@ -219,14 +224,17 @@ function ReportBody({
           accessibilityLabel="Details, optional"
           accessibilityHint={`Up to ${REPORT_DETAILS_MAX} characters.`}
         />
-        <Text variant="legal" style={styles.counter}>
+        <Text variant="monoSmall" style={styles.counter}>
           {details.length}/{REPORT_DETAILS_MAX}
         </Text>
         {errorLine}
+        {/* Sends and confirms in place: an action, not a way forward, so no
+            arrow (Button's `arrow`). */}
         <Button
           label={busy === 'report' ? 'Sending…' : 'Send report'}
           onPress={send}
           disabled={reason == null || busy != null}
+          arrow={false}
           style={styles.gap}
         />
         <Button
@@ -246,6 +254,7 @@ function ReportBody({
   return (
     <Steps>
       <Action
+        icon="flag"
         label="Report driver"
         detail="An offensive name, a spoofed run, or someone pretending to be someone else. We review reports within 24 hours."
         onPress={() => {
@@ -255,6 +264,7 @@ function ReportBody({
         disabled={busy != null}
       />
       <Action
+        icon="hidden"
         label={busy === 'hide' ? 'Hiding…' : 'Hide this driver'}
         detail={hideDetail}
         onPress={hide}
@@ -284,13 +294,15 @@ function Steps({ children }: { children: React.ReactNode }): React.JSX.Element {
   );
 }
 
-/** One of the sheet's two actions: a label, and what it does underneath. */
+/** One of the sheet's two actions: a stroke icon, a label, and what it does underneath. */
 function Action({
+  icon,
   label,
   detail,
   onPress,
   disabled,
 }: {
+  icon: IconName;
   label: string;
   detail: string;
   onPress: () => void;
@@ -306,11 +318,14 @@ function Action({
       accessibilityState={{ disabled }}
       style={[styles.action, disabled && styles.dimmed]}
     >
+      <View style={styles.actionIcon}>
+        <Icon name={icon} size={22} color={color.text2} />
+      </View>
       <View style={styles.actionText}>
         <Text variant="bodyMedium">{label}</Text>
         <Text variant="caption">{detail}</Text>
       </View>
-      <Text style={styles.chevron}>›</Text>
+      <Icon name="chevronRight" size={18} color={color.text3} strokeWidth={2} />
     </PressableScale>
   );
 }
@@ -327,11 +342,19 @@ const styles = StyleSheet.create({
     minHeight: 64,
     paddingVertical: space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: color.hairline,
+    borderBottomColor: color.divider,
   },
+  // Top-aligned with the label, which the detail can push to several lines.
+  actionIcon: { alignSelf: 'flex-start', paddingTop: 1 },
   actionText: { flex: 1, gap: 2, minWidth: 0 },
-  chevron: { ...textStyle(glyphSize.xxl), color: color.text3 },
   dimmed: { opacity: 0.45 },
+  done: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space.md,
+    paddingVertical: space.sm,
+  },
+  doneText: { flex: 1 },
   reasons: { gap: space.xs },
   // 52pt rows: the radio and its label are one target, above the 44pt floor.
   reason: {
@@ -340,17 +363,20 @@ const styles = StyleSheet.create({
     gap: space.md,
     minHeight: 52,
   },
+  // White when chosen, as the board's chosen segment is: a choice is not a
+  // light, so it is never red.
   radio: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: radius.pill,
     borderWidth: 1.5,
+    // text3, not a hairline: the ring is the control, so it needs 3:1.
     borderColor: color.text3,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioOn: { borderColor: color.accent },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: color.accent },
+  radioOn: { borderColor: color.text1 },
+  radioDot: { width: 10, height: 10, borderRadius: radius.pill, backgroundColor: color.text1 },
   reasonLabel: { flex: 1 },
   details: {
     minHeight: 96,
@@ -358,13 +384,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingTop: space.md,
     paddingBottom: space.md,
-    borderRadius: radius.card,
+    borderRadius: radius.sm,
     backgroundColor: color.surface2,
     borderWidth: 1,
     borderColor: color.hairline,
     color: color.text1,
     textAlignVertical: 'top',
-    ...textStyle(type.body),
+    fontFamily: font.body,
+    ...textStyle(type.callout),
   },
   counter: { textAlign: 'right' },
 });

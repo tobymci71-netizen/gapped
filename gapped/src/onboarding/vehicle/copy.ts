@@ -38,7 +38,7 @@ export function shareLine(share: number, noun: Noun): string {
   return `${formatShare(share)}% of all Gapped ${noun} drivers`;
 }
 
-/** The lime closer under the chart. */
+/** The closing line under the chart. */
 export function closerLine(noun: Noun): string {
   return `Your ${noun} connects you with drivers who share it.`;
 }

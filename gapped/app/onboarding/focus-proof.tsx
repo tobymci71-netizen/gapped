@@ -61,7 +61,7 @@ export default function FocusProofStep() {
         >
           {copy.title}
         </Text>
-        <Text variant="body" style={styles.center}>
+        <Text variant="callout" style={styles.center}>
           {copy.body}
         </Text>
       </View>

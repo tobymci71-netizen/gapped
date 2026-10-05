@@ -315,12 +315,13 @@ const styles = StyleSheet.create({
     borderBottomColor: color.surface2,
   },
   empty: { padding: space.xl, textAlign: 'center' },
-  useTyped: { color: color.accent },
+  // accentHot: red text on the sheet must clear AA; racing red does not.
+  useTyped: { color: color.accentHot },
   manualRow: {
     paddingVertical: space.md,
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: color.hairline,
   },
-  manualLabel: { color: color.accent, textDecorationLine: 'underline' },
+  manualLabel: { color: color.accentHot, textDecorationLine: 'underline' },
 });

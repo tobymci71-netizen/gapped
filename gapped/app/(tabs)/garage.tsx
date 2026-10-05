@@ -1,8 +1,11 @@
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, Switch, TextInput, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { SectionHeader } from '@/components/brand/SectionHeader';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { Icon } from '@/components/icons';
 import { PressableScale } from '@/components/PressableScale';
 import { ProBadge, useGoPro } from '@/components/ProBadge';
 import { Screen } from '@/components/Screen';
@@ -10,6 +13,7 @@ import { Text } from '@/components/Text';
 import { bracketsLocked } from '@/board/bracketAccess';
 import { SHOW_PRO } from '@/config/flags';
 import { SUPPORT_URL } from '@/config/links';
+import { GarageHero } from '@/garage/GarageHero';
 import { modifiedFromBracketKey } from '@/lib/bracket-flag';
 import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
@@ -19,13 +23,65 @@ import { useProfile } from '@/state/profile';
 import { bracketKey, bracketLabel } from '@/vehicles/brackets';
 import { decodeVin, fetchPrimaryVehicle, setModified, VehicleSpecs } from '@/vehicles/specs';
 import { checkVin } from '@/vehicles/vin';
-import { color, radius, space, textStyle, type } from '@/theme/tokens';
+import { duration } from '@/theme/motion';
+import {
+  color,
+  font,
+  gutter,
+  maxFontScale,
+  radius,
+  space,
+  textStyle,
+  type,
+} from '@/theme/tokens';
 
+/** One line of the spec sheet: a mono label, the value against the right edge. */
 function SpecRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.specRow}>
-      <Text variant="caption">{label}</Text>
-      <Text variant="bodyMedium">{value}</Text>
+    <View style={styles.specRow} accessible accessibilityLabel={`${label}, ${value}`}>
+      <Text variant="mono">{label}</Text>
+      <Text variant="bodySemibold" style={styles.specValue}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * The VIN's reasons, folded under one line so the section leads with what to
+ * do. The words are the ones the section always carried, unshortened: they
+ * are why the class can be trusted.
+ */
+function WhyVin() {
+  const [open, setOpen] = useState(false);
+  return (
+    <View>
+      <PressableScale
+        onPress={() => {
+          haptic.selection();
+          setOpen((o) => !o);
+        }}
+        silent
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={styles.whyRow}
+      >
+        <Text variant="bodySemibold" style={styles.whyLabel}>
+          Why a VIN?
+        </Text>
+        <View style={open ? styles.chevronOpen : null}>
+          <Icon name="chevronDown" size={18} color={color.text2} strokeWidth={2} />
+        </View>
+      </PressableScale>
+      {open ? (
+        <Animated.View entering={FadeIn.duration(duration.fast)}>
+          <Text variant="callout" style={styles.whyBody}>
+            Your VIN is decoded by NHTSA on our servers to get drivetrain, power and weight — we
+            never store the VIN itself, and we do not accept these figures typed in by hand, because
+            that would let anyone pick a class that is not theirs.
+          </Text>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
@@ -56,9 +112,21 @@ const OFFLINE = 'Could not reach our servers. Check your connection and try agai
  * garage editing ships here, its add control goes through vehicleAdd()
  * (src/onboarding/vehicle/garageAccess.ts) as onboarding's garage step does:
  * a full Free garage gets the PRO row and keeps every vehicle already in it.
+ *
+ * Nightrun: the car parked in its bay is the hero (GarageHero: the driver's
+ * own photo, or the car drawn from behind with its lights on), its name in
+ * the wide italic under it, the spec sheet in mono, the class on a night
+ * panel, and the VIN form below.
  */
 export default function GarageScreen() {
-  const { vehicleKind, vehicleMake, vehicleModel, vehicleId, vehicleRefused } = useProfile();
+  const {
+    vehicleKind,
+    vehicleMake,
+    vehicleModel,
+    vehicleId,
+    vehicleRefused,
+    vehiclePhotoUri,
+  } = useProfile();
   // The class itself is Free (runs are recorded in it either way); the board
   // that ranks them by class is Pro, so a locked account is told where it is.
   // Never while Pro is hidden (SHOW_PRO): a line that leads to a plan nobody
@@ -181,6 +249,21 @@ export default function GarageScreen() {
       : vehicleMake && vehicleModel
         ? `${vehicleMake} ${vehicleModel}`
         : null;
+  // The same name, set as a nameplate: the make and model large, the year in
+  // the mono line above it.
+  const plateName =
+    specs?.make && specs.model
+      ? `${specs.make} ${specs.model}`
+      : vehicleMake && vehicleModel
+        ? `${vehicleMake} ${vehicleModel}`
+        : null;
+  const eyebrow = [
+    'Primary vehicle',
+    specs?.make && specs.model && specs.year ? String(specs.year) : null,
+    vehicleKind === 'motorbike' ? 'Motorbike' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   // Shown from the same function the server ranks with, so the class on screen
   // is the class the drive competes in.
@@ -196,7 +279,46 @@ export default function GarageScreen() {
 
   return (
     <Screen>
-      <Text variant="headline">Garage</Text>
+      <Text variant="headline" accessibilityRole="header">
+        Garage
+      </Text>
+
+      <View style={styles.bleed}>
+        <GarageHero
+          kind={vehicleKind}
+          make={vehicleMake}
+          model={vehicleModel}
+          photoUri={vehiclePhotoUri}
+          photoLabel={plateName ? `Your ${plateName}` : 'Your vehicle'}
+          empty={!name}
+        />
+      </View>
+
+      {!name ? (
+        // Only for a profile with no make and model, which the ride step does
+        // not allow. Nothing here edits a vehicle, so it promises nothing: it
+        // used to say "or here once editing ships".
+        <View style={styles.nameplate}>
+          <Text variant="cardTitle">No vehicle yet</Text>
+          <Text variant="callout">
+            Your main vehicle is the one chosen during onboarding, and it shows here with its
+            class.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.nameplate}>
+          <Text variant="mono">{eyebrow}</Text>
+          <Text
+            variant="display"
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+            accessibilityRole="header"
+          >
+            {plateName}
+          </Text>
+        </View>
+      )}
 
       {/*
         The server refused this car's row (sync.ts, vehicleRefused), so its
@@ -206,7 +328,7 @@ export default function GarageScreen() {
       {vehicleRefused && name ? (
         <Card style={styles.card}>
           <Text variant="cardTitle">Drives in this car aren&apos;t uploading</Text>
-          <Text variant="body">
+          <Text variant="callout">
             Our server didn&apos;t accept this car&apos;s name, &ldquo;{name}&rdquo;, so drives in it
             can&apos;t be uploaded or ranked yet. They are kept on this phone and upload once
             it&apos;s sorted. Contact us and we&apos;ll look at it.
@@ -217,64 +339,45 @@ export default function GarageScreen() {
             onPress={() => {
               Linking.openURL(SUPPORT_URL).catch(() => undefined);
             }}
-            style={styles.decodeBtn}
+            style={styles.cardButton}
           />
         </Card>
       ) : null}
 
-      {!name ? (
-        // Only for a profile with no make and model, which the ride step does
-        // not allow. Nothing here edits a vehicle, so it promises nothing: it
-        // used to say "or here once editing ships".
-        <Card style={styles.card}>
-          <Text variant="cardTitle">No vehicle yet</Text>
-          <Text variant="body">
-            Your main vehicle is the one chosen during onboarding, and it shows here with its
-            class.
-          </Text>
-        </Card>
-      ) : (
+      {name ? (
         <>
-          <Card style={styles.card}>
-            <Text variant="cardTitle" numberOfLines={2}>
-              {name}
-            </Text>
-            <Text variant="caption">
-              Primary vehicle{vehicleKind === 'motorbike' ? ' · Motorbike' : ''}
-            </Text>
+          {/* Only when there is nothing to show yet: focus reloads are silent. */}
+          {loading && !specs ? (
+            <ActivityIndicator color={color.text3} style={styles.loading} />
+          ) : null}
 
-            {/* Only when there is nothing to show yet: focus reloads are silent. */}
-            {loading && !specs ? (
-              <ActivityIndicator color={color.accent} style={styles.loading} />
-            ) : null}
-
-            {specs?.specSource === 'vin' ? (
-              <View style={styles.specs}>
-                <SpecRow
-                  label="Drivetrain"
-                  value={specs.drivetrain ? DRIVETRAIN_LABEL[specs.drivetrain] : 'Unknown'}
-                />
-                <SpecRow
-                  label="Power"
-                  value={specs.factoryPowerHp ? `${specs.factoryPowerHp} hp` : 'Unknown'}
-                />
-                <SpecRow
-                  label="Kerb weight"
-                  value={specs.curbWeightKg ? `${specs.curbWeightKg} kg` : 'Unknown'}
-                />
-              </View>
-            ) : null}
-          </Card>
+          {specs?.specSource === 'vin' ? (
+            <View style={styles.specs}>
+              <SpecRow
+                label="Drivetrain"
+                value={specs.drivetrain ? DRIVETRAIN_LABEL[specs.drivetrain] : 'Unknown'}
+              />
+              <SpecRow
+                label="Power"
+                value={specs.factoryPowerHp ? `${specs.factoryPowerHp} hp` : 'Unknown'}
+              />
+              <SpecRow
+                label="Kerb weight"
+                value={specs.curbWeightKg ? `${specs.curbWeightKg} kg` : 'Unknown'}
+              />
+            </View>
+          ) : null}
 
           {currentBracket ? (
-            <Card style={styles.card}>
-              <Text variant="caption">YOUR CLASS</Text>
-              <Text variant="cardTitle" style={{ color: color.accent }}>
+            <Card style={styles.classCard}>
+              <Text variant="mono">Your class</Text>
+              <Text variant="cardTitle" style={styles.className}>
                 {bracketLabel(currentBracket)}
               </Text>
+              <View style={styles.rule} />
               <View style={styles.modRow}>
                 <View style={styles.modLabel}>
-                  <Text variant="bodyMedium">Modified</Text>
+                  <Text variant="bodySemibold">Modified</Text>
                   <Text variant="legal">
                     Declaring a mod moves you out of the stock classes. It is taken at your word
                     because it can only ever move you to a harder board, never an easier one.
@@ -294,6 +397,7 @@ export default function GarageScreen() {
                   accessibilityLabel="Modified"
                   accessibilityHint="Moves your runs out of the stock classes"
                   trackColor={{ true: color.accent, false: color.surface3 }}
+                  ios_backgroundColor={color.surface3}
                   thumbColor={color.text1}
                 />
               </View>
@@ -304,10 +408,12 @@ export default function GarageScreen() {
                   accessibilityLabel="See your class board, Gapped Pro"
                   style={styles.classLock}
                 >
-                  <Text variant="bodyMedium" style={styles.classLockText}>
+                  <Text variant="bodySemibold" style={styles.classLockText}>
                     See your class board
                   </Text>
                   <ProBadge style={styles.classLockBadge} />
+                  <View style={styles.flex} />
+                  <Icon name="chevronRight" size={18} color={color.text3} strokeWidth={2} />
                 </PressableScale>
               ) : null}
             </Card>
@@ -315,21 +421,19 @@ export default function GarageScreen() {
 
           {!supabase ? (
             <Card style={styles.card}>
-              <Text variant="body">
+              <Text variant="callout">
                 Vehicle classes need an account — your drives are recording locally in the meantime.
               </Text>
             </Card>
           ) : (
-            <Card style={styles.card}>
-              <Text variant="cardTitle">
-                {specs?.specSource === 'vin' ? 'Update from VIN' : 'Set your class'}
-              </Text>
-              <Text variant="body" style={styles.blurb}>
+            <View style={styles.vin}>
+              <SectionHeader
+                title={specs?.specSource === 'vin' ? 'Update from VIN' : 'Set your class'}
+              />
+              <Text variant="callout">
                 Without a VIN, every drive goes in the open class, alongside every other vehicle.
-                Your VIN is decoded by NHTSA on our servers to get drivetrain, power and weight — we
-                never store the VIN itself, and we do not accept these figures typed in by hand,
-                because that would let anyone pick a class that is not theirs.
               </Text>
+              <WhyVin />
               <TextInput
                 value={vin}
                 onChangeText={(t) => {
@@ -337,16 +441,18 @@ export default function GarageScreen() {
                   setError(null);
                 }}
                 placeholder="17-character VIN"
-                placeholderTextColor={color.text2}
+                placeholderTextColor={color.text3}
                 autoCapitalize="characters"
                 autoCorrect={false}
                 maxLength={17}
                 editable={!busy}
                 style={styles.input}
+                maxFontSizeMultiplier={maxFontScale.chip}
                 accessibilityLabel="Vehicle identification number"
               />
               <Button
                 label={busy ? 'Decoding…' : 'Decode VIN'}
+                variant="light"
                 onPress={onDecode}
                 disabled={busy || vin.trim().length === 0}
                 style={styles.decodeBtn}
@@ -358,27 +464,49 @@ export default function GarageScreen() {
               ) : null}
               {note ? <Text variant="caption">{note}</Text> : null}
               <Text variant="legal">Usually on the windscreen base, door jamb, or your V5C.</Text>
-            </Card>
+            </View>
           )}
         </>
-      )}
+      ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { marginTop: space.xl, gap: space.xs },
-  loading: { marginTop: space.md },
-  specs: { marginTop: space.md, gap: space.sm },
-  specRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  flex: { flex: 1 },
+  // The hero runs edge to edge, under the gutter.
+  bleed: { marginHorizontal: -gutter, marginTop: space.sm },
+  // Tucked into the hero's fade, as a title over the foot of a film still.
+  nameplate: { marginTop: -space.md, gap: space.xs },
+  card: { marginTop: space.xl, gap: space.sm },
+  cardButton: { marginTop: space.sm },
+  loading: { marginTop: space.lg, alignSelf: 'flex-start' },
+  specs: {
+    marginTop: space.lg,
+    borderTopWidth: StyleSheet.hairlineWidth * 2,
+    borderTopColor: color.divider,
+  },
+  specRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: space.md,
+    paddingVertical: space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth * 2,
+    borderBottomColor: color.divider,
+  },
+  specValue: { flexShrink: 1, textAlign: 'right' },
+  classCard: { marginTop: space.xl, gap: space.xs },
+  className: { marginTop: 2 },
+  rule: { height: StyleSheet.hairlineWidth * 2, backgroundColor: color.divider, marginTop: space.md },
   modRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    marginTop: space.lg,
+    marginTop: space.md,
   },
   modLabel: { flex: 1, gap: 2 },
-  blurb: { marginTop: space.sm },
   classLock: {
     minHeight: 44,
     flexDirection: 'row',
@@ -388,17 +516,29 @@ const styles = StyleSheet.create({
   },
   classLockText: { flexShrink: 1 },
   classLockBadge: { alignSelf: 'center' },
+  vin: { marginTop: space.xl, gap: space.sm },
+  whyRow: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    alignSelf: 'flex-start',
+  },
+  whyLabel: { color: color.text2 },
+  chevronOpen: { transform: [{ rotate: '180deg' }] },
+  whyBody: { marginBottom: space.sm },
   input: {
-    marginTop: space.md,
-    minHeight: 48,
+    marginTop: space.xs,
+    minHeight: 52,
     paddingHorizontal: space.lg,
-    borderRadius: radius.pill,
-    backgroundColor: color.surface2,
+    borderRadius: radius.sm,
+    backgroundColor: color.surface1,
     borderWidth: 1,
     borderColor: color.hairline,
     color: color.text1,
-    ...textStyle(type.body),
+    fontFamily: font.mono,
+    ...textStyle(type.callout),
     letterSpacing: 1,
   },
-  decodeBtn: { marginTop: space.md, marginBottom: space.sm },
+  decodeBtn: { marginTop: space.sm, marginBottom: space.xs },
 });

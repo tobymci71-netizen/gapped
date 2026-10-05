@@ -70,9 +70,9 @@ describe('bracketOptions', () => {
   test('open: exactly the rows the picker has always shown, no PRO marks', () => {
     for (const a of OPEN) {
       expect(bracketOptions(BRACKETS, a)).toEqual([
-        { key: ALL_CLASSES, label: ALL_CLASSES_LABEL, glyph: '🌐' },
-        { key: RWD, label: bracketLabel(RWD), detail: '1 driver', glyph: '🏁' },
-        { key: AWD, label: bracketLabel(AWD), detail: '12 drivers', glyph: '🏁' },
+        { key: ALL_CLASSES, label: ALL_CLASSES_LABEL },
+        { key: RWD, label: bracketLabel(RWD), detail: '1 driver' },
+        { key: AWD, label: bracketLabel(AWD), detail: '12 drivers' },
       ]);
     }
   });
@@ -80,12 +80,11 @@ describe('bracketOptions', () => {
   test('Free: every class is listed with its real count and marked PRO; All classes is not', () => {
     const rows = bracketOptions(BRACKETS, FREE);
     expect(rows.map((r) => r.key)).toEqual([ALL_CLASSES, RWD, AWD]);
-    expect(rows[0]).toEqual({ key: ALL_CLASSES, label: ALL_CLASSES_LABEL, glyph: '🌐' });
+    expect(rows[0]).toEqual({ key: ALL_CLASSES, label: ALL_CLASSES_LABEL });
     expect(rows[1]).toEqual({
       key: RWD,
       label: bracketLabel(RWD),
       detail: '1 driver',
-      glyph: '🏁',
       pro: true,
       accessibilityLabel: `${bracketLabel(RWD)}, 1 driver, Gapped Pro`,
     });
@@ -94,9 +93,7 @@ describe('bracketOptions', () => {
   });
 
   test('no classes: just the open board', () => {
-    expect(bracketOptions([], FREE)).toEqual([
-      { key: ALL_CLASSES, label: ALL_CLASSES_LABEL, glyph: '🌐' },
-    ]);
+    expect(bracketOptions([], FREE)).toEqual([{ key: ALL_CLASSES, label: ALL_CLASSES_LABEL }]);
   });
 });
 

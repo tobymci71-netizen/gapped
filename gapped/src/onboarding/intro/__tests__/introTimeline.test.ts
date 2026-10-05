@@ -1,8 +1,8 @@
 /**
- * Step 0's numbers: the carousel copy and buttons, the header's wordmark/dots
- * handoff, which pages count as on screen, the splash landing, and the
+ * Step 0's numbers: the carousel copy and buttons, the welcome mark / page
+ * marks handoff, which pages count as on screen, the splash landing, and the
  * cornering demo's one timeline. docs/ONBOARDING.md is what these hold the
- * code to.
+ * code to; the welcome scene's own numbers are in heroMath.test.ts.
  */
 
 import {
@@ -16,9 +16,6 @@ import {
   corneringDemoLabel,
   corneringG,
   ctaFor,
-  DIAL_DEMO_MS,
-  dialDemoLabel,
-  DIAL_SWEEP_MS,
   dotEmphasis,
   dotsOpacity,
   formatG,
@@ -40,11 +37,11 @@ import {
   spokenTitle,
   SPLASH_HOLD_MS,
   SPLASH_START_SCALE,
+  WELCOME_LINES,
   wordmarkOpacity,
 } from '../introTimeline';
 import { SHOW_PRO } from '@/config/flags';
 import { PLAN_MATRIX } from '@/config/plans';
-import { msToKmh, msToMph } from '@/drive/units';
 
 /** Timeline progress from 0 to 1 in 1% steps. */
 const STEPS = Array.from({ length: 101 }, (_, i) => i / 100);
@@ -53,7 +50,11 @@ describe('carousel copy (docs/ONBOARDING.md, "Carousel")', () => {
   test('four pages, in order, with the documented titles and buttons', () => {
     expect(INTRO_PAGE_COUNT).toBe(4);
     expect(INTRO_PAGES.map((p) => [p.title, p.subtitle, p.cta])).toEqual([
-      ['Track every drive', 'Distance, top speed and 0–60. Verified, then ranked.', 'Get started'],
+      [
+        'Every drive. Measured. Verified.',
+        'Gapped logs each drive with GPS and checks it on our servers before it counts.',
+        'Get started',
+      ],
       ['See where you stack up', 'Your drives. Your friends. Your place on the board.', 'Next'],
       ['See more in every drive.', null, 'Next'],
       ['Built by drivers', 'From drivers. For drivers.', 'Set up my car'],
@@ -71,15 +72,30 @@ describe('carousel copy (docs/ONBOARDING.md, "Carousel")', () => {
       const words = `${p.title} ${p.subtitle ?? ''} ${p.spokenSubtitle ?? ''} ${p.cta}`;
       expect(words).not.toMatch(/fastest|faster|beat|race|win\b|compet|launch|record-breaking/i);
     }
-    // Page 1 leads with distance, the board the Ranks tab opens on.
-    expect(INTRO_PAGES[0].subtitle).toMatch(/^Distance\b/);
+    // The welcome, the first screen anyone sees, names no speed at all: it
+    // sells measurement and verification (Nightrun-Welcome), not a figure.
+    const welcome = `${INTRO_PAGES[0].title} ${INTRO_PAGES[0].subtitle ?? ''}`;
+    expect(welcome).not.toMatch(/speed|mph|km\/h|0–60|fast/i);
   });
 
-  test('"0–60" has a spoken form, as the focus step gives it', () => {
-    const track = INTRO_PAGES[0];
-    expect(track.subtitle).toContain('0–60');
-    expect(track.spokenSubtitle).toContain('zero to sixty');
-    expect(track.spokenSubtitle).not.toMatch(/\d/);
+  test('the welcome says how a drive is checked, and claims no more than that', () => {
+    expect(WELCOME_LINES).toEqual(['Every drive.', 'Measured.', 'Verified.']);
+    // The three lines are the page's one title, read as a sentence.
+    expect(INTRO_PAGES[0].title).toBe(WELCOME_LINES.join(' '));
+    const line = INTRO_PAGES[0].subtitle ?? '';
+    expect(line).toMatch(/GPS/);
+    expect(line).toMatch(/our servers/);
+    // Not "every number you see is real": two pages on, the board card may
+    // show sample rows, labelled as such.
+    expect(line).not.toMatch(/every number/i);
+  });
+
+  test('any "0–60" a page prints has a spoken form, as the focus step gives it', () => {
+    for (const p of INTRO_PAGES) {
+      if (!p.subtitle?.includes('0–60')) continue;
+      expect(p.spokenSubtitle).toContain('zero to sixty');
+      expect(p.spokenSubtitle).not.toMatch(/\d/);
+    }
   });
 
   test('the last button names the vehicle; the rest are fixed', () => {
@@ -125,7 +141,7 @@ describe('carousel and the plans (src/config/plans.ts)', () => {
   test('VoiceOver hears "Gapped Pro" where the chip is only seen, while Pro is shown', () => {
     expect(spokenTitle(INTRO_PAGES[2], true)).toBe('Gapped Pro. See more in every drive.');
     // Unmarked pages read their title as printed.
-    expect(spokenTitle(INTRO_PAGES[0], true)).toBe('Track every drive');
+    expect(spokenTitle(INTRO_PAGES[0], true)).toBe('Every drive. Measured. Verified.');
   });
 
   test('with Pro hidden, no page wears the chip or says "Gapped Pro"', () => {
@@ -163,8 +179,8 @@ describe('carousel and the plans (src/config/plans.ts)', () => {
   });
 });
 
-describe('header: wordmark on the first page, dots on the rest', () => {
-  test('wordmark alone at rest on page 1; dots alone from page 2', () => {
+describe('header: the G mark on the first page, page marks on the rest', () => {
+  test('the mark alone at rest on page 1; page marks alone from page 2', () => {
     expect(wordmarkOpacity(0)).toBe(1);
     expect(dotsOpacity(0)).toBe(0);
     for (const pos of [1, 2, 3]) {
@@ -179,7 +195,7 @@ describe('header: wordmark on the first page, dots on the rest', () => {
     }
   });
 
-  test('rubber-banding past the first page keeps the wordmark', () => {
+  test('rubber-banding past the first page keeps the mark', () => {
     expect(wordmarkOpacity(-0.2)).toBe(1);
     expect(dotsOpacity(-0.2)).toBe(0);
   });
@@ -246,8 +262,13 @@ describe('splash landing', () => {
     expect(SPLASH_START_SCALE).toBeCloseTo(0.96);
     expect(SPLASH_HOLD_MS).toBeGreaterThanOrEqual(1500);
     expect(SPLASH_HOLD_MS).toBeLessThanOrEqual(2000);
-    expect(DIAL_SWEEP_MS).toBe(800);
     expect(CORNERING_DEMO_MS).toBe(2000);
+  });
+
+  test('the same mark at the same size lands without scaling: a pure rise', () => {
+    const mark = { x: 80, y: 360, width: 230, height: 126 };
+    const scene = { x: 80, y: 104, width: 230, height: 126 };
+    expect(landingFor(mark, scene)).toEqual({ dx: 0, dy: -256, scale: 1 });
   });
 });
 
@@ -325,23 +346,6 @@ describe('cornering demo', () => {
     expect(gHundredths(0.125)).toBe(13);
     expect(formatG(10)).toBe('0.10');
     expect(formatG(94)).toBe('0.94');
-  });
-
-  test('the welcome dial is a demo too, with its unit in words', () => {
-    expect(dialDemoLabel(60.04, 'mph')).toBe('Demo. Speedometer reading 60 miles per hour.');
-    expect(dialDemoLabel(96.56, 'km/h')).toBe(
-      'Demo. Speedometer reading 97 kilometres per hour.',
-    );
-    // Nothing for VoiceOver to spell out letter by letter.
-    expect(dialDemoLabel(60, 'mph')).not.toMatch(/mph|km\/h/);
-  });
-
-  test('the welcome dial sweeps to a legal 60 mph, not 87', () => {
-    // The first screen anyone sees. 87 mph (140 km/h) is over the national
-    // limit in the UK and most countries; 60 mph is the top of the 0–60.
-    expect(Math.round(msToMph(DIAL_DEMO_MS))).toBe(60);
-    expect(Math.round(msToKmh(DIAL_DEMO_MS))).toBe(97);
-    expect(msToMph(DIAL_DEMO_MS)).toBeLessThanOrEqual(60 + 1e-9);
   });
 
   test('VoiceOver hears a demo, with the pose it holds, and the plan while Pro is shown', () => {

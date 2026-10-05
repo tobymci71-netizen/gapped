@@ -29,7 +29,7 @@ import {
   seconds,
 } from '@/types/units';
 
-/** Fixes along the route. Enough for a smooth line; RoutePath draws every one. */
+/** Fixes along the route. Enough for a smooth line on the sample share card. */
 const FIX_COUNT = 150;
 
 /** Friday 12 June 2026, 14:40 in London. Not shown on the card; kept plausible anyway. */
@@ -72,8 +72,8 @@ function build(): { summary: DriveSummary; fixes: Fix[] } {
     const step = Math.hypot(p.x - prev.x, p.y - prev.y);
     const v = speedAt(s);
     if (i > 0) {
-      // Time to cover this step at this speed, so the speeds RoutePath derives
-      // from the fixes match the ones recorded on them.
+      // Time to cover this step at this speed, so the speeds derived from the
+      // fixes (stats.deriveSpeeds) match the ones recorded on them.
       t += Math.round((step / v) * 1000);
       distance += step;
     }

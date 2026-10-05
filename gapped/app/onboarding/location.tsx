@@ -1,7 +1,14 @@
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, AppState, Linking, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
 import { Button } from '@/components/Button';
 import { Entrance } from '@/components/Entrance';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
@@ -23,9 +30,10 @@ import {
   locationNote,
   locationStatus,
 } from '@/onboarding/place/locationStep';
+import { panel } from '@/onboarding/ui/choice';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
-import { duration } from '@/theme/motion';
-import { color, radius, space } from '@/theme/tokens';
+import { duration, easing } from '@/theme/motion';
+import { alpha, color, space } from '@/theme/tokens';
 
 /**
  * How long the OS's answer — "Allowed" or "Not allowed" — stays on the card
@@ -305,16 +313,18 @@ export default function LocationStep() {
         </View>
       }
     >
-      <View style={styles.hero} importantForAccessibility="no-hide-descendants">
-        <Entrance>
-          <LocationArrowIcon />
-        </Entrance>
+      <View
+        style={styles.hero}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <GpsReticle />
       </View>
 
       <Text variant="headline" accessibilityRole="header" maxFontSizeMultiplier={HEADLINE_MAX_SCALE}>
         Ready to drive.
       </Text>
-      <Text variant="body">Turn on location for speed, distance and your route.</Text>
+      <Text variant="callout">Turn on location for speed, distance and your route.</Text>
 
       <View
         style={styles.card}
@@ -337,6 +347,51 @@ export default function LocationStep() {
   );
 }
 
+/** The reticle's side, and its corner brackets' reach. */
+const RETICLE = 132;
+const BRACKET = 16;
+
+/**
+ * The step's picture: the welcome scene's reticle, locking onto a location
+ * arrow — what turning location on is for. White line work, no red: nothing
+ * here is a light. It settles in once, from a little large, as the hero's
+ * lock does; Reduce Motion shows it in place.
+ */
+function GpsReticle() {
+  const reduced = useReducedMotion();
+  const lock = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (reduced) {
+      lock.set(1);
+      return;
+    }
+    lock.set(withDelay(duration.base, withTiming(1, { duration: duration.slow, easing: easing.decel })));
+  }, [reduced, lock]);
+  const style = useAnimatedStyle(() => ({
+    opacity: lock.get(),
+    transform: [{ scale: 1.14 - 0.14 * lock.get() }],
+  }));
+  const b = BRACKET;
+  const r = RETICLE;
+  return (
+    <View style={styles.reticle}>
+      <Animated.View style={[StyleSheet.absoluteFill, style]}>
+        <Svg width={r} height={r} viewBox={`0 0 ${r} ${r}`}>
+          <Path
+            d={`M0.5 ${b} V0.5 H${b} M${r - b} 0.5 H${r - 0.5} V${b} M${r - 0.5} ${r - b} V${r - 0.5} H${r - b} M${b} ${r - 0.5} H0.5 V${r - b}`}
+            stroke={alpha(color.text1, 0.5)}
+            strokeWidth={1}
+            fill="none"
+          />
+        </Svg>
+      </Animated.View>
+      <Entrance>
+        <LocationArrowIcon size={56} />
+      </Entrance>
+    </View>
+  );
+}
+
 /**
  * The line about recording with the screen locked, fading in when it changes
  * from what to choose to what the answer means. White rather than the
@@ -354,12 +409,19 @@ function NoteText({ text }: { text: string }) {
   );
 }
 
-/** The card's status, fading in each time it changes. */
+/**
+ * The card's status in mono, fading in each time it changes. Allowed gets a
+ * small white dot, the "GPS ready" mark the Drive tab uses.
+ */
 function StatusText({ label, on }: { label: string; on: boolean }) {
   const reduced = useReducedMotion();
   return (
-    <Animated.View entering={reduced ? undefined : FadeIn.duration(duration.base)}>
-      <Text variant="caption" style={on ? styles.statusOn : undefined}>
+    <Animated.View
+      entering={reduced ? undefined : FadeIn.duration(duration.base)}
+      style={styles.status}
+    >
+      {on ? <View style={styles.statusDot} /> : null}
+      <Text variant="mono" style={on ? styles.statusOn : undefined}>
         {label}
       </Text>
     </Animated.View>
@@ -370,8 +432,15 @@ const styles = StyleSheet.create({
   // Takes the slack above the copy, so the arrow sits in the open upper part
   // of a tall phone and the words sit low, near the thumb and the buttons. On
   // a 667pt phone it shrinks to its minimum and the copy moves up.
-  hero: { flexGrow: 1, minHeight: 120, alignItems: 'center', justifyContent: 'center' },
+  hero: { flexGrow: 1, minHeight: 140, alignItems: 'center', justifyContent: 'center' },
+  reticle: {
+    width: RETICLE,
+    height: RETICLE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   card: {
+    ...panel,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
@@ -379,11 +448,11 @@ const styles = StyleSheet.create({
     marginTop: space.md,
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
-    borderRadius: radius.card,
-    backgroundColor: color.surface2,
   },
   cardLabel: { flex: 1 },
-  statusOn: { color: color.accent },
+  status: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.text1 },
+  statusOn: { color: color.text1 },
   note: { color: color.text1 },
   footer: { gap: space.xs },
   notNow: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },

@@ -2,6 +2,7 @@ import {
   BlurMask,
   Canvas,
   Group,
+  Line,
   Path,
   Skia,
   vec,
@@ -524,6 +525,8 @@ type Geometry = {
   detail: SkPath;
   wheels: Wheel[];
   ground: SkPath;
+  /** The tail light: a short stroke along the tail face (a dot on a bike). */
+  lamp: { p1: SkPoint; p2: SkPoint; width: number };
   stroke: number;
   hairline: number;
   blur: number;
@@ -688,12 +691,21 @@ function buildCar(pf: CarProfile, size: number): Geometry {
     buildWheel(X(u), Y(pf.wheelR), pf.wheelR * L, 0.42),
   );
 
+  // The tail light sits high on the tail face, just inside the outline.
+  const lampAt = (t: number): SkPoint => {
+    const q = lerpUV(tailTop, tailBottom, t);
+    const xy = P({ u: q.u - 0.008, v: q.v });
+    return vec(xy.x, xy.y);
+  };
+  const w = weights(size);
+
   return {
     body,
     detail,
     wheels,
     ground: buildGround(x0, groundY, L, size),
-    ...weights(size),
+    lamp: { p1: lampAt(0.1), p2: lampAt(0.3), width: w.stroke * 1.5 },
+    ...w,
   };
 }
 
@@ -724,12 +736,20 @@ function buildBike(pf: BikeProfile, size: number): Geometry {
     buildWheel(X(u), Y(pf.wheelR), pf.wheelR * L, 0.3),
   );
 
+  // The tail light: a dot at the tail of the seat unit, the outline's
+  // rearmost point, nudged inside it.
+  const tail = pf.outline.reduce((a, b) => (b.u > a.u ? b : a));
+  const lampXY = P({ u: tail.u - 0.012, v: tail.v - 0.004 });
+  const w = weights(size);
+  const lampPoint = vec(lampXY.x, lampXY.y);
+
   return {
     body,
     detail,
     wheels,
     ground: buildGround(x0, groundY, L, size),
-    ...weights(size),
+    lamp: { p1: lampPoint, p2: vec(lampXY.x + 0.01, lampXY.y), width: w.stroke * 1.8 },
+    ...w,
   };
 }
 
@@ -758,14 +778,28 @@ type Props = {
   size: number;
   /** Replay the draw-on animation when this changes (e.g. new model picked). */
   revealKey?: string;
+  /** The line colour. White by default: the drawing is line art, not a light. */
   color?: string;
+  /**
+   * Light the tail light: a small red lamp with its glow, catching as the
+   * drawing completes. The one thing on the drawing that is a light, and so
+   * the one thing that is red or glows. Off by default (a placeholder, an
+   * avatar), on where the vehicle is the person's own and "ready".
+   */
+  lit?: boolean;
 };
 
+/**
+ * Nightrun: white line art on the night with a faint body wash, no glow on
+ * the lines (they are not lights). With `lit`, the tail light comes on as the
+ * outline closes.
+ */
 export function CarSilhouette({
   bodyType,
   size,
   revealKey,
-  color: stroke = color.accent,
+  color: stroke = color.text1,
+  lit = false,
 }: Props): React.JSX.Element {
   const reduced = useReducedMotion();
 
@@ -804,9 +838,10 @@ export function CarSilhouette({
   // Body leads, glass follows into the tail of the same sweep.
   const bodyEnd = useDerivedValue(() => Math.min(1, progress.value / 0.7));
   const detailEnd = useDerivedValue(() => clampW((progress.value - 0.38) / 0.62));
-  const glowOpacity = useDerivedValue(() => 0.3 * Math.min(1, progress.value / 0.5));
   const fillOpacity = useDerivedValue(() => clampW((progress.value - 0.72) / 0.28) * 0.08);
-  const groundOpacity = useDerivedValue(() => 0.18 * clampW(wheelIn.value));
+  const groundOpacity = useDerivedValue(() => 0.12 * clampW(wheelIn.value));
+  // The lamp catches once the outline has nearly closed round it.
+  const lampOpacity = useDerivedValue(() => clampW((progress.value - 0.6) / 0.25));
   const wheelOpacity = useDerivedValue(() => clampW(wheelIn.value * 1.6));
   const wheelTransform = useDerivedValue(() => [{ scale: Math.max(0, wheelIn.value) }]);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
@@ -818,21 +853,6 @@ export function CarSilhouette({
       <Canvas style={{ width: size, height: size }}>
         <Path path={geo.ground} style="fill" color={stroke} opacity={groundOpacity}>
           <BlurMask blur={geo.blur} style="normal" />
-        </Path>
-
-        {/* glow copy beneath the line art, exactly as RoutePath does */}
-        <Path
-          path={geo.body}
-          style="stroke"
-          strokeWidth={geo.stroke * 1.9}
-          strokeCap="round"
-          strokeJoin="round"
-          color={stroke}
-          opacity={glowOpacity}
-          start={0}
-          end={bodyEnd}
-        >
-          <BlurMask blur={geo.blur} style="outer" />
         </Path>
 
         {/* body wash — only meaningful once the outline has closed */}
@@ -863,15 +883,6 @@ export function CarSilhouette({
 
         {geo.wheels.map((w, i) => (
           <Group key={i} transform={wheelTransform} origin={w.origin} opacity={wheelOpacity}>
-            <Path
-              path={w.tyre}
-              style="stroke"
-              strokeWidth={geo.stroke * 1.6}
-              color={stroke}
-              opacity={0.28}
-            >
-              <BlurMask blur={geo.blur * 0.8} style="outer" />
-            </Path>
             <Path path={w.tyre} style="stroke" strokeWidth={geo.stroke} color={stroke} />
             <Path
               path={w.hub}
@@ -882,6 +893,35 @@ export function CarSilhouette({
             />
           </Group>
         ))}
+
+        {lit ? (
+          <Group opacity={lampOpacity}>
+            <Line
+              p1={geo.lamp.p1}
+              p2={geo.lamp.p2}
+              strokeWidth={geo.lamp.width * 3}
+              strokeCap="round"
+              color={color.accent}
+              opacity={0.55}
+            >
+              <BlurMask blur={geo.blur * 1.2} style="normal" />
+            </Line>
+            <Line
+              p1={geo.lamp.p1}
+              p2={geo.lamp.p2}
+              strokeWidth={geo.lamp.width}
+              strokeCap="round"
+              color={color.accent}
+            />
+            <Line
+              p1={geo.lamp.p1}
+              p2={geo.lamp.p2}
+              strokeWidth={geo.lamp.width * 0.4}
+              strokeCap="round"
+              color={color.accentCore}
+            />
+          </Group>
+        ) : null}
       </Canvas>
     </Animated.View>
   );

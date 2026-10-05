@@ -5,9 +5,12 @@ import { Alert, Linking, Share, StyleSheet, View } from 'react-native';
 import { INTERNAL_TOOLS } from '@/config/flags';
 import { ACKNOWLEDGEMENTS_URL, PRIVACY_URL, SUPPORT_URL, TERMS_URL } from '@/config/links';
 import { countryByCode, type CountryCode } from '@/data/countries';
+import { GappedMark } from '@/components/brand/GappedMark';
+import { Card } from '@/components/Card';
+import { Icon, type IconName } from '@/components/icons';
 import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
-import { SettingsRow, SettingsSection } from '@/components/SettingsRow';
+import { SettingsRow } from '@/components/SettingsRow';
 import { Text } from '@/components/Text';
 import { sweepExportFiles } from '@/drive/deleteDrive';
 import { speedForDisplay } from '@/drive/units';
@@ -22,35 +25,68 @@ import { CountrySheet } from '@/onboarding/place/CountrySheet';
 import { rearmLocaleUnitDefault } from '@/onboarding/vehicle/deviceUnits';
 import { discardVehiclePhoto } from '@/onboarding/vehicle/vehiclePhoto';
 import { useProfile } from '@/state/profile';
-import { color, glyph, space, textStyle } from '@/theme/tokens';
-
-/** Glyph-tile tints: palette colours at low alpha, plus surface3 for neutral rows. */
-const tint = {
-  neutral: color.surface3,
-  accent: 'rgba(204, 255, 0, 0.16)', // color.accent
-  danger: 'rgba(255, 59, 48, 0.18)', // color.danger
-} as const;
+import { alpha, color, space } from '@/theme/tokens';
 
 const VERSION = Constants.expoConfig?.version ?? '1.0.0';
 
 /** How much of the account id the row shows; the share sheet sends all of it. */
 const ACCOUNT_ID_PREVIEW = 8;
 
+/** SettingsRow's metrics (src/components/SettingsRow.tsx): icon box and gap. */
+const ROW_ICON = 22;
+/** Separators start after the icon, iOS-style, as SettingsSection's do. */
+const SEPARATOR_INSET = space.lg + ROW_ICON + space.md;
+
 /**
- * A statement in a settings card: drawn like a SettingsRow without a press,
+ * A statement in a settings group: drawn like a SettingsRow without a press,
  * but allowed to wrap. SettingsRow holds its label to one line, which suits a
  * control's name and cuts a sentence off ("Routes never shown to oth…") — and
  * half a privacy promise is not one.
  */
-function StatementRow({ icon, tileColor, label }: { icon: string; tileColor: string; label: string }) {
+function StatementRow({ icon, label }: { icon: IconName; label: string }) {
   return (
     <View style={styles.statement} accessible accessibilityLabel={label}>
-      <View style={[styles.statementTile, { backgroundColor: tileColor }]}>
-        <Text style={styles.statementGlyph}>{icon}</Text>
+      <View style={styles.statementIcon}>
+        <Icon name={icon} size={ROW_ICON} color={color.text2} />
       </View>
       <Text variant="bodyMedium" style={styles.statementLabel}>
         {label}
       </Text>
+    </View>
+  );
+}
+
+/**
+ * A group of rows on one night panel, under a mono heading (a VoiceOver
+ * header, so the rotor can jump between groups). Hairlines between the rows,
+ * inset past the icons. `danger` gives the panel a faint danger edge: the
+ * destructive row stands apart from everything else on the screen.
+ */
+function Group({
+  title,
+  danger,
+  children,
+}: {
+  title?: string;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  const rows = React.Children.toArray(children).filter(Boolean);
+  return (
+    <View style={styles.group}>
+      {title ? (
+        <Text variant="mono" style={styles.groupTitle} accessibilityRole="header">
+          {title}
+        </Text>
+      ) : null}
+      <Card style={[styles.panel, danger ? styles.panelDanger : null]}>
+        {rows.map((row, i) => (
+          <View key={i}>
+            {i > 0 ? <View style={styles.separator} /> : null}
+            {row}
+          </View>
+        ))}
+      </Card>
     </View>
   );
 }
@@ -291,17 +327,16 @@ export default function SettingsScreen() {
           accessibilityLabel="Back"
           style={styles.back}
         >
-          <Text style={styles.backGlyph}>‹</Text>
+          <Icon name="chevronLeft" size={24} color={color.text1} strokeWidth={2} />
         </PressableScale>
-        <Text variant="cardTitle" style={styles.title}>
-          Settings
-        </Text>
       </View>
+      <Text variant="headline" accessibilityRole="header">
+        Settings
+      </Text>
 
-      <SettingsSection title="Preferences">
+      <Group title="Preferences">
         <SettingsRow
-          glyph="📏"
-          tint={tint.accent}
+          icon="units"
           label="Units"
           value={unitLabel}
           onPress={toggleUnits}
@@ -312,8 +347,7 @@ export default function SettingsScreen() {
           verified run goes to the new one.
         */}
         <SettingsRow
-          glyph="🌍"
-          tint={tint.neutral}
+          icon="globe"
           label="Country"
           value={countryValue}
           onPress={() => {
@@ -330,8 +364,7 @@ export default function SettingsScreen() {
         */}
         {INTERNAL_TOOLS ? (
           <SettingsRow
-            glyph="📈"
-            tint={tint.neutral}
+            icon="chart"
             label="Debug HUD"
             value={debugHud ? 'On' : 'Off'}
             onPress={() => {
@@ -341,31 +374,25 @@ export default function SettingsScreen() {
           />
         ) : null}
         <SettingsRow
-          glyph="👥"
-          tint={tint.neutral}
+          icon="friends"
           label="Friends"
           onPress={() => {
             haptic.press();
             router.push('/friends');
           }}
         />
-      </SettingsSection>
+      </Group>
 
-      <SettingsSection title="Privacy">
+      <Group title="Privacy">
         {/*
           Was "Private by default", which the leaderboards make untrue: a
           username, country and run results are public. What is private is the
           route — drives are readable by their owner only (RLS on drives), and
           the boards carry figures, never coordinates.
         */}
-        <StatementRow
-          icon="🛡️"
-          tileColor={tint.accent}
-          label="Routes never shown to other drivers"
-        />
+        <StatementRow icon="shield" label="Routes never shown to other drivers" />
         <SettingsRow
-          glyph="📍"
-          tint={tint.neutral}
+          icon="location"
           label="Location permission"
           onPress={() => {
             haptic.press();
@@ -373,16 +400,16 @@ export default function SettingsScreen() {
           }}
         />
         <SettingsRow
-          glyph="🙈"
-          tint={tint.neutral}
+          icon="hidden"
           label="Hidden drivers"
           onPress={() => {
             haptic.press();
             router.push('/hidden-drivers');
           }}
         />
-        <SettingsRow glyph="🚫" tint={tint.neutral} label="No ads, no data resale" />
-      </SettingsSection>
+        {/* A statement, not a control: it wraps rather than being cut off. */}
+        <StatementRow icon="noAds" label="No ads, no data resale" />
+      </Group>
       {/*
         Says where drives go, on every plan, and what of them is public.
         "Recorded on your device" alone, under Privacy, read as if they stayed
@@ -403,12 +430,11 @@ export default function SettingsScreen() {
         to the support page rather than an email link: the address is not
         settled, and the page can change without an app release.
       */}
-      <SettingsSection title="About">
-        <SettingsRow glyph="🏁" tint={tint.accent} label="Gapped" value={VERSION} />
+      <Group title="About">
+        <SettingsRow icon="driving" label="Gapped" value={VERSION} />
         {supabase ? (
           <SettingsRow
-            glyph="🪪"
-            tint={tint.neutral}
+            icon="idCard"
             label="Account ID"
             value={
               accountId
@@ -421,61 +447,61 @@ export default function SettingsScreen() {
           />
         ) : null}
         <SettingsRow
-          glyph="🔒"
-          tint={tint.neutral}
+          icon="lock"
           label="Privacy Policy"
           onPress={() => openURL(PRIVACY_URL)}
         />
         <SettingsRow
-          glyph="📄"
-          tint={tint.neutral}
+          icon="document"
           label="Terms of Use"
           onPress={() => openURL(TERMS_URL)}
         />
         <SettingsRow
-          glyph="💬"
-          tint={tint.neutral}
+          icon="feedback"
           label="Leave feedback"
           onPress={() => openURL(SUPPORT_URL)}
         />
         <SettingsRow
-          glyph="✉️"
-          tint={tint.neutral}
+          icon="mail"
           label="Contact us"
           onPress={() => openURL(SUPPORT_URL)}
         />
         <SettingsRow
-          glyph="📦"
-          tint={tint.neutral}
+          icon="package"
           label="Acknowledgements"
           onPress={() => openURL(ACKNOWLEDGEMENTS_URL)}
         />
-      </SettingsSection>
+      </Group>
       {accountId ? (
         <Text variant="legal" style={styles.note}>
           Tap Account ID to share it. It is how we find your account if you contact us.
         </Text>
       ) : null}
 
-      <SettingsSection title="Account">
+      <Group title="Account">
         <SettingsRow
-          glyph="✏️"
-          tint={tint.neutral}
+          icon="pencil"
           label="Change username"
           onPress={() => {
             haptic.press();
             router.push('/edit-username');
           }}
         />
+      </Group>
+
+      {/*
+        Delete account stands apart, on its own panel with a danger edge, so
+        it is never one row down from an everyday control.
+      */}
+      <Group danger>
         <SettingsRow
-          glyph="🗑️"
-          tint={tint.danger}
+          icon="trash"
           label="Delete account"
           value={deleting ? 'Deleting…' : undefined}
           destructive
           onPress={confirmDelete}
         />
-      </SettingsSection>
+      </Group>
       <Text variant="legal" style={styles.note}>
         Deletion erases your profile, records, streaks and recorded drives — on this device and on
         our servers, including any leaderboard entries. If the server cannot be reached, nothing is
@@ -492,9 +518,12 @@ export default function SettingsScreen() {
         lost access, contact us with your username or Account ID.
       </Text>
 
-      <Text variant="legal" style={styles.footer}>
-        © 2026 Toby Mcintosh · Every number in this app is measured, never estimated.
-      </Text>
+      <View style={styles.footer}>
+        <GappedMark size="sm" />
+        <Text variant="legal" style={styles.footerText}>
+          © 2026 Toby Mcintosh · Every number in this app is measured, never estimated.
+        </Text>
+      </View>
 
       <CountrySheet
         visible={countryOpen}
@@ -509,19 +538,27 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   header: { minHeight: 44, justifyContent: 'center' },
   back: {
-    position: 'absolute',
-    left: -space.md,
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: -space.md,
   },
-  backGlyph: { ...textStyle(glyph.display), color: color.text1 },
-  title: { textAlign: 'center' },
+  group: { marginTop: space.xl, gap: space.sm },
+  groupTitle: { color: color.text3 },
+  // Rows own their padding so separators can run full-bleed from the inset.
+  panel: { padding: 0, overflow: 'hidden' },
+  panelDanger: { borderColor: alpha(color.danger, 0.35) },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: color.hairline,
+    marginLeft: SEPARATOR_INSET,
+  },
   note: { marginTop: space.sm },
-  footer: { marginTop: space.xxl, textAlign: 'center' },
-  // SettingsRow's metrics (src/components/SettingsRow.tsx), so the statement
-  // sits in the card like the rows around it.
+  footer: { marginTop: space.xxl, alignItems: 'center', gap: space.md },
+  footerText: { textAlign: 'center' },
+  // SettingsRow's metrics, so the statement sits in the panel like the rows
+  // around it.
   statement: {
     minHeight: 52,
     flexDirection: 'row',
@@ -530,13 +567,11 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     gap: space.md,
   },
-  statementTile: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+  statementIcon: {
+    width: ROW_ICON,
+    height: ROW_ICON,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statementGlyph: { ...textStyle(glyph.lg), color: color.text1, textAlign: 'center' },
   statementLabel: { flex: 1 },
 });

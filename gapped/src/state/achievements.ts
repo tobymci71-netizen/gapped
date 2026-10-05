@@ -8,17 +8,24 @@
 
 import { ensureUserId, supabase } from '@/lib/supabase';
 
+/**
+ * What the You tab draws beside an award: a stroke icon, never an emoji.
+ * `verified` for verified-run counts, `stopwatch` for a measurement (the
+ * 0–60 is timed, not a race start), `check` for anything else.
+ */
+export type AchievementIcon = 'verified' | 'stopwatch' | 'check';
+
 export type Achievement = {
   kind: string;
   title: string;
   detail: string;
-  glyph: string;
+  icon: AchievementIcon;
   earnedAt: number;
 };
 
 type Entry = {
   title: string;
-  glyph: string;
+  icon: AchievementIcon;
   detail: (p: Payload) => string;
   /**
    * Known, and never shown. The kind keeps its entry so a row the server
@@ -36,19 +43,19 @@ type Entry = {
 const CATALOGUE: Record<string, Entry> = {
   first_verified_run: {
     title: 'First verified run',
-    glyph: '✅',
+    icon: 'verified',
     detail: () => 'A drive of yours was re-derived on our servers and stood up.',
   },
   ten_verified_runs: {
     title: 'Ten verified runs',
-    glyph: '🔟',
+    icon: 'verified',
     detail: (p) => `${p.count ?? 10} drives verified from the raw trace.`,
   },
-  // The kind is the server's and stays; only the words and glyph change. A
+  // The kind is the server's and stays; only the words and icon change. A
   // stopwatch, not a start light: it is a measurement, not a race start.
   first_measured_launch: {
     title: 'First 0–60 measured',
-    glyph: '⏱️',
+    icon: 'stopwatch',
     detail: (p) =>
       p.zero_to_60_s != null
         ? `0–60 mph in ${Number(p.zero_to_60_s).toFixed(2)} s from a standstill, measured from the raw trace.`
@@ -59,7 +66,7 @@ const CATALOGUE: Record<string, Entry> = {
   // before then still exist, so the kind is kept, and never rendered.
   country_number_one: {
     title: 'Fastest in country',
-    glyph: '🏆',
+    icon: 'check',
     detail: (p) => `Top of the ${p.country ?? 'national'} verified top-speed board.`,
     hidden: true,
   },
@@ -81,7 +88,7 @@ export function toAchievements(rows: readonly Row[]): Achievement[] {
         // An unrecognised kind is still a real achievement the server granted;
         // showing the raw kind beats dropping it silently.
         title: entry?.title ?? a.kind.replace(/_/g, ' '),
-        glyph: entry?.glyph ?? '🏅',
+        icon: entry?.icon ?? 'check',
         detail: entry ? entry.detail(a.payload ?? {}) : 'Earned on a verified drive.',
         earnedAt: Date.parse(a.earned_at),
       };

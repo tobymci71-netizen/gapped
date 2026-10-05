@@ -18,8 +18,8 @@ import {
   SPLASH_HOLD_MS,
   SPLASH_START_SCALE,
 } from './introTimeline';
+import { GappedMark } from '@/components/brand/GappedMark';
 import { playStingOnce, prepareSting } from './sting';
-import { Wordmark } from './Wordmark';
 
 /**
  * Whether the splash has already run in this process. It is a launch beat:
@@ -34,42 +34,46 @@ function markSplashRan(): void {
   ran = true;
 }
 
-/** If measuring either wordmark has not answered by now, crossfade instead. */
+/** If measuring either mark has not answered by now, crossfade instead. */
 const MEASURE_WAIT_MS = duration.base;
 
 type Props = {
   /**
    * The screen has stopped sliding in (./useArrived). Nothing moves before
-   * then: the wordmark's entrance is the first motion on screen.
+   * then: the mark's entrance is the first motion on screen.
    */
   start: boolean;
-  /** The carousel header's wordmark, which the splash wordmark lands on. */
+  /** The splash mark's width, in points. */
+  size: number;
+  /** The welcome scene's G mark, which the splash mark rises into and lands on. */
   target: React.RefObject<View | null>;
-  /** The header wordmark's visibility: 0 until the splash mark lands on it. */
+  /** The scene mark's visibility: 0 until the splash mark lands on it. */
   markShown: SharedValue<number>;
   /** The carousel's content, 0 (hidden) to 1, revealed as the mark moves. */
   reveal: SharedValue<number>;
   /** The move has begun: the carousel's own entrances can start. */
   onMoveStart: () => void;
-  /** The mark has landed and the header owns it: unmount the splash. */
+  /** The mark has landed and the scene owns it: unmount the splash. */
   onDone: () => void;
 };
 
 /**
- * The splash (docs/ONBOARDING.md, step 0): GAPPED fades and scales in from
- * 0.96, the sting plays as it lands, and after a hold it rises and shrinks
- * into the carousel header. It never fades out: the mark the person watched
- * arrive is the one that ends up in the header.
+ * The splash (docs/ONBOARDING.md, step 0): the G mark, glowing red, fades and
+ * scales in from 0.96 on the night, the sting plays as it lands, and after a
+ * hold it rises into the welcome scene as the motorway bursts out of the
+ * vanishing point beneath it, landing as the scene's own mark. It never fades
+ * out: the mark the person watched arrive is the one that ends up in the
+ * scene.
  *
  * It is an overlay on the carousel, not a screen before it. The carousel is
  * laid out underneath from the first frame with its content hidden, so the
- * header position the mark travels to is a real, measured place, and the
- * content can rise in while the mark is still moving.
+ * place the mark travels to is a real, measured place, and the scene can
+ * burst in while the mark is still moving.
  *
  * Reduced motion: the mark appears without the scale, the sting still plays,
- * and after the same hold it crossfades into the header in place of the move.
+ * and after the same hold it crossfades into the scene in place of the move.
  */
-export function Splash({ start, target, markShown, reveal, onMoveStart, onDone }: Props) {
+export function Splash({ start, size, target, markShown, reveal, onMoveStart, onDone }: Props) {
   const reduced = useReducedMotion();
   const markRef = useRef<View>(null);
 
@@ -78,11 +82,11 @@ export function Splash({ start, target, markShown, reveal, onMoveStart, onDone }
   const dx = useSharedValue(0);
   const dy = useSharedValue(0);
   const endScale = useSharedValue(1);
-  /** 1 when the mark travels to the header, 0 when it crossfades there. */
+  /** 1 when the mark travels to the scene, 0 when it crossfades there. */
   const travels = useSharedValue(0);
 
   // Load the sting while the screen is still arriving, so it is ready to
-  // start the moment the wordmark lands.
+  // start the moment the mark lands.
   useEffect(() => {
     prepareSting();
   }, []);
@@ -120,7 +124,7 @@ export function Splash({ start, target, markShown, reveal, onMoveStart, onDone }
         endScale.set(landing.scale);
         travels.set(1);
       } else {
-        // Crossfade: the header mark fades up as this one fades down.
+        // Crossfade: the scene's mark fades up as this one fades down.
         markShown.set(withTiming(1, timing));
       }
       // The content follows the mark a beat behind, decelerating in.
@@ -135,7 +139,7 @@ export function Splash({ start, target, markShown, reveal, onMoveStart, onDone }
           'worklet';
           if (!finished) return;
           // Set here, on the UI thread, in the frame the move ends: the
-          // header mark is up before the splash can unmount, so there is no
+          // scene's mark is up before the splash can unmount, so there is no
           // frame with neither.
           markShown.value = 1;
           scheduleOnRN(finish);
@@ -206,7 +210,7 @@ export function Splash({ start, target, markShown, reveal, onMoveStart, onDone }
           {/* A plain view to measure: the animated wrapper's own frame is
               transformed, and this one is read before any transform moves. */}
           <View ref={markRef} collapsable={false}>
-            <Wordmark size="splash" />
+            <GappedMark size={size} glow accessibilityLabel="Gapped" />
           </View>
         </Animated.View>
       </View>

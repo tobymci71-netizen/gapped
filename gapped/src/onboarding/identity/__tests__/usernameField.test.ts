@@ -89,7 +89,7 @@ describe('usernameFieldState', () => {
     });
   });
 
-  it('opens Continue for an available name, with the lime tick', () => {
+  it('opens Continue for an available name, with the check in the field', () => {
     expect(state('toby', true, 'available')).toMatchObject({
       tone: 'ok',
       caption: USERNAME_HELPER,

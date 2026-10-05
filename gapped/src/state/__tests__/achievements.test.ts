@@ -22,7 +22,7 @@ describe('toAchievements', () => {
   test('the 0–60 award is a measurement, with a stopwatch', () => {
     const [a] = toAchievements([row('first_measured_launch', { zero_to_60_s: 5.024 })]);
     expect(a.title).toBe('First 0–60 measured');
-    expect(a.glyph).toBe('⏱️');
+    expect(a.icon).toBe('stopwatch');
     expect(a.detail).toBe('0–60 mph in 5.02 s from a standstill, measured from the raw trace.');
   });
 
@@ -44,14 +44,15 @@ describe('toAchievements', () => {
     const kinds = ['first_verified_run', 'ten_verified_runs', 'first_measured_launch', 'country_number_one'];
     for (const a of toAchievements(kinds.map((k) => row(k)))) {
       expect(`${a.title} ${a.detail}`).not.toMatch(/fastest|launch|\brac(e|es|ing)\b|🚦/i);
-      expect(a.glyph).not.toBe('🚦');
+      // Drawn as a stroke icon from a closed set: no start light, no emoji.
+      expect(['verified', 'stopwatch', 'check']).toContain(a.icon);
     }
   });
 
   test('an unknown kind from a newer server still shows, by its name', () => {
     const [a] = toAchievements([row('hundred_verified_runs')]);
     expect(a.title).toBe('hundred verified runs');
-    expect(a.glyph).toBe('🏅');
+    expect(a.icon).toBe('check');
     expect(a.earnedAt).toBe(Date.parse('2026-10-01T10:00:00Z'));
   });
 

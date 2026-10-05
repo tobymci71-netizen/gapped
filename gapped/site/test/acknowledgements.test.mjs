@@ -62,12 +62,21 @@ describe('declaredLicence', () => {
 });
 
 describe('a node_modules that does not match the lock', () => {
-  /** A project root with one installed package and one that is only in the lock. */
-  function fakeRoot(name, absentMeta) {
+  /**
+   * A project root with one installed package and one that is only in the
+   * lock, plus the bundled fonts' licences every real root carries
+   * (assets/fonts, written by scripts/build-fonts.py).
+   */
+  function fakeRoot(name, absentMeta, { fontLicences = true } = {}) {
     const root = join(temp, name);
     mkdirSync(join(root, 'node_modules', 'present'), { recursive: true });
     mkdirSync(join(root, 'site'), { recursive: true });
     writeFileSync(join(root, 'site', 'style.css'), 'body { color: black; }');
+    if (fontLicences) {
+      mkdirSync(join(root, 'assets', 'fonts'), { recursive: true });
+      writeFileSync(join(root, 'assets', 'fonts', 'OFL-Archivo.txt'), 'SIL OPEN FONT LICENSE (Archivo)');
+      writeFileSync(join(root, 'assets', 'fonts', 'OFL-MartianMono.txt'), 'SIL OPEN FONT LICENSE (Martian Mono)');
+    }
     writeFileSync(
       join(root, 'node_modules', 'present', 'package.json'),
       JSON.stringify({ name: 'present', version: '1.0.0', license: 'MIT' }),
@@ -100,6 +109,14 @@ describe('a node_modules that does not match the lock', () => {
     const r = buildAcknowledgements({ root, outDir: join(root, 'out') });
     assert.equal(r.packages, 1);
     assert.deepEqual(r.skipped.map((p) => p.name), ['absent']);
+  });
+
+  test('a bundled font without its licence text stops the build and is named', () => {
+    const root = fakeRoot('missing-font-licence', { optional: true }, { fontLicences: false });
+    assert.throws(
+      () => buildAcknowledgements({ root, outDir: join(root, 'out') }),
+      (e) => e instanceof BuildError && /assets\/fonts\/OFL-Archivo\.txt is missing/.test(e.message),
+    );
   });
 });
 

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -6,14 +6,16 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
+import { StreakBar } from '@/components/brand/StreakArrow';
 import { Entrance } from '@/components/Entrance';
 import { Skeleton } from '@/components/Skeleton';
 import { Numeral, Text } from '@/components/Text';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { formatShare, type BrandProof, type MakeNeighbor } from '@/onboarding/proofVariants';
+import { panel, RowLight } from '@/onboarding/ui/choice';
 import type { VehicleKind } from '@/state/profile';
 import { duration, easing, stagger } from '@/theme/motion';
-import { color, font, radius, space, type } from '@/theme/tokens';
+import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
 import { closerLine, earlyCopy, rankedLine, rankLine, shareLine } from './copy';
 import { barFraction, formatCount } from './numbers';
 import { useRamp } from './useRamp';
@@ -22,7 +24,7 @@ import { VehicleArt } from './VehicleArt';
 type Noun = 'car' | 'bike';
 type Ranked = Extract<BrandProof, { kind: 'ranked' }>;
 
-/** Bar thickness on the make chart. */
+/** The streak's height on the make chart (StreakBar's own default). */
 const BAR_HEIGHT = 6;
 
 /**
@@ -73,7 +75,7 @@ export function RankedProof({ proof, make, noun }: { proof: Ranked; make: string
           {rankedLine(make)}
         </Text>
       </View>
-      <Text variant="bodyMedium" style={[styles.center, styles.lime]}>
+      <Text variant="bodySemibold" style={styles.center}>
         {rankLine(proof.rank)}
       </Text>
 
@@ -83,12 +85,12 @@ export function RankedProof({ proof, make, noun }: { proof: Ranked; make: string
         ))}
       </View>
 
-      <Text variant="caption" style={styles.center}>
+      <Text variant="mono" style={styles.center}>
         {shareLine(proof.share, noun)}
       </Text>
       <Text
-        variant="bodyMedium"
-        style={[styles.center, styles.lime, styles.closer]}
+        variant="callout"
+        style={[styles.center, styles.closer]}
         lineBreakStrategyIOS={BALANCED}
       >
         {closerLine(noun)}
@@ -98,25 +100,32 @@ export function RankedProof({ proof, make, noun }: { proof: Ranked; make: string
 }
 
 /**
- * One make on the chart. The person's own row sits on a raised surface with a
- * lime bar and lime percent; the rest are grey. Bars grow from the left on
- * the entering curve, one stagger step apart, so the chart reads top to
- * bottom as it draws.
+ * One make on the chart, as the Ranks tab sets a board row: its place in
+ * mono, the make, its share, and under them a light streak as long as its
+ * share of the top make's. The person's own make is lit — a red light down
+ * its left edge and the hot streak — and the rest are dimmer streaks. Each
+ * streak draws in from the left, one stagger step after the row above, so
+ * the chart reads top to bottom as it draws.
  */
 function MakeRow({ row, index, fraction }: { row: MakeNeighbor; index: number; fraction: number }) {
   const reduced = useReducedMotion();
-  const grow = useSharedValue(reduced ? fraction : 0);
+  const [width, setWidth] = useState(0);
+  const grow = useSharedValue(reduced ? 1 : 0);
   useEffect(() => {
     grow.set(
       reduced
-        ? fraction
+        ? 1
         : withDelay(
             index * stagger,
-            withTiming(fraction, { duration: duration.slow, easing: easing.decel }),
+            withTiming(1, { duration: duration.slow, easing: easing.decel }),
           ),
     );
-  }, [fraction, index, reduced, grow]);
-  const barStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: grow.get() }] }));
+  }, [index, reduced, grow]);
+  // The streak slides out from behind the row's left edge: its head arrives
+  // last, as a light travelling would.
+  const barStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -(1 - grow.get()) * width * fraction }],
+  }));
 
   const yours = row.isYours;
   const pct = `${formatShare(row.share)}%`;
@@ -126,8 +135,9 @@ function MakeRow({ row, index, fraction }: { row: MakeNeighbor; index: number; f
       accessibilityLabel={`Rank ${row.rank}, ${row.make}, ${pct}${yours ? ', your make' : ''}`}
       style={[styles.row, yours && styles.rowYours]}
     >
+      {yours ? <RowLight /> : null}
       <View style={styles.rowLine}>
-        <Text variant="caption" style={[styles.rank, yours && styles.rankYours]}>
+        <Text variant="mono" style={[styles.rank, yours && styles.rankYours]}>
           #{row.rank}
         </Text>
         <Text
@@ -137,11 +147,15 @@ function MakeRow({ row, index, fraction }: { row: MakeNeighbor; index: number; f
         >
           {row.make}
         </Text>
-        <Text variant="caption" style={[styles.pct, yours && styles.lime]}>
-          {pct}
-        </Text>
+        <Text style={[styles.pct, yours && styles.pctYours]}>{pct}</Text>
       </View>
-      <Animated.View style={[styles.bar, yours ? styles.barYours : styles.barOther, barStyle]} />
+      <View style={styles.barTrack} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+        {width > 0 ? (
+          <Animated.View style={barStyle}>
+            <StreakBar width={width} progress={fraction} you={yours} />
+          </Animated.View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -229,33 +243,31 @@ const styles = StyleSheet.create({
   ranked: { gap: space.md, paddingTop: space.xl },
   hero: { alignItems: 'center', gap: space.xs },
   center: { textAlign: 'center' },
-  lime: { color: color.accent },
   closer: { marginTop: space.sm },
   chart: { gap: space.xs, marginVertical: space.sm },
   row: {
     gap: space.sm,
     paddingVertical: space.sm,
     paddingHorizontal: space.md,
-    borderRadius: radius.card - 4,
+    borderRadius: radius.card,
+    overflow: 'hidden',
   },
-  rowYours: { backgroundColor: color.surface2 },
+  rowYours: { ...panel },
   rowLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  rank: { minWidth: 36, color: color.text3, fontVariant: ['tabular-nums'] },
-  // text3 clears AA on the canvas but not on surface2 (Text.tsx, OnSurface).
+  rank: { minWidth: 36, fontVariant: ['tabular-nums'] },
   rankYours: { color: color.text2 },
-  // text2 on the canvas, text1 on the raised row: the person's make leads.
+  // text2 on the night, text1 on the lit row: the person's make leads.
   name: { flex: 1 },
   nameOther: { color: color.text2 },
-  pct: { fontFamily: font.bodySemibold, fontVariant: ['tabular-nums'] },
-  bar: {
-    height: BAR_HEIGHT,
-    width: '100%',
-    borderRadius: BAR_HEIGHT / 2,
-    // Scaled, not resized: width cannot be animated on the UI thread.
-    transformOrigin: 'left center',
+  pct: {
+    fontFamily: font.monoMedium,
+    ...textStyle(type.caption),
+    color: color.text2,
+    fontVariant: ['tabular-nums'],
   },
-  barYours: { backgroundColor: color.accent },
-  barOther: { backgroundColor: color.disabled },
+  pctYours: { color: color.text1 },
+  // Clips the streak while it slides in from the row's left edge.
+  barTrack: { height: BAR_HEIGHT, overflow: 'hidden' },
   early: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: space.lg },
   skelCount: { width: 160, height: 52, borderRadius: radius.card / 2 },
   skelLine: { width: 240, height: 22 },

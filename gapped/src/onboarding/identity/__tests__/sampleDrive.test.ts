@@ -33,7 +33,7 @@ describe('SAMPLE_DRIVE', () => {
     for (const f of fixes) expect(f.speedMs ?? 0).toBeLessThanOrEqual(SAMPLE_TOP_SPEED_MS + 1e-9);
   });
 
-  it('gives RoutePath speeds to colour by: what it derives tracks what was recorded', () => {
+  it('derives speeds from its fixes that track what was recorded on them', () => {
     const derived = deriveSpeeds(fixes);
     expect(derived).toHaveLength(fixes.length);
     // Rounded timestamps blur it a little; it must still never claim a speed

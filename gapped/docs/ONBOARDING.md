@@ -3,8 +3,9 @@
 The first-run flow, rebuilt after a frame-by-frame study of a competitor's onboarding (a sport-bike
 tracker). Gapped keeps that flow's **order, pacing and shape**: splash with one sound, a short
 feature carousel, identity questions broken up by proof screens, a staged setup beat, then an
-optional paywall (off in v1). It keeps its own look (the "Acid" tokens are already near-black with a lime
-accent), its own nouns (cars first, motorbikes supported) and its own words.
+optional paywall (off in v1). It keeps its own look (Nightrun, `docs/DESIGN.md`: a car advert shot
+at night, red only where real light would be), its own nouns (cars first, motorbikes supported) and
+its own words.
 
 ## Rules that override the reference
 
@@ -49,12 +50,13 @@ accent), its own nouns (cars first, motorbikes supported) and its own words.
 
 ## Steps
 
-`progress` is the 3 pt bar under the back chevron (lime fill, grey track). It only moves forward and
-is hidden where marked "—".
+`progress` is the line under the back chevron (`OnboardingFrame`): a hairline track, a red trail
+along it and a small slanted red light at its head, travelling on from where the previous step left
+it. It only moves forward and is hidden where marked "—".
 
 | # | Route | Screen | Progress | Notes |
 |---|---|---|---|---|
-| 0 | `/onboarding` | Splash → carousel | — | Splash plays the sting once, then the wordmark moves into the carousel header. |
+| 0 | `/onboarding` | Splash → carousel | — | Splash plays the sting once, then the G mark rises into the welcome hero and lands on its mark. |
 | 1 | `/onboarding/ride` | Choose your ride | 1/13 | Car / Motorbike segmented control, make and model sheets, "add it yourself", nickname. |
 | 2 | `/onboarding/brand` | Make proof | 2/13 | `make_popularity`, ranked or early variant. |
 | 3 | `/onboarding/garage` | Add more cars? | 3/13 | Main car card, "Add another car" (extra vehicles, optional). |
@@ -77,25 +79,36 @@ Back returns to the previous step without clearing later answers.
 
 ## Copy
 
-**Splash.** `GAPPED` wordmark, lime, centred.
+**Splash.** The G mark (`assets/brand/gapped-mark.png`: white G, red streaks) with its red glow,
+centred. It rises into the welcome page and lands on the hero's own mark.
 
 **Carousel** (page dots, swipeable, button advances):
-1. *Track every drive* / Your top speed and 0–60 times. Verified, then ranked. — **Get started**
-   (It said "Top speed, 0–60 and every corner"; cornering G is Pro, and this page is the promise
-   for every drive.)
+1. *Every drive. / Measured. / Verified.* ("Verified." lit in racing red) / Gapped logs each drive
+   with GPS and checks it on our servers before it counts. — **Get started** (the deep-red primary
+   plate with the streak arrow). Behind it, the welcome hero (`src/onboarding/intro/hero/`): a
+   night motorway in Skia, light trails bursting out of the vanishing point, the car's tail lights
+   on wet road, the G mark with its flare, film grain. It runs only while the page is on screen and
+   the step focused; Reduce Motion gets the landed still frame. No sign-in link: Gapped has no
+   sign-in. The line says "before it counts" rather than "every number you see is real", because
+   page 2 can show SAMPLE rows. (Earlier wordings: "Track every drive", and before that "Top
+   speed, 0–60 and every corner"; cornering G is Pro, and this page is the promise for every
+   drive.)
 2. *See where you stack up* / Your drives. Your friends. Your place on the board. Card: "Distance"
    (the Ranks tab's default; it was "Top speed", and the first board anyone sees should not make a
-   contest of speed on public roads), the person's country code or "Global", three rows. Real board rows when the server has three or
-   more; otherwise sample rows wearing the existing SAMPLE treatment. — **Next**
+   contest of speed on public roads), the person's country code or "Global", three rows with red
+   streak bars. Real board rows when the server has three or more; otherwise sample rows wearing
+   the SAMPLE tag. — **Next**
 3. *See more in every drive.* / row label "Cornering G". Hero number counts
-   0.12 g → 0.94 g; an arc marker (0 at the top, 0.5 and 1.0 g each side, green centre → yellow →
-   red edges) swings right; the car silhouette rolls a few degrees; footer "Peak cornering G" —
+   0.12 g → 0.94 g; a lit arc (0 at the top, 0.5 and 1.0 g each side in mono; dim red at the
+   centre brightening to white-hot at the edges) with a white needle swings right; the night car
+   rolls a few degrees; footer "Peak cornering G" —
    Left 0.88 g | Right 0.94 g. One ~2 s ease-in-out timeline, holds at the end. In v1 it is a
    plain demo: every account has cornering G. The page's copy still names its matrix row
-   (`proFeature: 'advancedTelemetry'`), so when `SHOW_PRO` turns on the outlined lime PRO chip
+   (`proFeature: 'advancedTelemetry'`), so when `SHOW_PRO` turns on the PRO tag
    (`<ProBadge />`) sits over the title and VoiceOver hears "Gapped Pro. See more in every
    drive." (`marksPro`, `src/onboarding/intro/introTimeline.ts`). — **Next**
-4. *Built by drivers* / From drivers. For drivers. Large white car silhouette. — **Set up my car**
+4. *Built by drivers* / From drivers. For drivers. The car silhouette, lit tail lamp and all. —
+   **Set up my car**
 
 **Choose your ride** / Start with the car you drive most. Car | Motorbike. Fields "Select make",
 "Select model" (model disabled until a make). Link: "Not listed? Add it yourself". "Nickname ·
@@ -105,9 +118,10 @@ most." (the verb changes too).
 
 **Make proof**, ranked variant (the make has ≥ 5 drivers and ≥ 3 makes are listed; the server
 only lists makes with ≥ 5 drivers, so in practice that is three makes of five or more): big count,
-"{Make} drivers are already on Gapped", lime "#{rank} most popular on Gapped", up to five rows
-centred on the person's make with bars sized to share (theirs lime, others grey), "{share}% of all
-Gapped {car|bike} drivers", lime closer "Your car connects you with drivers who share it." Early
+"{Make} drivers are already on Gapped", "#{rank} most popular on Gapped", up to five rows
+centred on the person's make with streak bars sized to share (theirs lit hot, others red at rest),
+"{share}% of all Gapped {car|bike} drivers", closer "Your car connects you with drivers who share
+it." Early
 variant: "Be one of the first {Make} drivers on the board" / "Every verified {Make} run lands on
 the board. Yours can be the one to beat." No numbers.
 
@@ -116,7 +130,7 @@ with a verified run, so the ranked line says "on Gapped", not "on the board". Th
 drivers of the same kind (cars, or bikes), so the share line names the kind.
 
 **Add more cars?** / Optional. Your main car is set, so you can keep going and build your garage
-later. Card: silhouette, "{Make} {Model}" (or nickname), lime caption "Main car". Row: "+ Add
+later. Card: silhouette, "{Make} {Model}" (or nickname), a "Main car" slanted tag. Row: "+ Add
 another car". Continue. In v1 the step never caps: `PRO_LIMITS_ENFORCED` is off, so every account
 can add as many vehicles as it likes, and nothing on the step mentions Pro. When the limits turn
 on (with `SHOW_PRO` and purchases), a Free garage holds `FREE_LIMITS.garageVehicles` (1, the main
@@ -124,16 +138,16 @@ car) and a full one swaps the add row for a PRO row that leads to Gapped Pro (`u
 already added stay listed and removable (`src/onboarding/vehicle/garageAccess.ts`).
 
 **Add a car photo** / Make it yours, or keep the illustration. The photo stays on the phone (the
-app's Documents folder); it is never uploaded, and the privacy policy says so. **Add photo** (white pill),
-**Keep current image** (dark pill). After a pick the photo replaces the silhouette and Continue
+app's Documents folder); it is never uploaded, and the privacy policy says so. **Add photo** (the
+white slanted plate), **Keep current image** (the dark outlined plate). After a pick the photo replaces the silhouette and Continue
 appears.
 
 **Choose your speed unit** / Your speed. Your units. Gauge sweeps on appear. Cards: km/h · Metric ·
 km · m, and mph · Imperial · mi · ft.
 
 **Country.** Sheet "Select country" (flag, name, region; search pinned to the bottom). Proof:
-*You're in good company*, flag + country name in lime, dotted map (main landmass lime, other
-islands dim). Count line, in order of preference:
+*You're in good company*, flag + country name in white, dotted map (main landmass in soft white
+dots, other islands dim). Count line, in order of preference:
 - ≥ 10 drove yesterday: "{n} drivers from {Country} drove with Gapped yesterday"
 - ≥ 10 on the board: "{n} drivers from {Country} are on the board"
 - otherwise: "Be the first from {Country} on the board" / "The {Country} board fills one verified
@@ -143,17 +157,19 @@ closed without a pick) the step reads *Where do you drive?* / Your country decid
 board you're ranked on., over a grey dotted disc, and the footer button is **Select country**. The
 phone's region is offered as the sheet's first row, never chosen for the person.
 
-**Location.** Lime arrow. *Ready to drive.* / Turn on location for speed, distance and your route.
+**Location.** A white location arrow. *Ready to drive.* / Turn on location for speed, distance and your route.
 Card: pin, "Location", status "Not requested" / "Allowed" / "Not allowed". Caption: "Optional now.
 Recording a drive needs location." **Enable location**, then text button **Not now**. Whichever
 way the OS dialog is answered, the card shows the answer for a moment and the step moves on; a
 refusal is a choice, not an error, and Back finds **Open Settings** waiting.
 
-**Focus.** Eyebrow "YOUR FOCUS". *What matters to your drive?* / Choose what you want to explore
-after each drive. Rows: Top speed — Verified, on tracks and closed roads · 0–60 — Your
-acceleration, measured · Local ranking — See where you rank · Beat friends — Compare real drive
-stats. (The words describe what is measured, never a reason to go fast; the stored keys are
-unchanged. Source of truth: `FOCUS_OPTIONS`, `src/onboarding/flow.ts`.)
+**Focus.** Eyebrow "Your focus" (mono, after a small slanted red light). *What matters to your
+drive?* / Choose what you want to explore after each drive. Rows (night panels; the chosen one has
+a red light down its left edge and a white check): Top speed — Verified, on tracks and closed
+roads · 0–60 — Your acceleration, measured · Local ranking — See where you rank · Friends —
+Compare real drive stats. (The words describe what is measured, never a reason to go fast; the
+stored keys are unchanged, so "Friends" is still `beatFriends`, and `flow.test.ts` forbids "beat"
+and "faster" in the labels. Source of truth: `FOCUS_OPTIONS`, `src/onboarding/flow.ts`.)
 
 **Focus proof** (pill repeats the focus):
 - Top speed: *Your top speed, verified* / Every run is re-checked on our servers before it counts.
@@ -165,10 +181,11 @@ unchanged. Source of truth: `FOCUS_OPTIONS`, `src/onboarding/flow.ts`.)
 - Local ranking: *Your country, your board* / Every verified run places on your country's board
   and the global one, so you can see where you and your car stand. Visual: sample rank card, "#7
   of 48 drivers".
-- Beat friends: *See how you compare* / Add friends by username and compare real drive stats.
+- Friends: *See how you compare* / Add friends by username and compare real drive stats.
   Following is one-way, so nobody lands on a stranger's screen. Visual: sample friends board.
   (It said "Friends make it a race"; friends compare, they do not race.)
-Three lime icons under every variant: Real drive data · Progress history · Ranking context.
+Three stroke icons in soft white under every variant: Real drive data · Progress history ·
+Ranking context.
 Every figure on these cards is labelled SAMPLE (and spoken as one), and every sample speed is a
 road speed no faster than the Board tab's own sample: this step comes just before the safety
 acknowledgement.
@@ -179,7 +196,7 @@ circle. Field "@" + "username". Helper: 3–20 lowercase letters, numbers or und
 Pick another." (the server's denylist, rule 6) / "Use 3–20 lowercase letters, numbers or
 underscores." Continue enables when valid and available (or unknown offline).
 
-**Trust.** Shield in a grey circle. *Thanks for trusting us.* Card with lime lock: "Your privacy
+**Trust.** A white shield. *Thanks for trusting us.* Card with a lock: "Your privacy
 matters to us." / "No ads, and your data is never sold. A route you choose to share is trimmed at
 both ends first." Card with an eye: "What others see" / "Your username, country and run results,
 including the date of each drive, are public on the leaderboards. Your routes never are." Then
@@ -189,11 +206,12 @@ Settings says so under Privacy (rule 7). With the safety step off, this step als
 18+ box and the Terms (rule 4).
 
 **Attribution.** *How did you hear about us?* TikTok, App Store, A friend, X / Twitter, Other,
-Reddit, YouTube, Instagram (brand marks from Simple Icons, CC0). Selected row: white, black label,
-check. **Continue →** grey until a choice; the arrow is drawn (`Button`'s `trailing`), so VoiceOver
-says "Continue", not "rightwards arrow".
+Reddit, YouTube, Instagram (brand marks from Simple Icons, CC0). Selected row: the night panel with
+a red light down its left edge, white label and a white check. **Continue** is disabled until a
+choice; its arrow is the drawn streak tip (`StreakArrow`), so VoiceOver says "Continue", not
+"rightwards arrow".
 
-**Safety.** *Before you drive.* The guidelines with drawn lime glyphs: "Top-speed and 0–60 runs
+**Safety.** *Before you drive.* The guidelines with drawn stroke glyphs: "Top-speed and 0–60 runs
 belong on tracks and closed roads. Always obey speed limits.", then the original four (obey
 traffic laws and speed limits, start and stop only while parked, use a phone holder, never touch
 the phone while driving). Two boxes, both required: "I acknowledge these guidelines and agree to
@@ -202,18 +220,18 @@ you agree to the Terms of Use and Privacy Policy" (both links) and the legal lin
 reads **I agree**, since the next screen is setup, not a drive. Copy:
 `src/onboarding/place/consentCopy.ts`.
 
-**Setup.** Wordmark. *Getting your car ready.* Silhouette (or photo), make over model. "Making it
-yours" with a lime percent. Checklist, ticking as the percent crosses each: Your car · Your drive
+**Setup.** The G mark. *Getting your car ready.* Silhouette (or photo), make over model. "Making it
+yours" with its percent, over the flow's progress line and its red light. Checklist, ticking as the percent crosses each: Your car · Your drive
 preferences (Your units. Your country. Your way.) · Your stats · Your rankings · Your setup
 (Keeping everything ready for your first drive.). Then *You're all set.* / Your next drive starts
 here. "Ready to drive 100%" and **Continue**.
 
-**Paywall** (flagged; off in v1 and never reached, since `ONBOARDING_PAYWALL` is false). Wordmark, close button, a real `<ShareCard>` rendered from a sample drive
-(labelled sample, GAPPED badge on, as every plan draws it) as the hero, then *See more in every
+**Paywall** (flagged; off in v1 and never reached, since `ONBOARDING_PAYWALL` is false). The G mark, close button, a real `<ShareCard>` rendered from a sample drive
+(labelled sample, Gapped mark on, as every plan draws it) as the hero, then *See more in every
 drive* (the carousel's Pro page, closed here) / "Pro adds your full drive history, cornering G,
 class brackets and clean share cards. Recording and the boards stay free." Plan cards Monthly
 (preselected) and Weekly (`PRO_PLANS`) with `PAYWALL_PLACEHOLDER_PRICES` (no reference prices, no
-trial), lime **Unlock Gapped Pro**, then Terms of Use · Privacy Policy · Restore Purchases.
+trial), the primary **Unlock Gapped Pro**, then Terms of Use · Privacy Policy · Restore Purchases.
 Purchase and restore are stubs.
 
 Deliberate departures from the reference, each for a stated reason:
@@ -236,20 +254,25 @@ Deliberate departures from the reference, each for a stated reason:
 
 ## Look and motion
 
-Reuse `src/theme/tokens.ts`: canvas, `surface2` cards (radius 16), `accent` lime for progress,
-checks, links, wordmark, the PRO chip and the paywall CTA only. Primary buttons in this flow are
-**white pills with black labels** (`Button variant="light"`); disabled is `color.disabled` with
-`text3`. Errors use `color.warning` (orange, `#FF9F0A`). Motion is ease-out 350–550 ms, nothing
-bounces, numbers count, bars grow, sheets rise; reduced motion gets end states. No haptics are
-required by the reference; the app's existing selection haptic on choices is kept.
+Nightrun (`docs/DESIGN.md`, `src/theme/tokens.ts`). Every step sits on the night (`Screen`'s
+`NightBackdrop`), with titles in the wide italic (`StepTitle`), eyebrows and data in Martian Mono,
+and choices on night panels (`src/onboarding/ui/choice.tsx`) with a red light down the chosen
+row's left edge and a white check. Red is for light: the progress line's head, the chosen row's
+light, the hero's tail lights and trails, the welcome's lit "Verified." (the one red word, at
+display size), and the one deep-red primary button ("Get started", and the paywall's CTA). Continue buttons in this flow are the
+**white slanted plate with dark ink** (`Button variant="light"`); disabled is `color.disabled` with
+`text3`. Links are white and underlined (`NightLink`). SAMPLE, Verified and Main car are slanted
+tags (`SlantTag`). Errors use `color.warning` (orange, `#FF9F0A`). Motion is ease-out 350–550 ms,
+nothing bounces, numbers count, bars grow, sheets rise; reduced motion gets end states. No haptics
+are required by the reference; the app's existing selection haptic on choices is kept.
 
-Headlines grow with Dynamic Type up to 1.5x (past that the wide display face breaks words in
-half); body copy is never capped, and every step scrolls where its content outgrows the screen.
+Headlines grow with Dynamic Type up to 1.5x, display sizes to 1.3x (past that the wide italic
+breaks words in half); body copy is never capped, and every step scrolls where its content outgrows the screen.
 
 ## Sound
 
 One sting (`assets/sounds/launch-sting.wav`, ~1.6 s, generated by `scripts/generate-sting.py`),
-played once when the splash wordmark lands, through `expo-audio`, respecting the silent switch.
+played once when the splash's G mark lands, through `expo-audio`, respecting the silent switch.
 Nothing else in the flow makes a sound.
 
 ## Data

@@ -1,6 +1,7 @@
 import React from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NightBackdrop, type NightBackdropVariant } from '@/components/brand/NightBackdrop';
 import { color, gutter, space } from '@/theme/tokens';
 
 type Props = {
@@ -10,9 +11,16 @@ type Props = {
   style?: ViewStyle;
   /** Pinned below the scroll area, above the home indicator — the fixed-CTA pattern. */
   footer?: React.ReactNode;
+  /**
+   * The night behind the screen (NightBackdrop). Default 'top': the canvas
+   * with a faint sky glow at the top edge, so every screen sits on the same
+   * night. 'horizon' for a screen that draws a scene on the horizon, 'plain'
+   * for none. The backdrop stays put while the content scrolls.
+   */
+  backdrop?: NightBackdropVariant;
 };
 
-export function Screen({ children, scroll = true, style, footer }: Props) {
+export function Screen({ children, scroll = true, style, footer, backdrop = 'top' }: Props) {
   const insets = useSafeAreaInsets();
   const body = scroll ? (
     <ScrollView
@@ -41,6 +49,7 @@ export function Screen({ children, scroll = true, style, footer }: Props) {
       style={[styles.flex, { backgroundColor: color.canvas }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <NightBackdrop variant={backdrop} />
       {body}
       {footer ? (
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 14 }]}>
@@ -54,5 +63,7 @@ export function Screen({ children, scroll = true, style, footer }: Props) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: gutter, paddingBottom: space.xxl },
+  // The canvas, so content scrolling under the footer disappears behind it
+  // rather than through it. No rule above it: the CTA floats on the night.
   footer: { paddingHorizontal: gutter, paddingTop: space.md, backgroundColor: color.canvas },
 });

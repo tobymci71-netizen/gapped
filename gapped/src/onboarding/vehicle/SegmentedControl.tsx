@@ -11,7 +11,7 @@ import { PressableScale } from '@/components/PressableScale';
 import { haptic } from '@/lib/haptics';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { duration, easing } from '@/theme/motion';
-import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
+import { color, font, radius, slant, space, textStyle, type } from '@/theme/tokens';
 
 export type Segment<K extends string> = { key: K; label: string };
 
@@ -21,18 +21,18 @@ type Props<K extends string> = {
   onChange: (key: K) => void;
 };
 
-/** Inset of the thumb inside the track. */
-const INSET = 4;
+/** Space between the segments' plates. */
+const GAP = space.sm;
 
 /**
- * A pill track with a white thumb that slides to the chosen segment — Car |
- * Motorbike on the ride step and in the garage.
+ * Segments as slanted plates at the logo's lean, a white plate sliding to the
+ * chosen one — Car | Motorbike on the ride step and in the garage. The Ranks
+ * tab's World | Country | Friends, in the same hand (Nightrun-Ranks).
  *
- * White with a black label, not lime: selection in this flow is a white fill
- * (the unit cards, the attribution rows), and lime is kept for progress,
- * checks and links (docs/ONBOARDING.md, "Look and motion"). The thumb travels
- * on the entering curve, no spring, so it settles rather than bounces;
- * reduced motion moves it without travel.
+ * White with a dark label, not red: the selected one of a set is a white
+ * plate (SlantTag 'white'), and red is kept for light. The plate travels on
+ * the entering curve, no spring, so it settles rather than bounces; reduced
+ * motion moves it without travel.
  *
  * Each segment is its own 44pt button carrying its selected state, which is
  * how VoiceOver reads UIKit's segmented control: "Car, selected, button".
@@ -44,14 +44,15 @@ export function SegmentedControl<K extends string>({ segments, value, onChange }
     0,
     segments.findIndex((s) => s.key === value),
   );
-  const segmentWidth = width > 0 ? (width - INSET * 2) / segments.length : 0;
+  const segmentWidth = width > 0 ? (width - GAP * (segments.length - 1)) / segments.length : 0;
+  const pitch = segmentWidth + GAP;
 
   /** The thumb's offset from the first segment, in points. */
   const x = useSharedValue(0);
   const placed = useSharedValue(false);
   useEffect(() => {
     if (!segmentWidth) return;
-    const target = index * segmentWidth;
+    const target = index * pitch;
     // The first placement is not a movement: the thumb starts where it
     // belongs instead of sliding in from the left edge on mount.
     if (reduced || !placed.get()) {
@@ -60,12 +61,22 @@ export function SegmentedControl<K extends string>({ segments, value, onChange }
       return;
     }
     x.set(withTiming(target, { duration: duration.base, easing: easing.decel }));
-  }, [index, segmentWidth, reduced, x, placed]);
+  }, [index, segmentWidth, pitch, reduced, x, placed]);
 
-  const thumbStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.get() }] }));
+  // The slant rides in the same transform: an animated transform replaces a
+  // static one rather than adding to it.
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: x.get() }, ...slant.transform],
+  }));
 
   return (
     <View style={styles.track} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      {/* The segments' plates, under the white one that slides over them. */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.track]}>
+        {segments.map((s) => (
+          <View key={s.key} style={styles.plate} />
+        ))}
+      </View>
       {segmentWidth > 0 ? (
         <Animated.View
           pointerEvents="none"
@@ -92,6 +103,7 @@ export function SegmentedControl<K extends string>({ segments, value, onChange }
               label={s.label}
               index={i}
               x={x}
+              pitch={pitch}
               segmentWidth={segmentWidth}
               selected={selected}
             />
@@ -113,22 +125,25 @@ function SegmentLabel({
   label,
   index,
   x,
+  pitch,
   segmentWidth,
   selected,
 }: {
   label: string;
   index: number;
   x: SharedValue<number>;
+  /** A segment's width plus the gap after it: how far apart the plates sit. */
+  pitch: number;
   segmentWidth: number;
   selected: boolean;
 }) {
   const style = useAnimatedStyle(() => {
-    // Before the track is measured there is no thumb, so the chosen label
-    // sits on the bare dark track: white there, not the black it wears on
-    // the thumb, or the first frame shows a blank segment.
+    // Before the track is measured there is no white plate, so the chosen
+    // label sits on the bare night: white there, not the dark ink it wears
+    // on the plate, or the first frame shows a blank segment.
     if (!segmentWidth) return { color: selected ? color.text1 : color.text2 };
-    const covered = Math.max(0, 1 - Math.abs(x.get() - index * segmentWidth) / segmentWidth);
-    return { color: interpolateColor(covered, [0, 1], [color.text2, color.onAccent]) };
+    const covered = Math.max(0, 1 - Math.abs(x.get() - index * pitch) / segmentWidth);
+    return { color: interpolateColor(covered, [0, 1], [color.text2, color.onLight]) };
   });
   return (
     <Animated.Text style={[styles.label, style]} numberOfLines={2}>
@@ -138,18 +153,14 @@ function SegmentLabel({
 }
 
 const styles = StyleSheet.create({
-  track: {
-    flexDirection: 'row',
-    padding: INSET,
-    borderRadius: radius.pill,
-    backgroundColor: color.surface2,
-  },
+  track: { flexDirection: 'row', gap: GAP },
+  // The white plate. Skewed with the plates it slides over; its label is not.
   thumb: {
     position: 'absolute',
-    top: INSET,
-    bottom: INSET,
-    left: INSET,
-    borderRadius: radius.pill,
+    top: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: radius.xs,
     backgroundColor: color.text1,
   },
   segment: {
@@ -160,11 +171,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Each segment's own outlined plate: a dark panel, so an unchosen segment
+  // still reads as something to tap. outline, not hairline: it is the
+  // control's only boundary.
+  plate: {
+    flex: 1,
+    borderRadius: radius.xs,
+    borderWidth: 1,
+    borderColor: color.outline,
+    backgroundColor: color.surface1,
+    transform: slant.transform,
+  },
   // One weight for both states: a label that turned semibold on selection
   // would change width and nudge its neighbour mid-slide.
   label: {
     fontFamily: font.bodySemibold,
-    ...textStyle(type.body),
+    ...textStyle(type.callout),
     textAlign: 'center',
   },
 });

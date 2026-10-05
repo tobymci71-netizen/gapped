@@ -16,7 +16,7 @@ import { useProfile } from '@/state/profile';
  * The step is the proof screen; choosing happens in a sheet over it. On the
  * first visit — no country yet — the sheet rises by itself once the screen has
  * landed, so the question is asked straight away. Every later change goes
- * through the lime country name, which reopens it. The proof underneath
+ * through the country's name, which reopens it. The proof underneath
  * reacts to whatever is chosen: the map crossfades and the line swaps.
  *
  * The country decides which national board a driver is ranked on, so it is

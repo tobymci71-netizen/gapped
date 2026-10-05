@@ -97,7 +97,7 @@ export default function UsernameStep() {
     error.set(withTiming(to, { duration: duration.fast, easing: easing.standard }));
   }, [field.tone, error]);
   const border = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(error.value, [0, 1], [color.surface2, color.warning]),
+    borderColor: interpolateColor(error.value, [0, 1], [color.hairline, color.warning]),
   }));
 
   // The orange caption, spoken as it appears — invalid as well as taken, which
@@ -173,7 +173,7 @@ export default function UsernameStep() {
         {field.checking ? (
           <ActivityIndicator size="small" color={color.text3} accessibilityLabel="Checking" />
         ) : field.tone === 'ok' ? (
-          <CheckGlyph size={20} color={color.accent} />
+          <CheckGlyph size={20} color={color.text1} />
         ) : null}
       </Animated.View>
 
@@ -194,7 +194,9 @@ const styles = StyleSheet.create({
     width: AVATAR,
     height: AVATAR,
     borderRadius: AVATAR / 2,
-    backgroundColor: color.surface2,
+    backgroundColor: color.surface1,
+    borderWidth: 1,
+    borderColor: color.hairline,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: space.sm,
@@ -209,11 +211,12 @@ const styles = StyleSheet.create({
     borderWidth: FIELD_BORDER,
     backgroundColor: color.surface2,
   },
-  at: { color: color.text2 },
+  // The handle's @ in mono, as a username is data.
+  at: { color: color.text2, fontFamily: font.monoMedium },
   input: {
     flex: 1,
     color: color.text1,
-    fontFamily: font.body,
+    fontFamily: font.bodyMedium,
     ...textStyle(type.body),
     paddingVertical: space.md,
   },

@@ -15,6 +15,8 @@ import { duration } from '@/theme/motion';
 /**
  * Shimmer skeleton (spec §A6): every loading state is a skeleton matching the
  * final layout — a spinner tells the user nothing about what's coming.
+ * Night blue (surface2) breathing on the canvas, small radius like every
+ * Nightrun panel; it never glows — it is not a light.
  */
 export function Skeleton({ style }: { style?: ViewStyle }) {
   const pulse = useSharedValue(0);
@@ -38,7 +40,7 @@ export function Skeleton({ style }: { style?: ViewStyle }) {
   return (
     <Animated.View
       style={[
-        { backgroundColor: color.surface2, borderRadius: radius.card / 2, height: 16 },
+        { backgroundColor: color.surface2, borderRadius: radius.sm, height: 16 },
         style,
         animStyle,
       ]}

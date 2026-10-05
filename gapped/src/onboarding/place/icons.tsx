@@ -13,6 +13,7 @@ import { color } from '@/theme/tokens';
  * family next to the drawn back chevron in OnboardingFrame.
  *
  * All are decorative: the row or button that holds one carries the label.
+ * None is red: a glyph is not a light.
  */
 
 type IconProps = { size?: number; color?: string };
@@ -28,7 +29,7 @@ function Line({ size = 22, color: c = color.text2, d }: IconProps & { d: string 
 }
 
 /** The location arrow, filled — the step's lead glyph. */
-export function LocationArrowIcon({ size = 72, color: c = color.accent }: IconProps) {
+export function LocationArrowIcon({ size = 72, color: c = color.text1 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path d="M20.6 3.4 3.9 10.3c-.8.3-.7 1.4.1 1.6l6.6 1.5 1.5 6.6c.2.8 1.3.9 1.6.1l6.9-16.7Z" fill={c} />
@@ -41,16 +42,16 @@ export function PinIcon(p: IconProps) {
     <Svg width={p.size ?? 22} height={p.size ?? 22} viewBox="0 0 24 24" fill="none">
       <Path
         d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"
-        stroke={p.color ?? color.accent}
+        stroke={p.color ?? color.text2}
         strokeWidth={STROKE}
         strokeLinejoin="round"
       />
-      <Circle cx={12} cy={10} r={2.4} fill={p.color ?? color.accent} />
+      <Circle cx={12} cy={10} r={2.4} fill={p.color ?? color.text2} />
     </Svg>
   );
 }
 
-export function CheckIcon({ size = 18, color: c = color.accent }: IconProps) {
+export function CheckIcon({ size = 18, color: c = color.text1 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="m5 12.5 4.5 4.5L19 7.5" stroke={c} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
@@ -90,7 +91,7 @@ export function TrophyIcon(p: IconProps) {
   );
 }
 
-/** Beat friends: two people. */
+/** Friends: two people. */
 export function PeopleIcon(p: IconProps) {
   return (
     <Line

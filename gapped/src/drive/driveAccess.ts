@@ -152,7 +152,7 @@ export function cleanShareLocked(access: Access): boolean {
 }
 
 /**
- * Whether the share card draws its GAPPED wordmark. Branded is the default
+ * Whether the share card draws the Gapped mark. Branded is the default
  * for everyone; it comes off only when asked for and allowed, so whatever
  * state the switch is in, a Free account never shares a clean card.
  */

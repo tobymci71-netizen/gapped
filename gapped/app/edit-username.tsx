@@ -89,10 +89,12 @@ export default function EditUsernameScreen() {
     <Screen
       footer={
         <View style={styles.footer}>
+          {/* Saves in place and returns: an action, not a way forward, so no arrow. */}
           <Button
             label={saving ? 'Saving…' : 'Save'}
             onPress={onSave}
             disabled={!canSave}
+            arrow={false}
           />
           <Button label="Cancel" variant="secondary" onPress={goBack} disabled={saving} />
         </View>
@@ -101,24 +103,26 @@ export default function EditUsernameScreen() {
       <Text variant="headline" accessibilityRole="header">
         Change username
       </Text>
-      <Text variant="body" style={styles.sub}>
+      <Text variant="callout" style={styles.sub}>
         This is how you appear on the boards and to friends. Your runs and friends stay with you,
         and your old name is freed for anyone to take.
       </Text>
 
       {storedRefused && stored ? (
         <Card style={styles.refused}>
-          <Text variant="body">@{stored} couldn&apos;t be used on the boards. Pick another.</Text>
+          <Text variant="callout">
+            @{stored} couldn&apos;t be used on the boards. Pick another.
+          </Text>
         </Card>
       ) : null}
 
       <View
         style={[
           styles.field,
-          { borderColor: field.tone === 'error' ? color.warning : color.surface2 },
+          { borderColor: field.tone === 'error' ? color.warning : color.hairline },
         ]}
       >
-        <Text variant="bodyMedium" style={styles.at}>
+        <Text variant="mono" style={styles.at}>
           @
         </Text>
         <TextInput
@@ -148,7 +152,8 @@ export default function EditUsernameScreen() {
         {field.checking ? (
           <ActivityIndicator size="small" color={color.text3} accessibilityLabel="Checking" />
         ) : field.tone === 'ok' ? (
-          <CheckGlyph size={20} color={color.accent} />
+          // Available: a white tick. A good answer is not a light, so not red.
+          <CheckGlyph size={20} color={color.text1} />
         ) : null}
       </View>
 
@@ -174,15 +179,15 @@ const styles = StyleSheet.create({
   field: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
+    gap: space.xs,
     minHeight: 56,
     marginTop: space.xl,
     paddingHorizontal: space.lg,
-    borderRadius: radius.card,
+    borderRadius: radius.sm,
     borderWidth: FIELD_BORDER,
     backgroundColor: color.surface2,
   },
-  at: { color: color.text2 },
+  at: { color: color.text3 },
   input: {
     flex: 1,
     color: color.text1,

@@ -51,11 +51,13 @@ import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
 import { vehiclePhotoSource } from '@/onboarding/vehicle/vehiclePhoto';
 import { useProfile, type VehicleKind } from '@/state/profile';
 import { duration, easing } from '@/theme/motion';
-import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
+import { alpha, color, font, glow, radius, slant, space, textStyle, type } from '@/theme/tokens';
 import { inferBodyType } from '@/vehicles/bodyType';
 
-/** The progress bar under "Making it yours": the flow's own 3pt hairline. */
-const BAR = 3;
+/** The progress line under "Making it yours": the flow's own line, a red light at its head. */
+const TRACK = 1;
+const FILL = 2;
+const HEAD = { width: 14, height: 3 } as const;
 /**
  * The vehicle's drawn size by window height, or null to leave it out. The beat
  * runs with no input, so all of it has to fit without scrolling: on a 667pt
@@ -165,7 +167,7 @@ function useSetupTimeline(): { shown: number; progress: SharedValue<number> } {
  *
  * A staged checklist over real work: the percent eases to 100 over at least
  * SETUP_MIN_MS while the answers are saved and the profile synced, each row
- * ticking lime as the percent crosses it, and the step only finishes once the
+ * ticking as the percent crosses it, and the step only finishes once the
  * work has landed or been given up on (setupTimeline.ts). Then "You're all
  * set." and Continue, which completes onboarding — or opens the paywall when
  * ONBOARDING_PAYWALL is on (useOnboardingAdvance decides which).
@@ -293,7 +295,7 @@ const Heading = memo(function Heading({ allSet, noun }: { allSet: boolean; noun:
         >
           You&apos;re all set.
         </Text>
-        <Text variant="body" style={[styles.centerText, styles.subtitle]}>
+        <Text variant="callout" style={[styles.centerText, styles.subtitle]}>
           Your next drive starts here.
         </Text>
       </Animated.View>
@@ -303,8 +305,8 @@ const Heading = memo(function Heading({ allSet, noun }: { allSet: boolean; noun:
 
 /**
  * The person's car: their photo if they added one, otherwise the silhouette,
- * in white — lime is kept for what the screen is doing, not what it is about.
- * Make over model, as the garage card prints them.
+ * in white with its tail light on. Make (in mono) over model (in the wide
+ * italic), as a car's name is set on the Drive tab.
  */
 const VehicleHero = memo(function VehicleHero({
   kind,
@@ -342,11 +344,11 @@ const VehicleHero = memo(function VehicleHero({
           resizeMode="cover"
         />
       ) : (
-        <CarSilhouette bodyType={bodyType} size={size} color={color.text1} />
+        <CarSilhouette bodyType={bodyType} size={size} color={color.text1} lit />
       )}
       {make ? (
-        <Text variant="caption" style={styles.make}>
-          {make.toUpperCase()}
+        <Text variant="mono" style={styles.make}>
+          {make}
         </Text>
       ) : null}
       {model ? (
@@ -358,9 +360,21 @@ const VehicleHero = memo(function VehicleHero({
   );
 });
 
-/** "Making it yours … 42%" over a lime bar; "Ready to drive 100%" once it lands. */
+/**
+ * "Making it yours … 42%" over the flow's progress line, its red light
+ * travelling to the end; "Ready to drive 100%" once it lands.
+ */
 function ProgressRow({ shown, progress }: { shown: number; progress: SharedValue<number> }) {
+  const [width, setWidth] = useState(0);
   const fill = useAnimatedStyle(() => ({ transform: [{ scaleX: progress.value }] }));
+  // Clamped to the line: at 0% the light sits at its start rather than
+  // hanging off it into the gutter.
+  const head = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: Math.max(0, progress.value * width - HEAD.width) },
+      ...slant.transform,
+    ],
+  }));
   const label = shown >= 100 ? 'Ready to drive' : 'Making it yours';
   return (
     <View
@@ -374,8 +388,10 @@ function ProgressRow({ shown, progress }: { shown: number; progress: SharedValue
         <Text style={styles.progressLabel}>{label}</Text>
         <Text style={styles.percent}>{`${shown}%`}</Text>
       </View>
-      <View style={styles.track}>
+      <View style={styles.line} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+        <View style={styles.track} />
         <Animated.View style={[styles.fill, fill]} />
+        {width > 0 ? <Animated.View style={[styles.head, head]} /> : null}
       </View>
     </View>
   );
@@ -420,7 +436,7 @@ const Checklist = memo(function Checklist({
 });
 
 /**
- * One row: grey glyph and label while waiting, then a lime tick that grows in
+ * One row: grey glyph and label while waiting, then a white tick that grows in
  * (ease-out, no overshoot) as the label turns white. The row in progress shows
  * its caption.
  */
@@ -464,7 +480,7 @@ function ChecklistRow({
           <Glyph size={18} color={color.text3} />
         </Animated.View>
         <Animated.View style={[styles.layer, ticked]}>
-          <DoneGlyph size={18} color={color.accent} tick={color.onAccent} />
+          <DoneGlyph size={18} color={color.text1} tick={color.onLight} />
         </Animated.View>
       </View>
       <View style={styles.itemText}>
@@ -513,12 +529,7 @@ const styles = StyleSheet.create({
   subtitle: { marginTop: space.md },
   hero: { alignItems: 'center', gap: space.xs },
   photo: { borderRadius: radius.card, backgroundColor: color.surface2, marginBottom: space.sm },
-  make: {
-    color: color.text3,
-    fontFamily: font.bodySemibold,
-    letterSpacing: 1.2,
-    textAlign: 'center',
-  },
+  make: { textAlign: 'center' },
   // Holds the checklist low, by the button, as the reference does — and is
   // the first thing to give way on a short screen.
   spacer: { flexGrow: 1 },
@@ -534,24 +545,31 @@ const styles = StyleSheet.create({
     color: color.text1,
   },
   percent: {
-    fontFamily: font.bodySemibold,
+    fontFamily: font.monoMedium,
     ...textStyle(type.caption),
-    color: color.accent,
+    color: color.text1,
     fontVariant: ['tabular-nums'],
   },
-  track: {
-    height: BAR,
-    borderRadius: BAR / 2,
-    backgroundColor: color.hairline,
-    overflow: 'hidden',
-  },
+  line: { height: HEAD.height + glow.tight * 2, justifyContent: 'center' },
+  track: { height: TRACK, backgroundColor: color.hairline },
   fill: {
-    height: BAR,
-    width: '100%',
-    borderRadius: BAR / 2,
-    backgroundColor: color.accent,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: FILL,
+    backgroundColor: alpha(color.accent, 0.55),
     // Scaled, not resized: width cannot be animated on the UI thread.
     transformOrigin: 'left center',
+  },
+  // The light at the head of the line: lit, so it glows.
+  head: {
+    position: 'absolute',
+    left: 0,
+    width: HEAD.width,
+    height: HEAD.height,
+    borderRadius: 1,
+    backgroundColor: color.accent,
+    boxShadow: `0 0 ${glow.tight}px 1px ${alpha(color.accent, 0.85)}`,
   },
   list: { gap: space.sm },
   item: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },

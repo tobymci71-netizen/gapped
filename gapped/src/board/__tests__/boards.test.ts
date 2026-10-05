@@ -133,7 +133,7 @@ describe('empty server boards say which slice is empty', () => {
   test('world, verified-only', () => {
     expect(emptyBoardFraming(query(), null)).toEqual([
       'Nobody has a verified run in the last 7 days.',
-      'Unverified runs are hidden while VERIFIED is on.',
+      'Unverified runs are hidden while “Verified drives only” is on.',
     ]);
   });
 

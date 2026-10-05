@@ -13,11 +13,12 @@
 import React from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/Button';
+import { GappedMark } from '@/components/brand/GappedMark';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { APP_STORE_URL } from '@/config/links';
 import { haptic } from '@/lib/haptics';
-import { color, glyph, space, textStyle } from '@/theme/tokens';
+import { color, space } from '@/theme/tokens';
 
 const DEFAULT_MESSAGE =
   'This version of Gapped is no longer supported. Update to the latest version to keep recording drives.';
@@ -37,16 +38,14 @@ export function UpdateRequired({ message }: { message: string | null }) {
   return (
     <Screen style={styles.fill} footer={<Button label="Update" onPress={openStore} />}>
       <View style={styles.body}>
-        <Text style={styles.glyph} importantForAccessibility="no" accessibilityElementsHidden>
-          ⚠️
-        </Text>
+        <GappedMark size="md" glow style={styles.mark} />
         <Text variant="headline" style={styles.title} accessibilityRole="header">
           Update required
         </Text>
         <Text variant="body" style={styles.copy}>
           {message ?? DEFAULT_MESSAGE}
         </Text>
-        <Text variant="caption" style={styles.hint}>
+        <Text variant="legal" style={styles.hint}>
           Update opens Gapped in the App Store. You can also update from the App Store app.
         </Text>
       </View>
@@ -58,7 +57,9 @@ const styles = StyleSheet.create({
   // On the scroll content container: fill the viewport when the copy is short.
   fill: { flexGrow: 1 },
   body: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: space.md },
-  glyph: textStyle(glyph.display),
+  // The mark, a step above the title: the one thing on this screen that says
+  // which app it is.
+  mark: { marginBottom: space.lg },
   title: { textAlign: 'center' },
   copy: { textAlign: 'center', color: color.text2 },
   hint: { textAlign: 'center', color: color.text3, marginTop: space.sm },

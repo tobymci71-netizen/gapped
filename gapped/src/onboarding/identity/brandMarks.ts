@@ -11,10 +11,9 @@
  * is the use Simple Icons' disclaimer and the brands' own guidelines allow.
  *
  * TREATMENT. The reference shows each logo in its brand colours. Here every
- * mark takes the row's text colour — white on a dark row, black on the
- * selected white row — so eight logos read as one list rather than eight
- * adverts, and the only colour on the screen stays the lime that means
- * "selected" everywhere else in the flow.
+ * mark takes the row's text colour — soft white at rest, white once chosen —
+ * so eight logos read as one list rather than eight adverts, and the only
+ * colour on the screen stays the red light that marks the chosen row.
  *
  * "A friend" and "Other" have no brand. Their marks are drawn here, filled
  * rather than stroked so they carry the same visual weight as the logos beside

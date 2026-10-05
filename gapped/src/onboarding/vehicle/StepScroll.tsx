@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 import { Keyboard, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
-import { Text } from '@/components/Text';
 import { useReducedMotion } from '@/lib/useReducedMotion';
+import { StepTitle } from '@/onboarding/ui/StepTitle';
 import { space } from '@/theme/tokens';
 import { scrollTargetFor } from './scroll';
 
@@ -119,16 +119,10 @@ export function StepScroll({
 }
 
 /**
- * How far the title grows with Dynamic Type: OnboardingFrame's cap, for the
- * same reason (the wide display face breaks words in half at about 3x).
- */
-const TITLE_MAX_SCALE = 1.5;
-
-/**
  * A step's title and subtitle, for steps whose heading lives in a StepScroll.
- * Mirrors OnboardingFrame's heading — same variants, header role, text-size
- * cap and spacing — so a step that scrolls its own heading sits exactly where
- * one that does not would. Keep the two in step.
+ * The frame's own heading (StepTitle, the same component), at the frame's
+ * spacing, so a step that scrolls its own heading sits exactly where one that
+ * does not would.
  */
 export function StepHeading({
   title,
@@ -139,23 +133,7 @@ export function StepHeading({
   subtitle?: string;
   centered?: boolean;
 }) {
-  return (
-    <View style={[styles.heading, centered && styles.headingCentered]}>
-      <Text
-        variant="headline"
-        accessibilityRole="header"
-        maxFontSizeMultiplier={TITLE_MAX_SCALE}
-        style={centered ? styles.centerText : undefined}
-      >
-        {title}
-      </Text>
-      {subtitle ? (
-        <Text variant="body" style={[styles.subtitle, centered && styles.centerText]}>
-          {subtitle}
-        </Text>
-      ) : null}
-    </View>
-  );
+  return <StepTitle title={title} subtitle={subtitle} centered={centered} style={styles.heading} />;
 }
 
 const styles = StyleSheet.create({
@@ -168,7 +146,4 @@ const styles = StyleSheet.create({
   // OnboardingFrame: heading marginTop xxl, body marginTop xl. The body's
   // own gap adds md, so the bottom margin makes up the difference.
   heading: { marginTop: space.xxl, marginBottom: space.xl - space.md },
-  headingCentered: { alignItems: 'center' },
-  centerText: { textAlign: 'center' },
-  subtitle: { marginTop: space.md },
 });

@@ -1,17 +1,12 @@
 import React, { useEffect } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
-import Animated, {
-  interpolateColor,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import { useSharedValue, withTiming } from 'react-native-reanimated';
 import { PressableScale } from '@/components/PressableScale';
 import { OnSurface, Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
-import { CheckGlyph } from '@/onboarding/identity/glyphs';
+import { CheckBoxMark, panel, RowLight } from '@/onboarding/ui/choice';
 import { duration, easing } from '@/theme/motion';
-import { color, font, radius, space } from '@/theme/tokens';
+import { color, font, space } from '@/theme/tokens';
 import type { ConsentLink } from './consentCopy';
 
 /** The box's side. */
@@ -27,8 +22,9 @@ export function openPage(url: string): void {
 /**
  * One box a driver ticks to agree to something: the safety step's two and
  * the trust step's one (TERMS_ROUTE). A whole-row checkbox — the label is
- * part of the target — on the flow's surface2 card, with the lime fill
- * easing in. VoiceOver reads it as a checkbox with its state.
+ * part of the target — on a night panel; ticked, the box fills white with a
+ * check and the row's light comes on down its left edge, as every chosen row
+ * in the flow does. VoiceOver reads it as a checkbox with its state.
  */
 export function ConsentCheck({
   label,
@@ -43,11 +39,6 @@ export function ConsentCheck({
   useEffect(() => {
     on.set(withTiming(checked ? 1 : 0, { duration: duration.fast, easing: easing.standard }));
   }, [checked, on]);
-  const box = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(on.value, [0, 1], [color.surface2, color.accent]),
-    borderColor: interpolateColor(on.value, [0, 1], [color.text3, color.accent]),
-  }));
-  const tick = useAnimatedStyle(() => ({ opacity: on.value }));
 
   return (
     <PressableScale
@@ -61,11 +52,8 @@ export function ConsentCheck({
       accessibilityState={{ checked }}
       style={styles.check}
     >
-      <Animated.View style={[styles.box, box]}>
-        <Animated.View style={tick}>
-          <CheckGlyph size={18} color={color.onAccent} />
-        </Animated.View>
-      </Animated.View>
+      <RowLight on={on} />
+      <CheckBoxMark on={on} size={BOX} />
       <OnSurface>
         <Text variant="body" style={styles.checkLabel}>
           {label}
@@ -116,21 +104,13 @@ export function LinkedSentence({
 
 const styles = StyleSheet.create({
   check: {
+    ...panel,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     minHeight: 56,
     padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: color.surface2,
-  },
-  box: {
-    width: BOX,
-    height: BOX,
-    borderRadius: 8,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
   },
   checkLabel: { flex: 1, color: color.text1 },
   // A word space between runs; a run too long for the line wraps inside itself.
@@ -138,10 +118,10 @@ const styles = StyleSheet.create({
   sentenceCentred: { justifyContent: 'center' },
   centred: { textAlign: 'center' },
   link: { minHeight: HIT, justifyContent: 'center' },
-  // Lime marks what can be tapped in this flow (the country chip); the
-  // underline says "link" to anyone who cannot tell the colour apart.
+  // White and underlined, as every link in the flow (NightLink): red is
+  // light, and a link is not one. The underline says "link" to anyone.
   linkText: {
-    color: color.accent,
+    color: color.text1,
     fontFamily: font.bodyMedium,
     textDecorationLine: 'underline',
   },

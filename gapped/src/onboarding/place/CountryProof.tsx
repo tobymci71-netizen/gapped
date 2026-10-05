@@ -51,8 +51,8 @@ const FLAG_TILE_MAX_SCALE = 1.5;
 
 /**
  * The country step's body (docs/ONBOARDING.md, "Country"): the chosen country
- * in lime — which is also the way back into the sheet — its dotted map, and
- * the count line. A change of country crossfades the map and the line, and
+ * in the wide italic with a chevron — which is also the way back into the
+ * sheet — its dotted map, and the count line. A change of country crossfades the map and the line, and
  * the line's variant comes only from `country_activity` through
  * `countryProof`: a number when there are enough drivers behind it, the early
  * variant otherwise. Never a number made up for the occasion.
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
   chipFlag: textStyle(glyph.huge),
   // flexShrink so a long name wraps inside the screen instead of pushing the
   // chevron off it.
-  chipName: { color: color.accent, flexShrink: 1, textAlign: 'center' },
+  chipName: { color: color.text1, flexShrink: 1, textAlign: 'center' },
   map: { flex: 1, minHeight: 140 },
   flagOnly: { alignItems: 'center', justifyContent: 'center' },
   flagTile: {

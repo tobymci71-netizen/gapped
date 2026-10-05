@@ -14,12 +14,13 @@ import React, { useEffect } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import type { ErrorBoundaryProps } from 'expo-router';
 import { Button } from '@/components/Button';
+import { GappedMark } from '@/components/brand/GappedMark';
 import { Screen } from '@/components/Screen';
 import { Text } from '@/components/Text';
 import { SUPPORT_URL } from '@/config/links';
 import { haptic } from '@/lib/haptics';
 import { reportError } from '@/lib/observability';
-import { color, glyph, space, textStyle } from '@/theme/tokens';
+import { color, space } from '@/theme/tokens';
 
 export function ErrorFallback({ error, retry }: ErrorBoundaryProps) {
   // Reported once per error. A no-op without a crash reporter, which is the
@@ -50,9 +51,7 @@ export function ErrorFallback({ error, retry }: ErrorBoundaryProps) {
       }
     >
       <View style={styles.body}>
-        <Text style={styles.glyph} importantForAccessibility="no" accessibilityElementsHidden>
-          🛠️
-        </Text>
+        <GappedMark size="md" style={styles.mark} />
         <Text variant="headline" style={styles.title} accessibilityRole="header">
           Something went wrong
         </Text>
@@ -60,7 +59,7 @@ export function ErrorFallback({ error, retry }: ErrorBoundaryProps) {
           This screen could not be shown. Your drives are saved on this phone as they are recorded,
           so nothing has been lost.
         </Text>
-        <Text variant="caption" style={styles.hint}>
+        <Text variant="legal" style={styles.hint}>
           If it keeps happening, contact us and say what you were doing.
         </Text>
       </View>
@@ -71,7 +70,9 @@ export function ErrorFallback({ error, retry }: ErrorBoundaryProps) {
 const styles = StyleSheet.create({
   fill: { flexGrow: 1 },
   body: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: space.md },
-  glyph: textStyle(glyph.display),
+  // The mark, a step above the title: the one thing on this screen that says
+  // which app it is.
+  mark: { marginBottom: space.lg },
   title: { textAlign: 'center' },
   copy: { textAlign: 'center', color: color.text2 },
   hint: { textAlign: 'center', color: color.text3, marginTop: space.sm },

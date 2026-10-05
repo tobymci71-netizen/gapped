@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/Button';
-import { Card } from '@/components/Card';
+import { Icon } from '@/components/icons';
 import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
 import { Skeleton } from '@/components/Skeleton';
@@ -14,7 +14,7 @@ import {
   listHidden,
   unhideDriver,
 } from '@/social/moderation';
-import { color, radius, space } from '@/theme/tokens';
+import { color, font, maxFontScale, radius, slant, space, textStyle, type } from '@/theme/tokens';
 
 /**
  * Hidden drivers: everyone you hid from a board or from Friends, each with a
@@ -82,7 +82,7 @@ export default function HiddenDriversScreen() {
       <Text variant="headline" accessibilityRole="header">
         Hidden drivers
       </Text>
-      <Text variant="body" style={styles.sub}>
+      <Text variant="callout" style={styles.sub}>
         Drivers you hide are left off every board you see. They are not told. Unhide someone to
         see their runs again.
       </Text>
@@ -94,54 +94,62 @@ export default function HiddenDriversScreen() {
           ))}
         </View>
       ) : loadError ? (
-        <Card style={styles.note}>
-          <Text variant="cardTitle">Could not load hidden drivers</Text>
-          <Text variant="body" style={styles.noteBody}>
-            {loadError}
+        <View style={styles.state}>
+          <Icon name="hidden" size={28} color={color.text3} />
+          <Text variant="cardTitle" accessibilityRole="header">
+            Could not load hidden drivers
           </Text>
+          <Text variant="callout">{loadError}</Text>
           <Button label="Try again" variant="secondary" onPress={refresh} style={styles.retry} />
-        </Card>
+        </View>
       ) : drivers.length === 0 ? (
-        <Card style={styles.note}>
-          <Text variant="cardTitle">Nobody hidden</Text>
-          <Text variant="body" style={styles.noteBody}>
+        <View style={styles.state}>
+          <Icon name="hidden" size={28} color={color.text3} />
+          <Text variant="cardTitle" accessibilityRole="header">
+            Nobody hidden
+          </Text>
+          <Text variant="callout">
             To hide a driver, tap ⋯ beside their name on a board or in Friends.
           </Text>
-        </Card>
+        </View>
       ) : (
-        drivers.map((d) => {
-          const busy = pending === d.profileId;
-          return (
-            <Card key={d.profileId} style={styles.driver}>
-              <View style={styles.driverRow}>
-                <Text variant="cardTitle" numberOfLines={1} style={styles.name}>
-                  @{d.username}
-                </Text>
-                <PressableScale
-                  onPress={() => onUnhide(d)}
-                  disabled={pending != null}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Unhide @${d.username}`}
-                  accessibilityState={{ disabled: pending != null, busy }}
-                  style={[styles.unhide, pending != null && !busy && styles.dimmed]}
-                >
-                  {busy ? (
-                    <ActivityIndicator size="small" color={color.text2} />
-                  ) : (
-                    <Text variant="caption" style={styles.unhideLabel}>
-                      Unhide
-                    </Text>
-                  )}
-                </PressableScale>
+        <View style={styles.list}>
+          {drivers.map((d) => {
+            const busy = pending === d.profileId;
+            return (
+              <View key={d.profileId} style={styles.driver}>
+                <View style={styles.driverRow}>
+                  <Text variant="bodySemibold" numberOfLines={1} style={styles.name}>
+                    @{d.username}
+                  </Text>
+                  <PressableScale
+                    onPress={() => onUnhide(d)}
+                    disabled={pending != null}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Unhide @${d.username}`}
+                    accessibilityState={{ disabled: pending != null, busy }}
+                    style={[styles.unhide, pending != null && !busy && styles.dimmed]}
+                  >
+                    {/* A slanted outline plate, as every Nightrun button is. */}
+                    <View pointerEvents="none" style={styles.unhidePlate} />
+                    {busy ? (
+                      <ActivityIndicator size="small" color={color.text2} />
+                    ) : (
+                      <Text style={styles.unhideLabel} maxFontSizeMultiplier={maxFontScale.button}>
+                        Unhide
+                      </Text>
+                    )}
+                  </PressableScale>
+                </View>
+                {rowError?.profileId === d.profileId ? (
+                  <Text variant="caption" style={styles.error} accessibilityLiveRegion="polite">
+                    {rowError.message}
+                  </Text>
+                ) : null}
               </View>
-              {rowError?.profileId === d.profileId ? (
-                <Text variant="caption" style={styles.error} accessibilityLiveRegion="polite">
-                  {rowError.message}
-                </Text>
-              ) : null}
-            </Card>
-          );
-        })
+            );
+          })}
+        </View>
       )}
     </Screen>
   );
@@ -149,27 +157,47 @@ export default function HiddenDriversScreen() {
 
 const styles = StyleSheet.create({
   sub: { marginTop: space.sm },
-  loading: { marginTop: space.lg, gap: space.md },
-  loadingRow: { height: 72, borderRadius: radius.card },
-  note: { marginTop: space.lg },
-  noteBody: { marginTop: space.sm },
-  retry: { marginTop: space.md },
-  driver: { marginTop: space.md, gap: space.sm },
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  loading: { marginTop: space.xl, gap: space.md },
+  loadingRow: { height: 56, borderRadius: radius.sm },
+  // Empty and failed states: open on the night, not boxed.
+  state: { marginTop: space.xl, gap: space.sm },
+  retry: { marginTop: space.md, alignSelf: 'flex-start' },
+  list: {
+    marginTop: space.xl,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: color.divider,
+  },
+  driver: {
+    gap: space.xs,
+    paddingVertical: space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: color.divider,
+  },
+  driverRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: space.md },
   name: { flex: 1, minWidth: 0 },
-  // A compact pill that still meets the 44pt minimum, and keeps its width
-  // when the label swaps for the spinner.
+  // A compact slanted plate that still meets the 44pt minimum, and keeps its
+  // width when the label swaps for the spinner.
   unhide: {
     minHeight: 44,
-    minWidth: 88,
+    minWidth: 96,
     paddingHorizontal: space.lg,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: color.hairline,
+    // Clears the plate's 6pt inset, so a label grown by Dynamic Type stays on it.
+    paddingVertical: space.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  unhideLabel: { color: color.text1 },
+  unhidePlate: {
+    position: 'absolute',
+    top: 6,
+    bottom: 6,
+    left: 0,
+    right: 0,
+    borderRadius: radius.xs,
+    borderWidth: 1,
+    borderColor: color.outline,
+    transform: slant.transform,
+  },
+  unhideLabel: { fontFamily: font.bodySemibold, ...textStyle(type.legal), color: color.text1 },
   dimmed: { opacity: 0.45 },
   error: { color: color.danger },
 });

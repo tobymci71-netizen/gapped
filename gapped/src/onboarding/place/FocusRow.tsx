@@ -1,15 +1,16 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useSharedValue, withTiming } from 'react-native-reanimated';
 import { PressableScale } from '@/components/PressableScale';
 import { OnSurface, Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import type { ChoiceOption } from '@/onboarding/flow';
+import { ChoiceMark, panel, RowLight } from '@/onboarding/ui/choice';
 import type { Focus } from '@/state/profile';
 import { duration, easing } from '@/theme/motion';
-import { color, radius, space } from '@/theme/tokens';
-import { CheckIcon, GaugeIcon, PeopleIcon, StopwatchIcon, TrophyIcon } from './icons';
+import { color, space } from '@/theme/tokens';
+import { GaugeIcon, PeopleIcon, StopwatchIcon, TrophyIcon } from './icons';
 
 /** One glyph per focus, shared by the question's rows and the proof's pill. */
 export function FocusIcon({ focus, size, tint }: { focus: Focus; size?: number; tint: string }) {
@@ -25,14 +26,13 @@ export function FocusIcon({ focus, size, tint }: { focus: Focus; size?: number; 
   }
 }
 
-/** The radio's diameter. Inside a 60pt row, so the row is the touch target. */
-const RADIO = 24;
-
 /**
- * A single-select row on "What matters to your drive?": glyph, title, the grey
- * line under it, and a radio on the right that fills lime when chosen
- * (docs/ONBOARDING.md, "Focus"). Announced as a radio, checked or not, so
- * VoiceOver says what kind of choice this is as well as what it says.
+ * A single-select row on "What matters to your drive?": glyph, title, the
+ * line under it, and a radio mark on the right (docs/ONBOARDING.md, "Focus").
+ * A night panel; the chosen one lights up — the red light down its left
+ * edge, its words white, the mark filled white (src/onboarding/ui/choice).
+ * Announced as a radio, checked or not, so VoiceOver says what kind of choice
+ * this is as well as what it says.
  */
 export function FocusRow({
   option,
@@ -50,12 +50,6 @@ export function FocusRow({
     on.set(reduced ? to : withTiming(to, { duration: duration.fast, easing: easing.decel }));
   }, [selected, reduced, on]);
 
-  // The fill grows from 60% as it fades in: a dot being set, not a flash.
-  const fill = useAnimatedStyle(() => ({
-    opacity: on.get(),
-    transform: [{ scale: 0.6 + 0.4 * on.get() }],
-  }));
-
   return (
     <PressableScale
       silent
@@ -66,19 +60,18 @@ export function FocusRow({
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
       accessibilityLabel={[option.spoken ?? option.label, option.sublabel].filter(Boolean).join(', ')}
-      style={[styles.row, selected && styles.rowSelected]}
+      style={styles.row}
     >
+      <RowLight on={on} />
       <OnSurface>
         <FocusIcon focus={option.key} tint={selected ? color.text1 : color.text2} />
         <View style={styles.text}>
-          <Text variant="bodyMedium">{option.label}</Text>
+          <Text variant="bodyMedium" style={!selected && styles.labelRest}>
+            {option.label}
+          </Text>
           {option.sublabel ? <Text variant="caption">{option.sublabel}</Text> : null}
         </View>
-        <View style={[styles.radio, selected && styles.radioSelected]}>
-          <Animated.View style={[styles.radioFill, fill]}>
-            <CheckIcon size={14} color={color.onAccent} />
-          </Animated.View>
-        </View>
+        <ChoiceMark on={on} />
       </OnSurface>
     </PressableScale>
   );
@@ -86,6 +79,7 @@ export function FocusRow({
 
 const styles = StyleSheet.create({
   row: {
+    ...panel,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
@@ -94,32 +88,8 @@ const styles = StyleSheet.create({
     minHeight: 60,
     paddingHorizontal: space.lg,
     paddingVertical: 10,
-    borderRadius: radius.card,
-    backgroundColor: color.surface2,
+    overflow: 'hidden',
   },
-  // A step lighter, so the chosen row reads as chosen even before the eye
-  // reaches the radio at the far edge.
-  rowSelected: { backgroundColor: color.surface3 },
   text: { flex: 1, gap: 2 },
-  radio: {
-    width: RADIO,
-    height: RADIO,
-    borderRadius: RADIO / 2,
-    borderWidth: 1.5,
-    borderColor: color.text3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioSelected: { borderColor: color.accent },
-  radioFill: {
-    position: 'absolute',
-    top: -1.5,
-    left: -1.5,
-    right: -1.5,
-    bottom: -1.5,
-    borderRadius: RADIO / 2,
-    backgroundColor: color.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  labelRest: { color: color.text2 },
 });

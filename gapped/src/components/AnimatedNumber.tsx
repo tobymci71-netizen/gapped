@@ -9,7 +9,7 @@ import Animated, {
 import { scheduleOnUI } from 'react-native-worklets';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { duration, easing } from '@/theme/motion';
-import { color as colors, font } from '@/theme/tokens';
+import { color as colors, font, italicOverhang } from '@/theme/tokens';
 
 /**
  * Rolling-odometer number (spec §A8): each digit is a vertical strip of 0–9;
@@ -143,8 +143,13 @@ function DigitColumn({
     transform: [{ translateY: -slot.value * lineHeight }],
   }));
 
+  // The wide italic leans past each digit's advance (a 7 by 0.06 em), and
+  // both the glyph's text view and this clipping column would cut it. Each
+  // digit reaches that far right of its slot and the column gives the space
+  // back with a negative margin: tabular spacing kept, corners kept.
+  const lean = italicOverhang(size);
   return (
-    <View style={{ height: lineHeight, overflow: 'hidden' }}>
+    <View style={{ height: lineHeight, overflow: 'hidden', marginRight: -lean }}>
       <Animated.View style={style}>
         {/*
           Each row is a fixed-height box that centres its glyph, rather than a
@@ -163,6 +168,7 @@ function DigitColumn({
                 color,
                 fontVariant: ['tabular-nums'],
                 textAlign: 'center',
+                paddingRight: lean,
               }}
             >
               {d}

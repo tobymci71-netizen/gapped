@@ -1,49 +1,43 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, {
-  interpolateColor,
-  type SharedValue,
-  useAnimatedStyle,
-} from 'react-native-reanimated';
-import { color, space } from '@/theme/tokens';
-import { dotEmphasis, dotsOpacity, INTRO_PAGE_COUNT, wordmarkOpacity } from './introTimeline';
-import { Wordmark } from './Wordmark';
+import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import { alpha, color, glow, slant, space } from '@/theme/tokens';
+import { dotEmphasis, dotsOpacity, INTRO_PAGE_COUNT } from './introTimeline';
 
-/** Inactive dot diameter, and the active dot's pill length. */
-const DOT = 6;
-const PILL = 18;
+/** A page mark's length at rest, and lit for the page in view. */
+const MARK = 10;
+const LIT = 24;
+const MARK_HEIGHT = 3;
 /** The slot's height: a touch target for the adjustable control it is. */
 const HEADER_HEIGHT = 44;
 
 type Props = {
   /** Scroll offset in pages: 0 on the first page, 1.5 halfway to the third. */
   position: SharedValue<number>;
-  /** 0 while the splash mark is still on its way here. */
-  markShown: SharedValue<number>;
   /** The page most in view. */
   page: number;
   /** Move to a page; VoiceOver's swipe up/down on the control calls it. */
   onSelectPage: (page: number) => void;
-  /** The wordmark's frame, for the splash to measure and land on. */
-  markRef: React.RefObject<View | null>;
   /** Hidden from VoiceOver while the splash is still up. */
   hidden: boolean;
 };
 
 /**
- * The carousel's header slot: the wordmark on the first page, page dots on
- * the others, trading places as the first page is swiped away (as the
- * reference does). See wordmarkOpacity in ./introTimeline.
+ * The carousel's header slot: the page marks. On the first page they are
+ * out of the way of the welcome scene and its G mark, and they arrive as
+ * that page is swiped away (dotsOpacity, ./introTimeline); the mark goes the
+ * other way, so the two never overprint.
+ *
+ * The marks are short slanted dashes, the logo's lean, like lane markings;
+ * the page in view is a lit red one, the way the tab bar lights the active
+ * tab. The light slides between marks with the finger.
  *
  * For VoiceOver it is one adjustable control, "Gapped, page 2 of 4", that
  * swipes up and down through the pages, so the page position and a way to
- * change it are there on every page, the first included, where the dots are
+ * change it are there on every page, the first included, where the marks are
  * not drawn.
  */
-export function IntroHeader({ position, markShown, page, onSelectPage, markRef, hidden }: Props) {
-  const markStyle = useAnimatedStyle(() => ({
-    opacity: markShown.value * wordmarkOpacity(position.value),
-  }));
+export function IntroHeader({ position, page, onSelectPage, hidden }: Props) {
   const dotsStyle = useAnimatedStyle(() => ({ opacity: dotsOpacity(position.value) }));
 
   return (
@@ -61,14 +55,9 @@ export function IntroHeader({ position, markShown, page, onSelectPage, markRef, 
         if (e.nativeEvent.actionName === 'decrement') onSelectPage(page - 1);
       }}
     >
-      <Animated.View style={[styles.layer, markStyle]}>
-        <View ref={markRef} collapsable={false}>
-          <Wordmark size="header" />
-        </View>
-      </Animated.View>
-      <Animated.View style={[styles.layer, styles.dots, dotsStyle]}>
+      <Animated.View style={[styles.layer, styles.marks, dotsStyle]}>
         {Array.from({ length: INTRO_PAGE_COUNT }, (_, i) => (
-          <Dot key={i} index={i} position={position} />
+          <PageMark key={i} index={i} position={position} />
         ))}
       </Animated.View>
     </View>
@@ -76,19 +65,22 @@ export function IntroHeader({ position, markShown, page, onSelectPage, markRef, 
 }
 
 /**
- * One page dot. The active one is a white pill; the pill slides between dots
- * with the finger, because each dot's emphasis is read off the scroll offset
- * rather than off the settled page.
+ * One page mark. Its length and light are read off the scroll offset rather
+ * than the settled page, so the light travels with the finger.
  */
-function Dot({ index, position }: { index: number; position: SharedValue<number> }) {
-  const style = useAnimatedStyle(() => {
-    const e = dotEmphasis(position.value, index);
-    return {
-      width: DOT + (PILL - DOT) * e,
-      backgroundColor: interpolateColor(e, [0, 1], [color.disabled, color.text1]),
-    };
-  });
-  return <Animated.View style={[styles.dot, style]} />;
+function PageMark({ index, position }: { index: number; position: SharedValue<number> }) {
+  const size = useAnimatedStyle(() => ({
+    width: MARK + (LIT - MARK) * dotEmphasis(position.value, index),
+  }));
+  // The light is a second layer that fades in over the unlit mark: its glow
+  // is a fixed shadow, so only an opacity animates.
+  const light = useAnimatedStyle(() => ({ opacity: dotEmphasis(position.value, index) }));
+  return (
+    <Animated.View style={[styles.mark, size]}>
+      <View style={[StyleSheet.absoluteFill, styles.unlit]} />
+      <Animated.View style={[StyleSheet.absoluteFill, styles.lit, light]} />
+    </Animated.View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -96,13 +88,18 @@ const styles = StyleSheet.create({
     height: HEADER_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: space.sm,
   },
   layer: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dots: { flexDirection: 'row', gap: space.sm },
-  dot: { height: DOT, borderRadius: DOT / 2 },
+  marks: { flexDirection: 'row', gap: space.sm },
+  mark: { height: MARK_HEIGHT, transform: slant.transform },
+  unlit: { borderRadius: 1, backgroundColor: color.outline },
+  lit: {
+    borderRadius: 1,
+    backgroundColor: color.accent,
+    boxShadow: `0 0 ${glow.tight}px ${alpha(color.accent, 0.8)}`,
+  },
 });

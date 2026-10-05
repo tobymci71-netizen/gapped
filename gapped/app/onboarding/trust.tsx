@@ -14,14 +14,15 @@ import {
   PUBLIC_DATA_LINE,
   TERMS_SENTENCE,
 } from '@/onboarding/place/consentCopy';
+import { panel } from '@/onboarding/ui/choice';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
 import { useProfile } from '@/state/profile';
-import { color, radius, space } from '@/theme/tokens';
+import { color, space } from '@/theme/tokens';
 
-/** The grey disc the shield sits in. */
+/** The ring the shield sits in. */
 const BADGE = 88;
-/** The lime glyph tiles in the cards. */
-const TILE = 40;
+/** The glyph column in the cards: the glyphs line up, the words after them. */
+const GLYPH_BOX = 28;
 /**
  * How far the headline grows with Dynamic Type: the cap every onboarding
  * title uses (OnboardingFrame), past which the wide display face breaks
@@ -127,7 +128,7 @@ export default function TrustStep() {
   );
 }
 
-/** A lime glyph tile beside a short title and its explanation. */
+/** A stroke glyph beside a short title and its explanation, on a night panel. */
 function InfoCard({
   Glyph,
   title,
@@ -140,8 +141,8 @@ function InfoCard({
   return (
     <View style={styles.card}>
       <OnSurface>
-        <View style={styles.tile}>
-          <Glyph size={22} color={color.accent} />
+        <View style={styles.glyph}>
+          <Glyph size={22} color={color.text2} />
         </View>
         <View style={styles.cardText}>
           <Text variant="bodyMedium">{title}</Text>
@@ -163,28 +164,22 @@ const styles = StyleSheet.create({
     width: BADGE,
     height: BADGE,
     borderRadius: BADGE / 2,
-    backgroundColor: color.surface2,
+    backgroundColor: color.surface1,
+    borderWidth: 1,
+    borderColor: color.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: { textAlign: 'center' },
   cards: { gap: space.md },
   card: {
+    ...panel,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: space.md,
     padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: color.surface2,
   },
-  tile: {
-    width: TILE,
-    height: TILE,
-    borderRadius: 12,
-    backgroundColor: color.accentTile,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  glyph: { width: GLYPH_BOX, alignItems: 'center', paddingTop: 1 },
   cardText: { flex: 1, gap: space.xs },
   cardBody: { color: color.text2 },
 });

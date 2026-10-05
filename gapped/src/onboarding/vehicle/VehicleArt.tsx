@@ -55,9 +55,9 @@ type Props = {
 
 /**
  * The person's vehicle as a picture: their photo when they have added one,
- * otherwise the parametric silhouette for its body type. White, not lime —
- * lime marks progress, checks and links in this flow, and the reference draws
- * the ride in white.
+ * otherwise the parametric silhouette for its body type, in white line art
+ * with its tail light lit once the vehicle is chosen — the one red on it,
+ * because it is the one light.
  */
 export function VehicleArt({
   kind,
@@ -135,6 +135,9 @@ export function VehicleArt({
               // name-keyed drawing replayed its draw-on with each keystroke.
               revealKey={`${bodyType}:${tone}`}
               color={tone === 'set' ? color.text1 : color.text3}
+              // A chosen vehicle is the person's own, ready to drive: its
+              // tail light is on. The placeholder stays dark.
+              lit={tone === 'set'}
             />
           </Animated.View>
         )}

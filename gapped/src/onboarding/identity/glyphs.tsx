@@ -107,10 +107,6 @@ export function CloseGlyph(p: GlyphProps) {
   return <Line {...p}>{(s) => <Path d="M6.5 6.5l11 11m0-11-11 11" {...s} />}</Line>;
 }
 
-export function ArrowRightGlyph(p: GlyphProps) {
-  return <Line {...p}>{(s) => <Path d="M5 12h14m-6-6 6 6-6 6" {...s} />}</Line>;
-}
-
 /** Safety: speed limits — a gauge with the needle low. */
 export function GaugeGlyph(p: GlyphProps) {
   return (
@@ -233,7 +229,7 @@ export function TrophyGlyph(p: GlyphProps) {
 }
 
 /**
- * A ticked row: lime disc, black tick. The one filled glyph in the set, because
+ * A ticked row: a filled disc and a tick in its ink. The one filled glyph in the set, because
  * "done" has to read at a glance down a list of outlines.
  */
 export function DoneGlyph({ size = 20, color, tick }: GlyphProps & { tick: string }) {

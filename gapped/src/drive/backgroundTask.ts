@@ -20,6 +20,7 @@ import {
   sensorSpeed,
   sensorTimestamp,
 } from '@/types/boundary';
+import { color } from '@/theme/tokens';
 import { Fix } from './types';
 
 export const BACKGROUND_LOCATION_TASK = 'gapped-background-location';
@@ -65,7 +66,8 @@ export async function startBackgroundUpdates(): Promise<void> {
     foregroundService: {
       notificationTitle: 'Gapped is recording your drive',
       notificationBody: 'Speed, route and distance are being tracked.',
-      notificationColor: '#CCFF00',
+      // Android's notification tint: the racing red, the app's one light.
+      notificationColor: color.accent,
     },
   });
 }

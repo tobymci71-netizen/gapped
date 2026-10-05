@@ -47,7 +47,8 @@ type Props = {
 const DISMISS_TRAVEL_FRACTION = 0.25;
 const DISMISS_VELOCITY = 800;
 
-const SHEET_RADIUS = 22;
+/** A softened corner, not a bubble: Nightrun panels are sharp. */
+const SHEET_RADIUS = 12;
 
 /**
  * Widens the grabber's tap area without moving the layout. Sideways only:
@@ -311,8 +312,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: color.disabled,
+    // outline, not hairline: the grabber is the sheet's Close control, and it
+    // has to read as something to take hold of.
+    backgroundColor: color.outline,
   },
-  title: { textAlign: 'center' },
+  // cardTitle is the wide italic: the sheet's header reads as a title, not a
+  // label.
+  // paddingLeft/Right, not paddingHorizontal: the wide variants carry their
+  // own paddingRight (the italic's lean), which would beat a horizontal one.
+  title: { textAlign: 'center', paddingLeft: space.xl, paddingRight: space.xl },
   body: { flex: 1 },
 });

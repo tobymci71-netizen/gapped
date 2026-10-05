@@ -5,13 +5,15 @@ import {
   Path,
   Skia,
   SweepGradient,
+  type Transforms3d,
   vec,
 } from '@shopify/react-native-skia';
 import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { type SharedValue, useDerivedValue } from 'react-native-reanimated';
 import { Text } from '@/components/Text';
-import { color } from '@/theme/tokens';
+import { alpha, color, type } from '@/theme/tokens';
+import { NightVehicleRear } from './hero/NightVehicle';
 import {
   bodyRollDeg,
   GAUGE_LABELS,
@@ -20,7 +22,6 @@ import {
   litStart,
   pointOnGauge,
 } from './introTimeline';
-import { buildRearCar } from './rearCar';
 
 /** Largest arc radius; on a 375pt phone the width sets it lower. */
 const MAX_RADIUS = 150;
@@ -30,35 +31,40 @@ const TOP_PAD = 30;
 const BOTTOM_PAD = 14;
 /** Labels sit this far outside the arc. */
 const LABEL_GAP = 16;
-/** Label box: wide enough for "1.0"; its height is legal's line height, for centring. */
-const LABEL_BOX = { width: 36, height: 18 };
+/**
+ * Label box: wide enough for "1.0"; its height is the mono label's line
+ * height, for centring. The scale is an instrument's data, so it is set in
+ * Martian Mono like every figure's label.
+ */
+const LABEL_BOX = { width: 36, height: type.monoSmall.lineHeight };
 /** The scale labels are part of the instrument, so they cap with it. */
 const LABEL_MAX_SCALE = 1.2;
 /** Ticks every 0.1 g; the long ones at 0, 0.5 and 1.0. */
 const TICK_STEP_G = 0.1;
 
 /**
- * The cornering scale's colours: green at the centre, through the accent and
- * gold, to orange and red at the ends. All from the palette; the gauge invents
- * none of its own.
+ * The lit stretch of the scale is a light, so it is red: dim near zero,
+ * brightening to the white-hot edge of a light at 1 g, the same at the same
+ * g on both sides. All from the palette.
  *
  * A sweep gradient starts at 3 o'clock and runs clockwise, and the arc only
  * occupies the top half (9 o'clock through 12 to 3), so the stops live between
- * 0.5 and 1. Each colour sits at the same g on both sides.
+ * 0.5 and 1.
  */
-const SCALE_COLORS = [
-  color.danger,
-  color.danger,
-  color.warning,
-  color.rank1,
+const LIT_COLORS = [
+  color.accentCore,
+  color.accentCore,
+  color.accentHot,
   color.accent,
-  color.success,
+  alpha(color.accent, 0.45),
   color.accent,
-  color.rank1,
-  color.warning,
-  color.danger,
+  color.accentHot,
+  color.accentCore,
 ];
-const SCALE_POSITIONS = [0, 0.5, 0.5625, 0.625, 0.6875, 0.75, 0.8125, 0.875, 0.9375, 1];
+const LIT_POSITIONS = [0, 0.5, 0.56, 0.64, 0.75, 0.86, 0.94, 1];
+
+/** The car's own frame (./hero/NightVehicle): 200 wide, ground at 125. */
+const CAR_FRAME = { width: 200, ground: 125 };
 
 type Props = {
   /** Width available; the gauge centres itself in it. */
@@ -69,8 +75,9 @@ type Props = {
 
 /**
  * The cornering G instrument: a half-circle scale (0 at the top, 0.5 and 1.0 g
- * each side), a marker on the live value with the arc lit from zero to it,
- * and a car seen from behind, rolling with the load.
+ * each side), a marker on the live value with the arc lit red from zero to
+ * it, and the welcome's night car seen from behind, tail lights on, rolling
+ * with the load.
  *
  * Everything that moves reads one shared value, so the marker, the lit arc and
  * the body roll cannot drift apart. Geometry is built once per size; per frame
@@ -101,36 +108,38 @@ export function CorneringGauge({ width, g }: Props) {
     // Drawn at 12 o'clock and rotated into place, crossing the arc.
     const marker = Skia.Path.Line(vec(cx, cy - radius - 9), vec(cx, cy - radius + 9));
 
-    const car = buildRearCar(cx, cy, radius * 1.05);
+    // The car, as wide as the old drawing (1.05 radii), standing on the
+    // gauge's centre line.
+    const k = (radius * 1.05) / CAR_FRAME.width;
+    const car = [
+      { translateX: cx - (CAR_FRAME.width / 2) * k },
+      { translateY: cy - CAR_FRAME.ground * k },
+      { scale: k },
+    ];
     return { arc, minor: minor.build(), major: major.build(), marker, car };
   }, [cx, cy, radius]);
 
   const start = useDerivedValue(() => litStart(g.value));
   const end = useDerivedValue(() => litEnd(g.value));
   const markerTransform = useDerivedValue(() => [{ rotate: gaugeAngle(g.value) }]);
-  const rollTransform = useDerivedValue(() => [
+  const rollTransform = useDerivedValue<Transforms3d>(() => [
     { rotate: (bodyRollDeg(g.value) * Math.PI) / 180 },
   ]);
 
-  const gradient = (
-    <SweepGradient c={vec(cx, cy)} colors={SCALE_COLORS} positions={SCALE_POSITIONS} />
-  );
-  const { car } = geo;
+  const lit = <SweepGradient c={vec(cx, cy)} colors={LIT_COLORS} positions={LIT_POSITIONS} />;
 
   return (
     <View style={{ width, height }}>
       <Canvas style={StyleSheet.absoluteFill}>
-        {/* The whole scale, dimmed: the colours read before anything lights. */}
+        {/* The whole scale, unlit: a dark track on the night. */}
         <Path
           path={geo.arc}
           style="stroke"
           strokeWidth={ARC_STROKE}
           strokeCap="round"
-          opacity={0.28}
-        >
-          {gradient}
-        </Path>
-        {/* Lit from zero to the marker, with a soft glow under it. */}
+          color={color.surface3}
+        />
+        {/* Lit from zero to the marker: a light, so it glows. */}
         <Path
           path={geo.arc}
           style="stroke"
@@ -138,9 +147,9 @@ export function CorneringGauge({ width, g }: Props) {
           strokeCap="round"
           start={start}
           end={end}
-          opacity={0.3}
+          opacity={0.35}
         >
-          {gradient}
+          {lit}
           <BlurMask blur={8} style="normal" />
         </Path>
         <Path
@@ -151,58 +160,19 @@ export function CorneringGauge({ width, g }: Props) {
           start={start}
           end={end}
         >
-          {gradient}
+          {lit}
         </Path>
-        <Path path={geo.minor} style="stroke" strokeWidth={1.5} color={color.disabled} />
+        <Path path={geo.minor} style="stroke" strokeWidth={1.5} color={color.outline} />
         <Path path={geo.major} style="stroke" strokeWidth={2} color={color.text3} />
 
         {/* The car. Tyres are planted; everything above them rolls. */}
-        <Path path={car.shadow} style="fill" color={color.text1} opacity={0.1}>
-          <BlurMask blur={6} style="normal" />
-        </Path>
-        {/* Rubber: near-black with a faint edge, so it reads as tyre, not box. */}
-        <Path path={car.tyres} style="fill" color={color.surface1} />
-        <Path path={car.tyres} style="stroke" strokeWidth={car.hairline} color={color.disabled} />
-        <Group transform={rollTransform} origin={car.rollCentre}>
-          <Path path={car.body} style="fill" color={color.surface2} />
-          <Path
-            path={car.body}
-            style="stroke"
-            strokeWidth={car.stroke}
-            strokeJoin="round"
-            color={color.text1}
-          />
-          <Path path={car.glass} style="fill" color={color.canvas} />
-          <Path
-            path={car.glass}
-            style="stroke"
-            strokeWidth={car.hairline}
-            strokeJoin="round"
-            color={color.text3}
-          />
-          <Path
-            path={car.lightBar}
-            style="stroke"
-            strokeWidth={car.hairline}
-            color={color.danger}
-            opacity={0.55}
-          />
-          <Path path={car.lamps} style="fill" color={color.danger} />
-          <Path path={car.trim} style="stroke" strokeWidth={car.hairline} color={color.text3} />
+        <Group transform={geo.car}>
+          <NightVehicleRear kind="car" roll={rollTransform} streak={0.6} outline />
         </Group>
 
-        {/* Marker last, so it is never under the car or the ticks. */}
+        {/* Marker last, so it is never under the car or the ticks. A needle,
+            not a light: white, no glow. */}
         <Group transform={markerTransform} origin={vec(cx, cy)}>
-          <Path
-            path={geo.marker}
-            style="stroke"
-            strokeWidth={6}
-            strokeCap="round"
-            color={color.text1}
-            opacity={0.35}
-          >
-            <BlurMask blur={5} style="normal" />
-          </Path>
           <Path
             path={geo.marker}
             style="stroke"
@@ -218,7 +188,7 @@ export function CorneringGauge({ width, g }: Props) {
         return (
           <Text
             key={l.g}
-            variant="legal"
+            variant="monoSmall"
             maxFontSizeMultiplier={LABEL_MAX_SCALE}
             style={[
               styles.label,

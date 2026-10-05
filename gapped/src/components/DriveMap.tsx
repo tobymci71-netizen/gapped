@@ -12,16 +12,19 @@ import type { Camera, EdgePadding, MapType, Provider, Region } from 'react-nativ
 import { Text } from '@/components/Text';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { duration } from '@/theme/motion';
-import { color, space } from '@/theme/tokens';
+import { alpha, color, space } from '@/theme/tokens';
 
 /**
- * Full-bleed map surface for the Driving tab. react-native-maps 1.27.2 is
- * bundled in Expo Go for SDK 57, so PROVIDER_DEFAULT (Apple Maps on iOS)
- * renders in the simulator with no dev build.
+ * Full-bleed map surface for the Driving tab's live drive. react-native-maps
+ * 1.27.2 is bundled in Expo Go for SDK 57, so PROVIDER_DEFAULT (Apple Maps on
+ * iOS) renders in the simulator with no dev build.
  *
- * We draw our own heading marker rather than showsUserLocation so the puck is
- * on-brand, and we throttle camera commands — the recorder is sampling GPS at
- * the same time and we must not compete with it for CPU.
+ * Nightrun: the map is the night, the route is the one light on it — a red
+ * light trail (a soft wide glow, the racing-red line, a white-hot filament)
+ * running up to a white puck. We draw our own heading marker rather than
+ * showsUserLocation so the puck is on-brand, and we throttle camera commands —
+ * the recorder is sampling GPS at the same time and we must not compete with
+ * it for CPU.
  */
 
 type MapsModule = typeof import('react-native-maps');
@@ -50,8 +53,8 @@ const RECENTRE_ZOOM = 16.5; // Google Maps
 const RECENTRE_ALTITUDE_M = 1200; // Apple Maps
 const INITIAL_DELTA = 0.012;
 
-// Apple's muted standard is desaturated and reads well under the acid overlay;
-// Google has no equivalent, so Android gets standard.
+// Apple's muted standard is desaturated, so the red trail is the only colour on
+// it; Google has no equivalent, so Android gets standard.
 const MAP_TYPE: MapType = Platform.OS === 'ios' ? 'mutedStandard' : 'standard';
 
 type Props = {
@@ -195,15 +198,48 @@ export const DriveMap = forwardRef<DriveMapHandle, Props>(function DriveMap(
           toolbarEnabled={false}
           loadingEnabled
           loadingBackgroundColor={color.canvas}
-          loadingIndicatorColor={color.accent}
+          // A spinner is not a light: grey, not red.
+          loadingIndicatorColor={color.text3}
         >
+          {/*
+            The route as a light trail, three lines on the same coordinates:
+            the glow, the red line, the filament. Maps cannot blur a line, so
+            the glow is a wide translucent stroke, as the drive summary's
+            trail is in its mock. The three share one coordinates array, built
+            once per poll; MAX_ROUTE_POINTS (the Driving tab) bounds each.
+            Each its own zIndex: Google Maps draws equal ones in any order, so
+            the glow could land over the filament. Apple Maps stacks them in
+            the order below (each update re-adds its overlay on top, and they
+            update in this order).
+          */}
+          {routeCoords.length > 1 && (
+            <Polyline
+              coordinates={routeCoords}
+              strokeColor={TRAIL.glow}
+              strokeWidth={11}
+              lineCap="round"
+              lineJoin="round"
+              zIndex={1}
+            />
+          )}
           {routeCoords.length > 1 && (
             <Polyline
               coordinates={routeCoords}
               strokeColor={color.accent}
-              strokeWidth={4}
+              strokeWidth={3.5}
               lineCap="round"
               lineJoin="round"
+              zIndex={2}
+            />
+          )}
+          {routeCoords.length > 1 && (
+            <Polyline
+              coordinates={routeCoords}
+              strokeColor={TRAIL.filament}
+              strokeWidth={1.2}
+              lineCap="round"
+              lineJoin="round"
+              zIndex={3}
             />
           )}
           {position && (
@@ -225,7 +261,12 @@ export const DriveMap = forwardRef<DriveMapHandle, Props>(function DriveMap(
                 {/* No bearing, no arrow: pointing north when the device has
                     not reported a course would be an invented heading. */}
                 {position.heading != null ? (
-                  <View style={styles.arrow} />
+                  // The logo's streak tip, pointing the way: a white dart
+                  // with its tail notched out in the disc's colour.
+                  <View style={styles.dart}>
+                    <View style={styles.arrow} />
+                    <View style={styles.notch} />
+                  </View>
                 ) : (
                   <View style={styles.dot} />
                 )}
@@ -254,7 +295,7 @@ function MapUnavailable({
     <View
       style={[styles.container, styles.unavailable, { paddingBottom: obscuredBottom }, style]}
     >
-      <Text variant="caption" style={styles.unavailableLabel}>
+      <Text variant="mono" style={styles.unavailableLabel}>
         Map unavailable
       </Text>
     </View>
@@ -279,7 +320,13 @@ class MapBoundary extends React.Component<BoundaryProps, { failed: boolean }> {
   }
 }
 
-const PUCK = 42;
+const PUCK = 40;
+
+/** The light trail's outer layers (the middle line is color.accent). */
+const TRAIL = {
+  glow: alpha(color.accent, 0.32),
+  filament: color.accentCore,
+} as const;
 
 const styles = StyleSheet.create({
   container: {
@@ -307,27 +354,46 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: PUCK / 2,
-    backgroundColor: 'rgba(10, 10, 10, 0.72)', // color.canvas, tinted
-    borderWidth: 1,
-    borderColor: color.hairline,
+    // Opaque, so the dart's notch can be cut in the same colour.
+    backgroundColor: color.canvas,
+    borderWidth: 1.5,
+    borderColor: alpha(color.text1, 0.85),
   },
   dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: color.accent,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: color.text1,
+  },
+  dart: {
+    width: 14,
+    height: 17,
+    alignItems: 'center',
+    // Optical centring: a dart's visual mass sits below its bounding box.
+    marginTop: -2,
   },
   arrow: {
     width: 0,
     height: 0,
     backgroundColor: 'transparent',
-    borderLeftWidth: 8,
-    borderRightWidth: 8,
-    borderBottomWidth: 15,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderBottomWidth: 17,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderBottomColor: color.accent,
-    // Optical centring: a triangle's visual mass sits below its bounding box.
-    marginTop: -2,
+    borderBottomColor: color.text1,
+  },
+  notch: {
+    position: 'absolute',
+    bottom: 0,
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderBottomWidth: 5,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: color.canvas,
   },
 });

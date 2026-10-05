@@ -12,7 +12,7 @@ const LABEL = 'Hide Gapped badge';
 const NOTE = 'The verification mark stays on the card either way.';
 
 type Props = {
-  /** The person asked for the GAPPED wordmark to come off the card. */
+  /** The person asked for the Gapped mark (the badge) to come off the card. */
   hidden: boolean;
   onChange: (hidden: boolean) => void;
   /** Clean share cards are Pro and this account does not have them. */
@@ -54,7 +54,7 @@ export function HideBadgeRow({ hidden, onChange, locked, onGoPro, style }: Props
     >
       <Card style={styles.card}>
         <View style={styles.text}>
-          <Text variant="bodyMedium">{LABEL}</Text>
+          <Text variant="bodySemibold">{LABEL}</Text>
           <Text variant="legal">{NOTE}</Text>
         </View>
         {locked ? (
@@ -72,6 +72,7 @@ export function HideBadgeRow({ hidden, onChange, locked, onGoPro, style }: Props
             <Switch
               value={hidden}
               trackColor={{ true: color.accent, false: color.surface3 }}
+              ios_backgroundColor={color.surface3}
               thumbColor={color.text1}
             />
           </View>
@@ -82,6 +83,6 @@ export function HideBadgeRow({ hidden, onChange, locked, onGoPro, style }: Props
 }
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  card: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: space.md },
   text: { flex: 1, gap: 2 },
 });

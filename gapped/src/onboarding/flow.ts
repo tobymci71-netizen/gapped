@@ -184,7 +184,10 @@ export type ChoiceOption<K extends string> = {
  * 0017), so only the words change. They describe what is measured, never a
  * reason to go fast: top speed says where it belongs (src/onboarding/place
  * consentCopy.ts, SAFETY_LINE says the same on the safety step), and 0–60 is a
- * measurement rather than "launches" to time.
+ * measurement rather than "launches" to time. The friends row said "Beat
+ * friends"; friends compare, they do not race (the focus proof already says
+ * "See how you compare"), so it says "Friends". Its stored key keeps the old
+ * name.
  */
 export const FOCUS_OPTIONS: readonly ChoiceOption<Focus>[] = [
   {
@@ -199,7 +202,7 @@ export const FOCUS_OPTIONS: readonly ChoiceOption<Focus>[] = [
     spoken: 'Zero to sixty',
   },
   { key: 'localRanking', label: 'Local ranking', sublabel: 'See where you rank' },
-  { key: 'beatFriends', label: 'Beat friends', sublabel: 'Compare real drive stats' },
+  { key: 'beatFriends', label: 'Friends', sublabel: 'Compare real drive stats' },
 ];
 
 /**

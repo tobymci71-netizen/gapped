@@ -192,8 +192,8 @@ export function emptyBoardFraming(query: BoardQuery, country: string | null): st
   const when = query.period === 'all' ? 'yet' : periodPhrase(query.period);
   const lines = [`${who} ${what} ${when}.`];
   // The toggle that widens the board sits above it; on an empty board it is
-  // the one thing worth knowing about.
-  if (query.verifiedOnly) lines.push('Unverified runs are hidden while VERIFIED is on.');
+  // the one thing worth knowing about. Named as the toggle reads.
+  if (query.verifiedOnly) lines.push('Unverified runs are hidden while “Verified drives only” is on.');
   return lines;
 }
 

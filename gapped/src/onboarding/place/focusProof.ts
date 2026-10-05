@@ -59,7 +59,7 @@ export function focusProofCopy(focus: Focus, noun: 'car' | 'bike'): FocusProofCo
   }
 }
 
-/** The three lime marks under every variant. */
+/** The three marks under every variant. */
 export const PROOF_POINTS = ['Real drive data', 'Progress history', 'Ranking context'] as const;
 export type ProofPoint = (typeof PROOF_POINTS)[number];
 
@@ -114,7 +114,7 @@ export const SAMPLE_RANK = { rank: 7, of: 48 } as const;
 export type SampleFriend = { name: string; topSpeed: MetresPerSecond; you?: true };
 
 /**
- * Beat friends: a three-row friends board, ranked. Usernames say "sample" in
+ * Friends: a three-row friends board, ranked. Usernames say "sample" in
  * the name itself, as the board's own sample rows do (src/board/boards.ts),
  * so even a screenshot cropped past the SAMPLE tag cannot pass them off as
  * people. Within SAMPLE_SPEED_CAP_MPH, and no faster than the top-speed row.

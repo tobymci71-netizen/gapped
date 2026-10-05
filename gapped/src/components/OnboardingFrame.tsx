@@ -1,28 +1,24 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { Icon } from '@/components/icons';
 import { PressableScale } from '@/components/PressableScale';
 import { Screen } from '@/components/Screen';
-import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { progressFor, TOTAL_PROGRESS_STEPS, type OnboardingRoute } from '@/onboarding/flow';
+import { StepTitle } from '@/onboarding/ui/StepTitle';
 import { duration, easing } from '@/theme/motion';
-import { color, font, space } from '@/theme/tokens';
+import { alpha, color, glow, slant, space } from '@/theme/tokens';
 
-/** The progress bar's height: a hairline that reads as chrome, not content. */
-const PROGRESS_HEIGHT = 3;
-
-/**
- * How far the title grows with Dynamic Type. The display face is wide, and
- * uncapped at the largest accessibility sizes (about 3x) it broke words in
- * half — "What matters to your drive?" and "Thanks for trusting us." among
- * them. 1.5x is the cap the steps that draw their own headline already use
- * (focus-proof, location, setup); the subtitle and body scale freely.
- */
-const TITLE_MAX_SCALE = 1.5;
+/** The track: a hairline, chrome rather than content. */
+const TRACK = 1;
+/** The lit stretch, a touch heavier than the track it runs along. */
+const FILL = 2;
+/** The light at the head of the line. */
+const HEAD = { width: 14, height: 3 } as const;
 
 type Props = {
   /**
@@ -31,7 +27,7 @@ type Props = {
    * with the order about where it sits.
    */
   route: OnboardingRoute;
-  /** Small lime capitals above the title ("YOUR FOCUS"). */
+  /** The label over the title ("Your focus"), set in mono after a small red light. */
   eyebrow?: string;
   title?: string;
   subtitle?: string;
@@ -54,16 +50,20 @@ type Props = {
 };
 
 /**
- * The bar under the flow: grey track, lime fill.
+ * The flow's progress: a thin line across the night with a red light at its
+ * head, the way a route trail ends in the car's own tail light.
  *
- * The fill starts where the PREVIOUS step left it and grows to this one. Each
- * step is its own route, so a static width would simply be painted at its new
- * length on mount — the one element that should carry continuity across the
- * push would be the one that never moved. It only ever grows: Back uncovers
- * the earlier step's own, already-settled bar rather than shrinking this one.
+ * The light starts where the PREVIOUS step left it and travels to this one.
+ * Each step is its own route, so a static length would simply be painted at
+ * its new length on mount — the one element that should carry continuity
+ * across the push would be the one that never moved. It only ever goes
+ * forward: Back uncovers the earlier step's own, already-settled line rather
+ * than pulling this one back.
  */
-function ProgressBar({ step }: { step: number }) {
+function ProgressLine({ step }: { step: number }) {
   const reduced = useReducedMotion();
+  const gradientId = `onbTrail${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const [width, setWidth] = useState(0);
   const progress = useSharedValue(Math.max(0, step - 1) / TOTAL_PROGRESS_STEPS);
   useEffect(() => {
     const target = step / TOTAL_PROGRESS_STEPS;
@@ -72,45 +72,51 @@ function ProgressBar({ step }: { step: number }) {
       : withTiming(target, { duration: duration.slow, easing: easing.decel });
   }, [step, reduced, progress]);
 
+  // Scaled, not resized: width cannot be animated on the UI thread. The
+  // gradient scales with it, so the head is always the brightest point.
   const fillStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: progress.value }] }));
+  // Clamped to the track: on the first step the trail is shorter than the
+  // light, which would otherwise hang off the line's start, into the gap by
+  // the back chevron.
+  const headStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: Math.max(0, progress.value * width - HEAD.width) },
+      ...slant.transform,
+    ],
+  }));
 
   return (
     <View
-      style={styles.progressTrack}
+      style={styles.progress}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       accessible
       accessibilityRole="progressbar"
       accessibilityLabel={`Step ${step} of ${TOTAL_PROGRESS_STEPS}`}
       accessibilityValue={{ min: 0, max: TOTAL_PROGRESS_STEPS, now: step }}
     >
-      <Animated.View style={[styles.progressFill, fillStyle]} />
+      <View style={styles.track} />
+      <Animated.View style={[styles.trail, fillStyle]}>
+        <Svg width="100%" height={FILL}>
+          <Defs>
+            <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor={color.accent} stopOpacity={0.1} />
+              <Stop offset="0.7" stopColor={color.accent} stopOpacity={0.55} />
+              <Stop offset="1" stopColor={color.accentHot} stopOpacity={1} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height={FILL} fill={`url(#${gradientId})`} />
+        </Svg>
+      </Animated.View>
+      {width > 0 ? <Animated.View style={[styles.head, headStyle]} /> : null}
     </View>
   );
 }
 
 /**
- * A chevron drawn rather than typed. The "‹" character this replaced sat on a
- * font's baseline, so it needed a hand-tuned size and line height to be
- * centred, and still rendered thinner than the SF Symbol it stood in for.
- */
-function Chevron() {
-  return (
-    <Svg width={12} height={20} viewBox="0 0 12 20">
-      <Path
-        d="M10 2 L2 10 L10 18"
-        stroke={color.text1}
-        strokeWidth={2.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </Svg>
-  );
-}
-
-/**
- * Chrome for every onboarding step: back chevron (no word "Back") and the 3pt
- * progress bar, then an optional eyebrow, title and subtitle, a scrolling body
- * and a pinned footer. docs/ONBOARDING.md is the contract for what goes in it.
+ * Chrome for every onboarding step: back chevron (no word "Back") and the
+ * progress line, then an optional eyebrow, title and subtitle (StepTitle), a
+ * scrolling body and a pinned footer, all on the night. docs/ONBOARDING.md is
+ * the contract for what goes in it.
  *
  * The body scrolls by default, so a step works at 375×667 and at the largest
  * Dynamic Type sizes without the footer covering its last control.
@@ -152,35 +158,20 @@ export function OnboardingFrame({
               accessibilityLabel="Back"
               style={styles.back}
             >
-              <Chevron />
+              <Icon name="chevronLeft" size={24} color={color.text1} strokeWidth={2} />
             </PressableScale>
           ) : null}
-          {step !== null ? <ProgressBar step={step} /> : null}
+          {step !== null ? <ProgressLine step={step} /> : null}
         </View>
       ) : null}
       {hasHeading ? (
-        <View style={[styles.heading, centered && styles.headingCentered]}>
-          {eyebrow ? (
-            <Text variant="caption" style={[styles.eyebrow, centered && styles.centerText]}>
-              {eyebrow}
-            </Text>
-          ) : null}
-          {title ? (
-            <Text
-              variant="headline"
-              accessibilityRole="header"
-              maxFontSizeMultiplier={TITLE_MAX_SCALE}
-              style={centered ? styles.centerText : undefined}
-            >
-              {title}
-            </Text>
-          ) : null}
-          {subtitle ? (
-            <Text variant="body" style={[styles.subtitle, centered && styles.centerText]}>
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
+        <StepTitle
+          eyebrow={eyebrow}
+          title={title}
+          subtitle={subtitle}
+          centered={centered}
+          style={styles.heading}
+        />
       ) : null}
       <View style={[styles.body, !hasHeading && styles.bodyNoHeading]}>{children}</View>
     </Screen>
@@ -207,34 +198,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  progressTrack: {
-    flex: 1,
-    height: PROGRESS_HEIGHT,
-    borderRadius: PROGRESS_HEIGHT / 2,
-    // hairline, not a surface: at 3pt a surface grey all but vanishes into
-    // the canvas, and the remaining length is half of what the bar says.
-    backgroundColor: color.hairline,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: PROGRESS_HEIGHT,
-    width: '100%',
-    borderRadius: PROGRESS_HEIGHT / 2,
-    backgroundColor: color.accent,
-    // Scaled, not resized: width cannot be animated on the UI thread.
+  progress: { flex: 1, height: HEAD.height + glow.tight * 2, justifyContent: 'center' },
+  track: { height: TRACK, backgroundColor: color.hairline },
+  trail: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: FILL,
     transformOrigin: 'left center',
   },
-  heading: { marginTop: space.xxl },
-  headingCentered: { alignItems: 'center' },
-  eyebrow: {
-    color: color.accent,
-    fontFamily: font.bodySemibold,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: space.sm,
+  // The light at the head: the logo's slant, lit, so it glows.
+  head: {
+    position: 'absolute',
+    left: 0,
+    width: HEAD.width,
+    height: HEAD.height,
+    borderRadius: 1,
+    backgroundColor: color.accent,
+    boxShadow: `0 0 ${glow.tight}px 1px ${alpha(color.accent, 0.85)}`,
   },
-  centerText: { textAlign: 'center' },
-  subtitle: { marginTop: space.md },
+  heading: { marginTop: space.xxl },
   body: { flex: 1, marginTop: space.xl, gap: space.md },
   bodyNoHeading: { marginTop: 0 },
 });

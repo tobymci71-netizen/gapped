@@ -15,10 +15,11 @@ import {
 import { SegmentedControl, type Segment } from '@/onboarding/vehicle/SegmentedControl';
 import { StepHeading, StepScroll, useRevealOnFocus } from '@/onboarding/vehicle/StepScroll';
 import { VehicleArt } from '@/onboarding/vehicle/VehicleArt';
+import { raisedPanel } from '@/onboarding/ui/choice';
 import { VehicleFields } from '@/onboarding/vehicle/VehicleFields';
 import { discardVehiclePhoto } from '@/onboarding/vehicle/vehiclePhoto';
 import { useProfile, type VehicleKind } from '@/state/profile';
-import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
+import { color, font, space, textStyle, type } from '@/theme/tokens';
 
 const KINDS: readonly Segment<VehicleKind>[] = [
   { key: 'car', label: 'Car' },
@@ -134,7 +135,7 @@ function NicknameField({
   const wrap = useRef<View>(null);
   return (
     <View ref={wrap} style={styles.nickname}>
-      <Text variant="caption" importantForAccessibility="no" accessibilityElementsHidden>
+      <Text variant="mono" importantForAccessibility="no" accessibilityElementsHidden>
         Nickname · optional
       </Text>
       <View style={styles.inputRow}>
@@ -161,11 +162,10 @@ const styles = StyleSheet.create({
   art: { alignItems: 'center', paddingVertical: space.sm },
   nickname: { marginTop: space.sm, gap: space.sm },
   inputRow: {
+    ...raisedPanel,
     minHeight: 56,
     justifyContent: 'center',
     paddingHorizontal: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: color.surface2,
   },
   input: {
     alignSelf: 'stretch',

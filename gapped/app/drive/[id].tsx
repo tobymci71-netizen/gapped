@@ -4,15 +4,15 @@ import * as Sharing from 'expo-sharing';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { captureRef, releaseCapture } from 'react-native-view-shot';
+import { FilmGrain } from '@/components/brand/FilmGrain';
+import { NumberPlate } from '@/components/brand/NumberPlate';
+import { SectionHeader } from '@/components/brand/SectionHeader';
 import { Button } from '@/components/Button';
-import { Card } from '@/components/Card';
 import { HideBadgeRow } from '@/components/HideBadgeRow';
+import { Icon } from '@/components/icons';
 import { ProBadge, useGoPro } from '@/components/ProBadge';
-import { ProLockedStat } from '@/components/ProLockedStat';
-import { RoutePath } from '@/components/RoutePath';
 import { Screen } from '@/components/Screen';
 import { SettingsRow, SettingsSection } from '@/components/SettingsRow';
-import { Stat } from '@/components/Stat';
 import { ShareCard, SHARE_CARD_SIZE } from '@/components/ShareCard';
 import { Text } from '@/components/Text';
 import {
@@ -27,16 +27,29 @@ import {
 import { deleteDrive, discardExportFile, type DeleteDriveResult } from '@/drive/deleteDrive';
 import { exportStamp, toCsv, toGpx } from '@/drive/export';
 import { trimRouteForSharing } from '@/drive/privacy';
+import { Figure } from '@/drive/summary/Figure';
+import { ForcesRow } from '@/drive/summary/ForcesRow';
+import {
+  driveVehicleLabel,
+  durationFigure,
+  spokenDistanceUnit,
+  spokenSpeedUnit,
+} from '@/drive/summary/format';
+import { routeFixes, speedTrace } from '@/drive/summary/geometry';
+import { BackLink, LocalChecks, VerificationChip, type ChipState } from '@/drive/summary/parts';
+import { RouteMap } from '@/drive/summary/RouteMap';
+import { SpeedTrace } from '@/drive/summary/SpeedTrace';
+import { driveTitle } from '@/lib/driveTitle';
 import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { checkPlausibility } from '@/drive/plausibility';
-import { distanceForDisplay, formatDuration, formatSpeed } from '@/drive/units';
+import { distanceForDisplay, speedForDisplay } from '@/drive/units';
 import { useDriveStore } from '@/drive/recorder';
 import { listDrives, readFixes } from '@/drive/wal';
 import { notRankedLine, type RankingCeiling } from '@/drive/notRanked';
 import { useProfile } from '@/state/profile';
-import { color, gutter, space } from '@/theme/tokens';
+import { gutter, space } from '@/theme/tokens';
 
 type Verification = 'verified' | 'unverified' | 'pending' | null;
 
@@ -117,24 +130,32 @@ async function fetchVerification(id: string): Promise<ServerVerdict | undefined>
   }
 }
 
-/** The destructive row's glyph tile: color.danger at low alpha, as in Settings. */
-const DANGER_TINT = 'rgba(255, 59, 48, 0.18)';
+/**
+ * Where the distance plate sits on the map: its top edge this far above the
+ * map's foot, so the plate rests on the route's ground as in the mock.
+ */
+const PLATE_OVERLAP = 58;
 
 /** Resolves after the next two frames: one to commit a state change, one to draw it. */
 const nextPaint = () =>
   new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 
 export default function DriveDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `from`: the list that opened this drive. The Driving tab's Recent drives
+  // by default; the You tab's history passes 'you', so the back link names
+  // where it goes.
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  const fromYou = from === 'you';
   const router = useRouter();
   // A cold-start deep link (gapped://friends, gapped://drive/<id>) opens this
   // screen with nothing beneath it, so Back must have somewhere to go.
-  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/drive'));
+  const goBack = () =>
+    router.canGoBack() ? router.back() : router.replace(fromYou ? '/(tabs)/you' : '/(tabs)/drive');
   const goPro = useGoPro();
   // Unrestricted while PRO_LIMITS_ENFORCED is off: every lock below is then
   // open, and the screen is what it was plus a working "Hide Gapped badge".
   const access = useAccess();
-  const { unitPref, username, vehicleMake, vehicleModel } = useProfile();
+  const { unitPref, username, vehicleId, vehicleMake, vehicleModel, extraVehicles } = useProfile();
   const { width } = useWindowDimensions();
   const cardRef = useRef<View>(null);
   const [sharing, setSharing] = useState(false);
@@ -206,8 +227,17 @@ export default function DriveDetail() {
     () => (id && fixes.length > 1 ? trimRouteForSharing(fixes, 'gapped-share-card', id) : []),
     [fixes, id],
   );
-  const vehicleLabel =
-    vehicleMake && vehicleModel ? `${vehicleMake} ${vehicleModel}` : null;
+  // The car this drive was recorded in, not whichever is in the garage today.
+  const vehicleLabel = driveVehicleLabel(drive?.vehicleId ?? null, {
+    vehicleId,
+    vehicleMake,
+    vehicleModel,
+    extraVehicles,
+  });
+  // The map and the speed trace are drawn from the same gated stream the
+  // summary's figures come from (geometry.ts).
+  const mapFixes = useMemo(() => routeFixes(fixes), [fixes]);
+  const trace = useMemo(() => speedTrace(fixes, unitPref), [fixes, unitPref]);
 
   if (!drive || !drive.summary) {
     return (
@@ -216,6 +246,16 @@ export default function DriveDetail() {
       </Screen>
     );
   }
+
+  // "Monday afternoon" and "Mon 5 Oct · 13:00–13:25", from when the drive
+  // really happened, in this phone's zone (driveTitle). Never a raw timestamp.
+  // Ends at the summary's last fix, as the Drive tab's row does and as the
+  // speed trace's axis does, so the three never disagree about the end time.
+  const when = driveTitle({
+    startedAt: drive.startedAt,
+    durationS: drive.summary.durationS,
+    endedAt: drive.summary.endedAt,
+  });
 
   if (locked) {
     const copy = lockedDriveCopy();
@@ -232,9 +272,10 @@ export default function DriveDetail() {
         <Text variant="headline" style={styles.lockedTitle}>
           {copy.title}
         </Text>
-        <Text variant="caption" style={styles.note}>
-          Drive on {new Date(drive.startedAt).toLocaleString()}
-        </Text>
+        <View style={styles.lockedWhen} accessible accessibilityLabel={`Drive: ${when.spoken}`}>
+          <Text variant="callout">{when.title}</Text>
+          <Text variant="mono">{when.meta}</Text>
+        </View>
         <Text variant="body" style={styles.lockedBody}>
           {copy.body}
         </Text>
@@ -244,9 +285,24 @@ export default function DriveDetail() {
 
   const s = drive.summary;
   const dist = distanceForDisplay(s.distanceM, unitPref);
+  const distValue = dist.value.toFixed(1);
+  const spokenDistance = `${distValue} ${spokenDistanceUnit(dist.unit)}`;
+  const duration = durationFigure(s.durationS);
+  const avg = speedForDisplay(s.avgSpeedMs, unitPref);
+  const top = speedForDisplay(s.maxSpeedMs, unitPref);
+  const avgValue = String(Math.round(avg.value));
+  const topValue = String(Math.round(top.value));
+  const speedUnitSpoken = spokenSpeedUnit(avg.unit);
   const stamp = exportStamp(drive.startedAt);
   const peakG = peakGView(s.maxG, access);
   const exporting = exportView(access);
+  const hasRoute = mapFixes.length > 1;
+  const contentWidth = width - gutter * 2;
+  // The chip says what the server has said. Before it has (no row yet, or
+  // still checking) the verdict is pending — unless there is no server to
+  // ask, when it is plainly unverified, as the share card says.
+  const chip: ChipState = verification ?? (supabase ? 'pending' : 'unverified');
+  const metaLine = vehicleLabel ? `${when.range} · ${vehicleLabel}` : when.range;
   // Drawn after a locked export label. Wrapped because the chip pins itself
   // to the top of a row, and this one should sit centred on the label.
   const proChip = () => (
@@ -371,180 +427,226 @@ export default function DriveDetail() {
   };
 
   return (
-    <Screen footer={<Button label="Back" variant="secondary" onPress={goBack} />}>
-      <Text variant="headline">{new Date(drive.startedAt).toLocaleString()}</Text>
-
-      {fixes.length > 1 ? (
-        <Card style={styles.routeCard}>
-          {/* viewport − both screen gutters − both Card paddings */}
-          <RoutePath fixes={fixes} width={width - gutter * 2 - space.lg * 2} height={200} />
-        </Card>
-      ) : null}
-
-      <View style={styles.grid}>
-        <Stat label="Distance" value={dist.value.toFixed(1)} unit={dist.unit} />
-        <Stat label="Duration" value={formatDuration(s.durationS)} />
-      </View>
-      <View style={styles.grid}>
-        <Stat
-          label="Top speed"
-          value={formatSpeed(s.maxSpeedMs, unitPref).split(' ')[0]}
-          unit={formatSpeed(s.maxSpeedMs, unitPref).split(' ')[1]}
-          accent
-        />
-        <Stat
-          label="Avg speed"
-          value={formatSpeed(s.avgSpeedMs, unitPref).split(' ')[0]}
-          unit={formatSpeed(s.avgSpeedMs, unitPref).split(' ')[1]}
-        />
-      </View>
-      {/*
-        Only on the server's word. A top speed above the country's national
-        limit is kept off the public boards (verify-drive), and the figure
-        above is still this driver's own — so the line says where it does not
-        count, not that it was wrong.
-      */}
-      {topSpeedRanked === false ? (
-        <Text variant="caption" style={styles.note}>
-          {notRankedLine(ceiling, unitPref)}
-        </Text>
-      ) : null}
-      <View style={styles.grid}>
-        {/* "Cornering G & full telemetry" is Pro; the figures around it are not. */}
-        {peakG.kind === 'locked' ? (
-          <ProLockedStat label="Peak G" onPress={goPro} />
-        ) : (
-          <Stat
-            label="Peak G"
-            value={peakG.kind === 'value' ? peakG.value : '—'}
-            unit={peakG.kind === 'value' ? peakG.unit : undefined}
+    <View style={styles.root}>
+      <Screen
+        footer={
+          <Button
+            label={sharing ? 'Preparing…' : 'Share drive'}
+            accessibilityLabel={sharing ? 'Preparing the share card' : 'Share drive'}
+            disabled={sharing}
+            onPress={shareCard}
+            trailing={(ink) => <Icon name="share" size={22} color={ink} strokeWidth={1.9} />}
           />
-        )}
-        <Stat
-          label="0–60 mph"
-          value={s.zeroTo60S != null ? s.zeroTo60S.toFixed(2) : '—'}
-          unit={s.zeroTo60S != null ? 's' : undefined}
-        />
-      </View>
-      {s.zeroTo60S == null ? (
-        <Text variant="caption" style={styles.note}>
-          0–60 shows only when a drive pulls away from a standstill and reaches 60 mph without
-          slowing on the way — we never estimate it.
+        }
+      >
+        <BackLink label={fromYou ? 'You' : 'Drives'} onPress={goBack} />
+
+        <Text
+          variant="headline"
+          accessibilityRole="header"
+          accessibilityLabel={vehicleLabel ? `${when.spoken}, ${vehicleLabel}` : when.spoken}
+          style={styles.title}
+        >
+          {when.title}
         </Text>
-      ) : (
-        <Text variant="caption" style={styles.note}>
-          Timed from a 1-foot rollout, with the 60 mph crossing interpolated between GPS fixes.
-        </Text>
-      )}
-
-      {plausibility ? (
-        <Card style={styles.plausibility}>
-          <Text variant="cardTitle">
-            {plausibility.verdict === 'plausible' ? 'Passes local checks' : 'Failed local checks'}
+        <View style={styles.metaRow}>
+          <VerificationChip state={chip} />
+          {/* Said with the title, in words, so VoiceOver skips the mono line. */}
+          <Text
+            variant="mono"
+            style={styles.meta}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            {metaLine}
           </Text>
-          {plausibility.checks.map((c) => (
-            <View key={c.check} style={styles.checkRow}>
-              <Text style={{ color: c.pass ? color.success : color.danger }}>
-                {c.pass ? '✓' : '✕'}
-              </Text>
-              <Text variant="caption" style={styles.checkDetail}>
-                {c.detail}
-              </Text>
-            </View>
-          ))}
-          <Text variant="legal">
-            Final verification is server-side, recomputed from the raw trace. Unverified is not
-            an accusation — it means a check could not pass yet.
-          </Text>
-        </Card>
-      ) : null}
+        </View>
 
-      <HideBadgeRow
-        hidden={hideBadge}
-        onChange={setHideBadge}
-        locked={cleanShareLocked(access)}
-        onGoPro={goPro}
-        style={styles.badgeRow}
-      />
-      <Button
-        label={sharing ? 'Preparing…' : 'Share card'}
-        style={styles.shareBtn}
-        disabled={sharing}
-        onPress={shareCard}
-      />
-
-      {/*
-        Locked, each button carries the chip and leads to Pro instead of
-        exporting. Stacked then, because a label and a chip in half a row
-        overflow the pill on a small phone or at a large text size.
-      */}
-      <View style={exporting.locked ? styles.exportColumn : styles.exportRow}>
-        {(['gpx', 'csv'] as const).map((kind) => {
-          const label = `Export ${kind.toUpperCase()}`;
-          return (
-            <Button
-              key={kind}
-              label={label}
-              variant="secondary"
-              style={exporting.locked ? undefined : styles.exportBtn}
-              accessibilityLabel={exporting.locked ? proLabel(label) : undefined}
-              trailing={exporting.locked ? proChip : undefined}
-              onPress={exporting.locked ? goPro : () => shareFile(kind)}
+        {hasRoute ? (
+          <View style={styles.map}>
+            <RouteMap
+              fixes={mapFixes}
+              width={width}
+              unitPref={unitPref}
+              spokenDistance={spokenDistance}
             />
-          );
-        })}
-      </View>
-      <Text variant="legal" style={styles.note}>
-        {exporting.note}
-      </Text>
+          </View>
+        ) : null}
 
-      <SettingsSection title="Drive">
-        <SettingsRow
-          glyph="🗑️"
-          tint={DANGER_TINT}
-          label="Delete drive"
-          value={deleting ? 'Deleting…' : undefined}
-          destructive
-          onPress={confirmDelete}
+        {/* The one hero figure: the distance, on its plate, resting on the map. */}
+        <NumberPlate
+          label="Distance"
+          value={distValue}
+          unit={dist.unit}
+          accessibilityLabel={`Distance, ${spokenDistance}`}
+          style={hasRoute ? styles.plateOnMap : styles.plate}
         />
-      </SettingsSection>
 
-      {/*
-        Off-screen at natural size so view-shot captures it crisply — collapsed
-        to zero height and pushed out of the layout rather than scaled down,
-        which would blur the capture.
-      */}
-      <View style={styles.offscreen} pointerEvents="none" collapsable={false}>
-        <View ref={cardRef} collapsable={false}>
-          <ShareCard
-            summary={s}
-            fixes={shareFixes}
-            unitPref={unitPref}
-            username={username}
-            vehicle={vehicleLabel}
-            verification={verification}
-            branded={shareCardBranded(hideBadge, access)}
+        <View style={styles.stats}>
+          <Figure
+            label="Duration"
+            value={duration.value}
+            unit={duration.unit}
+            spoken={duration.spoken}
+          />
+          <Figure
+            label="Average"
+            value={avgValue}
+            unit={avg.unit}
+            spoken={`${avgValue} ${speedUnitSpoken}`}
+            divider
+          />
+          <Figure
+            label="Top speed"
+            value={topValue}
+            unit={top.unit}
+            spoken={`${topValue} ${speedUnitSpoken}`}
+            divider
           />
         </View>
-      </View>
-    </Screen>
+        {/*
+          Only on the server's word. A top speed above the country's national
+          limit is kept off the public boards (verify-drive), and the figure
+          above is still this driver's own — so the line says where it does not
+          count, not that it was wrong.
+        */}
+        {topSpeedRanked === false ? (
+          <Text variant="legal" style={styles.note}>
+            {notRankedLine(ceiling, unitPref)}
+          </Text>
+        ) : null}
+
+        {trace ? (
+          <View style={styles.trace}>
+            <SpeedTrace trace={trace} average={avg.value} unit={avg.unit} width={contentWidth} />
+          </View>
+        ) : null}
+
+        {/* "Cornering G & full telemetry" is Pro; the figures around it are not. */}
+        <View style={styles.forces}>
+          <ForcesRow peakG={peakG} maxG={s.maxG} zeroTo60S={s.zeroTo60S} onGoPro={goPro} />
+        </View>
+        {s.zeroTo60S == null ? (
+          <Text variant="legal" style={styles.note}>
+            0–60 shows only when a drive pulls away from a standstill and reaches 60 mph without
+            slowing on the way — we never estimate it.
+          </Text>
+        ) : (
+          <Text variant="legal" style={styles.note}>
+            Timed from a 1-foot rollout, with the 60 mph crossing interpolated between GPS fixes.
+          </Text>
+        )}
+
+        {plausibility ? (
+          <>
+            <SectionHeader title="Verification" style={styles.sectionHead} />
+            <LocalChecks report={plausibility} />
+          </>
+        ) : null}
+
+        <SectionHeader title="Share card" style={styles.sectionHead} />
+        <HideBadgeRow
+          hidden={hideBadge}
+          onChange={setHideBadge}
+          locked={cleanShareLocked(access)}
+          onGoPro={goPro}
+        />
+
+        <SectionHeader title="Export" style={styles.sectionHead} />
+        {/*
+          Locked, each button carries the chip and leads to Pro instead of
+          exporting. Stacked then, because a label and a chip in half a row
+          overflow the plate on a small phone or at a large text size.
+        */}
+        <View style={exporting.locked ? styles.exportColumn : styles.exportRow}>
+          {(['gpx', 'csv'] as const).map((kind) => {
+            const label = `Export ${kind.toUpperCase()}`;
+            return (
+              <Button
+                key={kind}
+                label={label}
+                variant="secondary"
+                style={exporting.locked ? undefined : styles.exportBtn}
+                accessibilityLabel={exporting.locked ? proLabel(label) : undefined}
+                trailing={exporting.locked ? proChip : undefined}
+                onPress={exporting.locked ? goPro : () => shareFile(kind)}
+              />
+            );
+          })}
+        </View>
+        <Text variant="legal" style={styles.note}>
+          {exporting.note}
+        </Text>
+
+        <SettingsSection title="Drive">
+          <SettingsRow
+            icon="trash"
+            label="Delete drive"
+            value={deleting ? 'Deleting…' : undefined}
+            destructive
+            onPress={confirmDelete}
+          />
+        </SettingsSection>
+
+        {/*
+          Off-screen at natural size so view-shot captures it crisply — collapsed
+          to zero height and pushed out of the layout rather than scaled down,
+          which would blur the capture. Hidden from VoiceOver: it is a picture
+          for the share sheet, and the screen above already says all of it.
+        */}
+        <View
+          style={styles.offscreen}
+          pointerEvents="none"
+          collapsable={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          <View ref={cardRef} collapsable={false}>
+            <ShareCard
+              summary={s}
+              fixes={shareFixes}
+              unitPref={unitPref}
+              username={username}
+              vehicle={vehicleLabel}
+              verification={verification}
+              branded={shareCardBranded(hideBadge, access)}
+            />
+          </View>
+        </View>
+      </Screen>
+      {/* The night's film grain over the whole scene; still under Reduce Motion. */}
+      <FilmGrain />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  routeCard: { marginTop: space.lg, alignItems: 'center' },
-  grid: { flexDirection: 'row', gap: space.md, marginTop: space.md },
+  root: { flex: 1 },
+  title: { marginTop: space.xs },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    columnGap: space.md,
+    rowGap: space.xs,
+    marginTop: space.sm,
+  },
+  meta: { flexShrink: 1 },
+  // The map runs edge to edge, out through the screen's gutters.
+  map: { marginHorizontal: -gutter, marginTop: space.sm },
+  plateOnMap: { marginTop: -PLATE_OVERLAP, marginLeft: 2 },
+  plate: { marginTop: space.xl, marginLeft: 2 },
+  stats: { flexDirection: 'row', gap: space.md, marginTop: space.lg },
   note: { marginTop: space.sm },
-  plausibility: { marginTop: space.xl, gap: space.sm },
-  checkRow: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
-  checkDetail: { flex: 1 },
-  badgeRow: { marginTop: space.xl },
-  shareBtn: { marginTop: space.md },
-  exportRow: { flexDirection: 'row', gap: space.md, marginTop: space.md },
-  exportColumn: { gap: space.md, marginTop: space.md },
+  trace: { marginTop: space.xl },
+  forces: { marginTop: space.lg },
+  sectionHead: { marginTop: space.xl, marginBottom: space.xs },
+  exportRow: { flexDirection: 'row', gap: space.md },
+  exportColumn: { gap: space.md },
   offscreen: { position: 'absolute', left: -10000, top: 0, opacity: 0 },
   exportBtn: { flex: 1, alignSelf: 'auto' },
   lockedTitle: { marginTop: space.md },
+  lockedWhen: { marginTop: space.sm, gap: 2 },
   lockedBody: { marginTop: space.lg },
   lockedFooter: { gap: space.md },
 });

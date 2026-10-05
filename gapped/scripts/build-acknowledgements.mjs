@@ -132,8 +132,18 @@ const OTHER_SOURCES = [
   'Country names: <strong>Unicode CLDR</strong>, as bundled with Node.js ICU. Copyright &copy; Unicode, Inc. Used under the Unicode License v3 (unicode.org/license.txt).',
   'Vehicle makes and models, and VIN lookups: the US Department of Transportation&#39;s <strong>NHTSA vPIC</strong> database, a US Government work.',
   'Brand marks on the &ldquo;How did you hear about us?&rdquo; step: <strong>Simple Icons</strong>, CC0 1.0. The marks themselves are trademarks of their owners and are used only to name their services.',
-  'Typefaces: <strong>Inter</strong> and <strong>Archivo</strong>, under the SIL Open Font License 1.1. Their full licence texts are below, with the @expo-google-fonts packages that carry them.',
+  'Typefaces: <strong>Archivo</strong> and <strong>Martian Mono</strong>, under the SIL Open Font License 1.1. Archivo&#39;s regular width ships in the @expo-google-fonts/archivo package; its wide italic cuts and Martian Mono are instanced from the Google Fonts sources by scripts/build-fonts.py and bundled in assets/fonts. Their full licence texts are below.',
   'Maps: <strong>Apple Maps</strong>. Map data &copy; Apple and its data providers, credited on the map itself.',
+];
+
+/**
+ * Licence texts for fonts the app bundles directly rather than through an npm
+ * package (scripts/build-fonts.py copies each next to its fonts). Printed with
+ * the package texts, deduplicated the same way.
+ */
+const BUNDLED_FONT_LICENCES = [
+  { user: 'Archivo Expanded (assets/fonts)', file: 'assets/fonts/OFL-Archivo.txt' },
+  { user: 'Martian Mono (assets/fonts)', file: 'assets/fonts/OFL-MartianMono.txt' },
 ];
 
 /**
@@ -193,6 +203,20 @@ export function buildAcknowledgements({
       texts.get(id).users.push(`${pkg.name} ${pkg.version} (${t.file})`);
       pkg.textIds.push(id);
     }
+  }
+
+  for (const font of BUNDLED_FONT_LICENCES) {
+    const path = join(root, font.file);
+    if (!existsSync(path)) {
+      throw new BuildError(
+        `build-acknowledgements: ${font.file} is missing, so a bundled font would ship without its licence. ` +
+          'Run scripts/build-fonts.py, which copies it next to the fonts.',
+      );
+    }
+    const text = normalise(readFileSync(path, 'utf8'));
+    const id = `t-${createHash('sha256').update(text).digest('hex').slice(0, 12)}`;
+    if (!texts.has(id)) texts.set(id, { id, text, users: [] });
+    texts.get(id).users.push(font.user);
   }
 
   const rows = installed

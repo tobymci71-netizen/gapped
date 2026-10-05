@@ -1,13 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import { SlantTag } from '@/components/brand/SlantTag';
+import { StreakBar } from '@/components/brand/StreakArrow';
 import { Entrance } from '@/components/Entrance';
+import { Icon } from '@/components/icons';
 import { Skeleton } from '@/components/Skeleton';
-import { Numeral, OnSurface, Text } from '@/components/Text';
+import { OnSurface, Text } from '@/components/Text';
 import { fetchBoard } from '@/board/boards';
 import { distanceForDisplay, type UnitPref } from '@/drive/units';
 import { useProfile } from '@/state/profile';
-import { color, font, glyph, radius, space, textStyle, type } from '@/theme/tokens';
+import { SlantLight } from '@/onboarding/ui/choice';
+import {
+  color,
+  font,
+  gutter,
+  italicOverhang,
+  radius,
+  space,
+  textStyle,
+  type,
+} from '@/theme/tokens';
+import { raw } from '@/types/units';
 import { IntroPage } from './IntroPage';
 import {
   boardAttempts,
@@ -32,34 +45,24 @@ import type { IntroPageCopy } from './introTimeline';
 const BOARD_WAIT_MS = 4000;
 
 /** Rows grow with Dynamic Type; this is their height at the default size. */
-const ROW_MIN_HEIGHT = 56;
-const AVATAR = 32;
-const LIVE_DOT = 8;
-/** The SAMPLE chip is a badge, not reading text (as on the Board tab). */
-const CHIP_MAX_SCALE = 2;
-/** Rank and distance are display figures in a fixed-width card; they cap here. */
+const ROW_MIN_HEIGHT = 64;
+/** Position and distance are figures in a fixed-width card; they cap here. */
 const FIGURE_MAX_SCALE = 2;
 
 /**
  * Text scale above which the row stops fitting one line, the Board tab's own
  * threshold (iOS AX1 is ~1.79). Past it, the scope label drops under the
- * card's title and each row stacks its distance under the name, without the
- * avatar. At the largest size the one-line layout gave the title a letter's
- * width, so the title ran down the card one letter per line.
+ * card's title and each row stacks its distance under the name. At the
+ * largest size the one-line layout gave the title a letter's width, so the
+ * title ran down the card one letter per line.
  */
 const LARGE_TEXT = 1.5;
 
-const RANK_COLOR: Record<number, string> = {
-  1: color.rank1,
-  2: color.rank2,
-  3: color.rank3,
-};
-
 /**
  * The real distance board, verified drives only (the board the Ranks tab
- * opens on, and the pitch on page one: "Verified, then ranked"), else the
- * sample. Never rejects: an error, a timeout or no backend at all is the
- * sample.
+ * opens on, and the welcome's promise: a drive is checked before it counts),
+ * else the sample. Never rejects: an error, a timeout or no backend at all is
+ * the sample.
  */
 async function loadIntroBoard(country: string | null): Promise<IntroBoard> {
   const deadline = Date.now() + BOARD_WAIT_MS;
@@ -91,7 +94,8 @@ type Props = {
 
 /**
  * Page 2, "See where you stack up": a "Distance" card with three rows, each
- * a driver's longest verified drive (./introBoard explains why distance).
+ * a driver's longest verified drive (./introBoard explains why distance),
+ * set as the Ranks tab sets its board (Nightrun-Ranks).
  *
  * Real rows when the server has three or more on the board, otherwise the
  * Board tab's own sample rows wearing its SAMPLE treatment (docs/ONBOARDING.md
@@ -121,6 +125,11 @@ export function BoardPage({ copy, width, hidden, seen, onVerticalDrag }: Props) 
 
   const scopeLabel = board?.scopeLabel ?? GLOBAL_LABEL;
 
+  // The bars run under the name and figure columns, the card's width less
+  // its padding and the position column.
+  const barWidth = Math.max(0, width - gutter * 2 - space.lg * 2 - POSITION_WIDTH - space.md);
+  const leader = board ? Math.max(...board.rows.map((r) => raw(r.distance))) : 0;
+
   return (
     <IntroPage
       copy={copy}
@@ -138,13 +147,13 @@ export function BoardPage({ copy, width, hidden, seen, onVerticalDrag }: Props) 
               board?.sample ? ', sample board' : ''
             }`}
           >
-            {/* Lime only over real rows: a "live" light on a sample board, or
-                on one still loading, would claim what the SAMPLE chips deny. */}
-            <View style={[styles.liveDot, board && !board.sample ? styles.liveDotOn : null]} />
-            <Text variant="caption" style={styles.cardTitle}>
+            {/* A live light only over real rows: lit on a sample board, or on
+                one still loading, it would claim what the SAMPLE tags deny. */}
+            {board && !board.sample ? <SlantLight /> : null}
+            <Text variant="title" style={styles.cardTitle}>
               Distance
             </Text>
-            <Text variant="legal" style={[styles.scope, large && styles.scopeLarge]}>
+            <Text variant="mono" style={[styles.scope, large && styles.scopeLarge]}>
               {scopeLabel}
             </Text>
           </View>
@@ -161,7 +170,14 @@ export function BoardPage({ copy, width, hidden, seen, onVerticalDrag }: Props) 
             {seen && board
               ? board.rows.map((row, i) => (
                   <Entrance key={row.key} index={i}>
-                    <BoardRowView row={row} unitPref={unitPref} first={i === 0} large={large} />
+                    <BoardRowView
+                      row={row}
+                      unitPref={unitPref}
+                      first={i === 0}
+                      large={large}
+                      barWidth={barWidth}
+                      share={leader > 0 ? raw(row.distance) / leader : 0}
+                    />
                   </Entrance>
                 ))
               : null}
@@ -177,32 +193,39 @@ export function BoardPage({ copy, width, hidden, seen, onVerticalDrag }: Props) 
   );
 }
 
+/**
+ * One row, as the Ranks tab sets it (Nightrun-Ranks): the position in the
+ * wide italic, the name, the figure in mono, and under them a light streak
+ * as long as the row's share of the leader's distance. A real row carries
+ * the verified mark (the board is verified drives only); a sample row
+ * carries SAMPLE instead, and never the mark.
+ */
 function BoardRowView({
   row,
   unitPref,
   first,
   large,
+  barWidth,
+  share,
 }: {
   row: IntroBoardRow;
   unitPref: UnitPref;
   first: boolean;
   /** Stacked layout for large text (see LARGE_TEXT). */
   large: boolean;
+  barWidth: number;
+  /** The row's distance over the leader's, 0–1. */
+  share: number;
 }) {
   const distance = distanceForDisplay(row.distance, unitPref);
-  const value = Math.round(distance.value);
-  const tint = RANK_COLOR[row.rank] ?? color.text1;
+  const value = distance.value.toFixed(1);
   // In words: VoiceOver reads "mi" and "km" letter by letter.
-  const unitWords = `${distance.unit === 'mi' ? 'mile' : 'kilometre'}${value === 1 ? '' : 's'}`;
+  const unitWords = `${distance.unit === 'mi' ? 'mile' : 'kilometre'}${value === '1.0' ? '' : 's'}`;
   const figure = (
-    <View style={large ? styles.valueInline : styles.value}>
-      <Numeral size={type.cardTitle.size} color={tint} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
-        {value}
-      </Numeral>
-      <Text variant="legal" style={styles.unit} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
-        {distance.unit.toUpperCase()}
-      </Text>
-    </View>
+    <Text style={styles.value} maxFontSizeMultiplier={FIGURE_MAX_SCALE} numberOfLines={1}>
+      {value}
+      <Text style={styles.unit}> {distance.unit}</Text>
+    </Text>
   );
   return (
     <View
@@ -213,59 +236,39 @@ function BoardRowView({
         row.name,
         row.detail,
         `${value} ${unitWords}`,
-        row.sample ? 'sample' : null,
+        row.sample ? 'sample' : 'verified',
       ]
         .filter(Boolean)
         .join(', ')}
     >
-      <Text
-        variant="caption"
-        maxFontSizeMultiplier={FIGURE_MAX_SCALE}
-        style={[styles.rank, large && styles.rankLarge, { color: tint }]}
-      >
-        #{row.rank}
-      </Text>
-      {large ? null : <Avatar />}
-      <View style={styles.who}>
-        {/* One line beside the figure; two once the figure has moved below. */}
-        <Text variant="bodyMedium" numberOfLines={large ? 2 : 1}>
-          {row.name}
+      <View style={styles.rowLine}>
+        <Text style={styles.position} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
+          {row.rank}
         </Text>
-        {/* The chip rides on the second line: beside the name it took the
-            width the name needed, and every sample name truncated. */}
-        {row.detail || row.sample ? (
-          <View style={styles.detailLine}>
-            {row.detail ? (
-              <Text variant="legal" numberOfLines={1} style={styles.detail}>
-                {row.detail}
-              </Text>
-            ) : null}
-            {row.sample ? (
-              // The Board tab's SAMPLE chip, in text2 rather than its text3:
-              // this card is surface2, where text3 falls under 4.5:1.
-              <View style={styles.chip}>
-                <Text style={styles.chipText} maxFontSizeMultiplier={CHIP_MAX_SCALE}>
-                  SAMPLE
-                </Text>
-              </View>
-            ) : null}
+        <View style={styles.who}>
+          <View style={styles.nameLine}>
+            <Text variant="bodySemibold" numberOfLines={large ? 2 : 1} style={styles.name}>
+              {row.name}
+            </Text>
+            {row.sample ? null : <Icon name="verified" size={14} color={color.text3} />}
           </View>
-        ) : null}
-        {large ? figure : null}
+          {/* The tag rides on the second line: beside the name it took the
+              width the name needed, and every sample name truncated. */}
+          {row.detail || row.sample ? (
+            <View style={styles.detailLine}>
+              {row.detail ? (
+                <Text variant="legal" numberOfLines={1} style={styles.detail}>
+                  {row.detail}
+                </Text>
+              ) : null}
+              {row.sample ? <SlantTag label="SAMPLE" size="sm" decorative /> : null}
+            </View>
+          ) : null}
+          {large ? figure : null}
+        </View>
+        {large ? null : figure}
       </View>
-      {large ? null : figure}
-    </View>
-  );
-}
-
-/** A generic driver: the board has no photos, and the card does not invent any. */
-function Avatar() {
-  return (
-    <View style={styles.avatar}>
-      <Svg width={16} height={16} viewBox="0 0 16 16">
-        <Circle cx={8} cy={5.25} r={3} fill={color.text3} />
-        <Path d="M2.5 14.5c0-3.1 2.5-5.25 5.5-5.25s5.5 2.15 5.5 5.25z" fill={color.text3} />
-      </Svg>
+      <StreakBar width={barWidth} progress={share} style={styles.bar} />
     </View>
   );
 }
@@ -273,19 +276,26 @@ function Avatar() {
 function SkeletonRow({ first }: { first: boolean }) {
   return (
     <View style={[styles.row, !first && styles.rowRule]}>
-      <View style={styles.rankSlot} />
-      <View style={styles.avatar} />
-      <View style={styles.who}>
-        <Skeleton style={styles.skelName} />
+      <View style={styles.rowLine}>
+        <View style={styles.positionSlot} />
+        <View style={styles.who}>
+          <Skeleton style={styles.skelName} />
+        </View>
+        <Skeleton style={styles.skelValue} />
       </View>
-      <Skeleton style={styles.skelValue} />
     </View>
   );
 }
 
+/** The position column: wide enough for "3" in the wide italic at its cap. */
+const POSITION_WIDTH = 28;
+
 const styles = StyleSheet.create({
+  // A night panel: the board is a real object on the page.
   card: {
-    backgroundColor: color.surface2,
+    backgroundColor: color.surface1,
+    borderWidth: 1,
+    borderColor: color.hairline,
     borderRadius: radius.card,
     paddingHorizontal: space.lg,
     paddingTop: space.md,
@@ -297,58 +307,37 @@ const styles = StyleSheet.create({
     gap: space.sm,
     paddingBottom: space.sm,
   },
-  liveDot: {
-    width: LIVE_DOT,
-    height: LIVE_DOT,
-    borderRadius: LIVE_DOT / 2,
-    backgroundColor: color.text3,
-  },
-  liveDotOn: { backgroundColor: color.accent },
   cardHeaderLarge: { flexWrap: 'wrap' },
-  cardTitle: { flexGrow: 1, flexShrink: 1, fontFamily: font.bodySemibold, color: color.text1 },
-  scope: { textTransform: 'uppercase', letterSpacing: 0.6 },
+  cardTitle: { flexGrow: 1, flexShrink: 1 },
+  scope: { color: color.text3 },
   // Its own line, under the title.
   scopeLarge: { flexBasis: '100%' },
   rows: { minHeight: ROW_MIN_HEIGHT * INTRO_BOARD_SIZE },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    minHeight: ROW_MIN_HEIGHT,
-    paddingVertical: space.sm,
+  row: { minHeight: ROW_MIN_HEIGHT, paddingVertical: space.md, gap: space.sm },
+  rowRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.divider },
+  rowLine: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  position: {
+    width: POSITION_WIDTH,
+    fontFamily: font.displayBlack,
+    ...textStyle(type.cardTitle),
+    paddingRight: italicOverhang(type.cardTitle.size),
+    color: color.text1,
   },
-  rowRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.hairline },
-  rankSlot: { width: 24 },
-  rank: { minWidth: 24, fontFamily: font.bodySemibold },
-  // Stacked rows top-align, so the rank sits level with the name.
-  rankLarge: { alignSelf: 'flex-start' },
-  avatar: {
-    width: AVATAR,
-    height: AVATAR,
-    borderRadius: AVATAR / 2,
-    backgroundColor: color.surface3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  positionSlot: { width: POSITION_WIDTH },
   who: { flex: 1, minWidth: 0 },
+  nameLine: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  name: { flexShrink: 1 },
   detailLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 2 },
   detail: { flexShrink: 1 },
-  chip: {
-    borderWidth: 1,
-    borderColor: color.text2,
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
+  value: {
+    fontFamily: font.monoMedium,
+    ...textStyle(type.caption),
+    color: color.text1,
+    fontVariant: ['tabular-nums'],
   },
-  chipText: {
-    fontFamily: font.bodySemibold,
-    ...textStyle(glyph.xs),
-    color: color.text2,
-    letterSpacing: 1,
-  },
-  value: { alignItems: 'flex-end' },
-  valueInline: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs, marginTop: space.xs },
-  unit: { letterSpacing: 0.6, marginTop: -2 },
+  unit: { fontFamily: font.mono, color: color.text3 },
+  // Under the name and figure, past the position column.
+  bar: { marginLeft: POSITION_WIDTH + space.md },
   skelName: { width: '70%', height: 14 },
-  skelValue: { width: 44, height: 20 },
+  skelValue: { width: 56, height: 16 },
 });

@@ -3,10 +3,11 @@ import { AccessibilityInfo, Linking, StyleSheet, useWindowDimensions, View } fro
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Button } from '@/components/Button';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
-import { PressableScale } from '@/components/PressableScale';
 import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
 import { vehicleNoun } from '@/onboarding/flow';
+import { panel } from '@/onboarding/ui/choice';
+import { NightLink } from '@/onboarding/ui/StepTitle';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
 import { vehicleTitle } from '@/onboarding/vehicle/draft';
 import { pickVehiclePhoto, type PickOutcome } from '@/onboarding/vehicle/pickPhoto';
@@ -14,7 +15,7 @@ import { VehicleArt } from '@/onboarding/vehicle/VehicleArt';
 import { discardVehiclePhoto } from '@/onboarding/vehicle/vehiclePhoto';
 import { useProfile } from '@/state/profile';
 import { duration } from '@/theme/motion';
-import { color, font, gutter, radius, space } from '@/theme/tokens';
+import { color, gutter, space } from '@/theme/tokens';
 
 type Problem = Exclude<PickOutcome['kind'], 'picked' | 'canceled'>;
 
@@ -29,8 +30,8 @@ const PROBLEM_COPY: Record<Problem, string> = {
  * Step 4, "Add a car photo" (docs/ONBOARDING.md). A library pick replaces the
  * illustration, or the illustration stays. Optional either way.
  *
- * Before a pick: Add photo (white pill), Keep current image (dark pill, which
- * moves on). After: the photo takes the silhouette's place in the same frame
+ * Before a pick: Add photo (the white plate), Keep current image (the
+ * outlined plate, which moves on). After: the photo takes the silhouette's place in the same frame
  * and Continue appears, with "Choose another" beside it and a link back to
  * the illustration.
  *
@@ -113,13 +114,7 @@ export default function PhotoStep() {
           {photoUri ? (
             <>
               <Button label="Continue" variant="light" disabled={busy} onPress={advance} />
-              <Button
-                label="Choose another"
-                variant="secondary"
-                disabled={busy}
-                onPress={pick}
-                style={styles.darkPill}
-              />
+              <Button label="Choose another" variant="secondary" disabled={busy} onPress={pick} />
             </>
           ) : (
             <>
@@ -129,7 +124,6 @@ export default function PhotoStep() {
                 variant="secondary"
                 disabled={busy}
                 onPress={advance}
-                style={styles.darkPill}
               />
             </>
           )}
@@ -163,10 +157,12 @@ export default function PhotoStep() {
             <Text variant="caption" style={styles.problemText}>
               {PROBLEM_COPY[problem]}
             </Text>
-            {problem === 'denied' ? <Link label="Open Settings" onPress={openSettings} /> : null}
+            {problem === 'denied' ? (
+              <NightLink label="Open Settings" onPress={openSettings} />
+            ) : null}
           </Animated.View>
         ) : photoUri ? (
-          <Link label="Use the illustration instead" onPress={keepIllustration} />
+          <NightLink label="Use the illustration instead" role="button" onPress={keepIllustration} />
         ) : (
           <Text variant="caption" style={styles.caption} numberOfLines={2}>
             {title}
@@ -177,32 +173,12 @@ export default function PhotoStep() {
   );
 }
 
-/** A lime text link with a 44pt target — lime is for links in this flow. */
-function Link({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <PressableScale
-      onPress={onPress}
-      silent
-      accessibilityRole="link"
-      accessibilityLabel={label}
-      style={styles.link}
-    >
-      <Text variant="caption" style={styles.linkLabel}>
-        {label}
-      </Text>
-    </PressableScale>
-  );
-}
-
 const styles = StyleSheet.create({
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md },
   // The photo's slot, drawn even while it holds the illustration, so the
   // person can see where their photo will go before they pick one.
   stage: {
-    borderRadius: radius.card,
-    backgroundColor: color.surface1,
-    borderWidth: 1,
-    borderColor: color.hairline,
+    ...panel,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -210,10 +186,5 @@ const styles = StyleSheet.create({
   caption: { textAlign: 'center' },
   problem: { alignItems: 'center', gap: space.xs, paddingHorizontal: space.md },
   problemText: { color: color.warning, textAlign: 'center' },
-  link: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.md },
-  linkLabel: { color: color.accent, fontFamily: font.bodySemibold, textAlign: 'center' },
   footer: { gap: space.sm },
-  // The reference's dark pill: secondary's white label on a surface fill, no
-  // stroke (docs/ONBOARDING.md, "Add a car photo").
-  darkPill: { backgroundColor: color.surface2, borderWidth: 0 },
 });

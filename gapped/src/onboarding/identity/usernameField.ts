@@ -80,7 +80,7 @@ export type UsernameFieldInput = {
 export type UsernameFieldState = {
   /** The name as it would be stored (trimmed, lower-cased). */
   name: string;
-  /** neutral: grey helper. error: orange border and caption. ok: lime check in the field. */
+  /** neutral: grey helper. error: orange border and caption. ok: white check in the field. */
   tone: 'neutral' | 'error' | 'ok';
   /** The caption under the field. Always present, so nothing shifts when it changes. */
   caption: string;

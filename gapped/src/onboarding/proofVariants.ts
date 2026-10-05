@@ -38,7 +38,7 @@ export type CountryActivity = {
 
 /** A row on the make-proof chart. */
 export type MakeNeighbor = MakePopularityRow & {
-  /** The person's own make — drawn lime, the others grey. */
+  /** The person's own make — drawn lit (red), the others dimmer. */
   isYours: boolean;
 };
 

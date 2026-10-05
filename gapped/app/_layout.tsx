@@ -1,12 +1,10 @@
-import {
-  Archivo_800ExtraBold,
-  Archivo_900Black,
-} from '@expo-google-fonts/archivo';
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-} from '@expo-google-fonts/inter';
+// One weight per import path: the package's index requires all eighteen
+// Archivo files, and every one it requires ships in the bundle (~1.8 MB of
+// faces the app never sets).
+import { Archivo_400Regular } from '@expo-google-fonts/archivo/400Regular';
+import { Archivo_500Medium } from '@expo-google-fonts/archivo/500Medium';
+import { Archivo_600SemiBold } from '@expo-google-fonts/archivo/600SemiBold';
+import { Archivo_700Bold } from '@expo-google-fonts/archivo/700Bold';
 import { useFonts } from 'expo-font';
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -113,12 +111,20 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
 }
 
 export default function RootLayout() {
+  // Keys are the names theme/tokens.ts `font` refers to. The wide italic and
+  // mono faces are static cuts of variable fonts (scripts/build-fonts.py),
+  // keyed by their PostScript names because that is how iOS registers them.
   const [fontsLoaded, fontError] = useFonts({
-    Archivo_800ExtraBold,
-    Archivo_900Black,
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
+    Archivo_400Regular,
+    Archivo_500Medium,
+    Archivo_600SemiBold,
+    Archivo_700Bold,
+    'ArchivoExpanded-BoldItalic': require('../assets/fonts/ArchivoExpanded-BoldItalic.ttf'),
+    'ArchivoExpanded-ExtraBoldItalic': require('../assets/fonts/ArchivoExpanded-ExtraBoldItalic.ttf'),
+    'ArchivoExpanded-BlackItalic': require('../assets/fonts/ArchivoExpanded-BlackItalic.ttf'),
+    'MartianMono-Regular': require('../assets/fonts/MartianMono-Regular.ttf'),
+    'MartianMono-Medium': require('../assets/fonts/MartianMono-Medium.ttf'),
+    'MartianMono-Bold': require('../assets/fonts/MartianMono-Bold.ttf'),
   });
   const [fontsTimedOut, setFontsTimedOut] = useState(false);
   const [gate, setGate] = useState<VersionGate>(GATE_OK);

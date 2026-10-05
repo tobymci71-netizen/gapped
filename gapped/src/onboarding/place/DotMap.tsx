@@ -7,9 +7,9 @@ type Props = {
   dots: CountryDots;
   width: number;
   height: number;
-  /** The main landmass. Lime by default. */
+  /** The main landmass: soft white by default, the country seen at night. */
   mainColor?: string;
-  /** Near land, the islands. accentDim by default: the same lime, stepped down. */
+  /** Near land, the islands: a step dimmer by default. */
   nearColor?: string;
 };
 
@@ -29,8 +29,8 @@ export function DotMap({
   dots,
   width,
   height,
-  mainColor = color.accent,
-  nearColor = color.accentDim,
+  mainColor = color.text2,
+  nearColor = color.outline,
 }: Props) {
   const drawn = useMemo(() => {
     const layout = fitDots(dots.cols, dots.rows, width, height);

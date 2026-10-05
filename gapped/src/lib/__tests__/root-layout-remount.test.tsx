@@ -25,12 +25,10 @@ const mockInit = jest.fn(async () => undefined);
 const mockShutdown = jest.fn(async () => undefined);
 let mockGate: { status: 'ok' } | { status: 'blocked'; message: string | null } = { status: 'ok' };
 
-jest.mock('@expo-google-fonts/archivo', () => ({ Archivo_800ExtraBold: 1, Archivo_900Black: 2 }));
-jest.mock('@expo-google-fonts/inter', () => ({
-  Inter_400Regular: 3,
-  Inter_500Medium: 4,
-  Inter_600SemiBold: 5,
-}));
+jest.mock('@expo-google-fonts/archivo/400Regular', () => ({ Archivo_400Regular: 1 }));
+jest.mock('@expo-google-fonts/archivo/500Medium', () => ({ Archivo_500Medium: 2 }));
+jest.mock('@expo-google-fonts/archivo/600SemiBold', () => ({ Archivo_600SemiBold: 3 }));
+jest.mock('@expo-google-fonts/archivo/700Bold', () => ({ Archivo_700Bold: 4 }));
 jest.mock('expo-font', () => ({ useFonts: () => [true, null] }));
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 jest.mock('expo-router', () => {

@@ -51,7 +51,7 @@
  *    same amount of ground. Centring it on the country keeps the shape the one
  *    people recognise, and handles the antimeridian (Russia, Fiji, the
  *    Aleutians) without special cases.
- * 2. Main landmass (drawn lime). The largest polygon, then, grown until
+ * 2. Main landmass (drawn bright). The largest polygon, then, grown until
  *    nothing changes: any polygon sharing a border with the set — which is
  *    how map units' England, Scotland and Wales become Great Britain again —
  *    and, within NEAR_GAP of the set, any polygon at least MAIN_SHARE of the
@@ -70,7 +70,7 @@
  * 4. Grid. The kept polygons' bounding box is fitted into a GRID_COLS ×
  *    GRID_ROWS box — the shape of the space the screen gives the map — with
  *    square cells, so dots come out the same size on nearly every country
- *    (5 has the exceptions). A cell is a dot when its centre is on land: lime
+ *    (5 has the exceptions). A cell is a dot when its centre is on land: bright
  *    if that land is main, dim otherwise.
  *    Every kept polygon too small to cover a cell centre still gets one dot,
  *    so no island that was kept on purpose can vanish.
@@ -84,7 +84,7 @@
  * left; `runs` is a run-length string over it in which each run is one kind
  * character followed by its length in base 36, the length omitted when it is 1:
  *
- *   '.'  sea         '#'  main landmass (lime)         '+'  near land (dim)
+ *   '.'  sea         '#'  main landmass (bright)       '+'  near land (dim)
  *
  *   ".k#3+.b"  →  20 sea, 3 main, 1 near, 11 sea
  *

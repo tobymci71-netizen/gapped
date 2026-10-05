@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { TAB_TINT, TabIcon } from '@/components/TabIcon';
 import { haptic } from '@/lib/haptics';
-import { color, font } from '@/theme/tokens';
+import { color, font, textStyle, type } from '@/theme/tokens';
 
 /**
  * Four tabs. The reference app puts a territory game in the third slot; we ship
@@ -17,13 +17,16 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         sceneStyle: { backgroundColor: color.canvas },
+        // The bar is part of the night, not a panel over it: canvas, with a
+        // divider for an edge. The active tab is white with a red light above
+        // it (TabIcon); everything else is grey.
         tabBarStyle: {
-          backgroundColor: color.surface1,
-          borderTopColor: color.hairline,
+          backgroundColor: color.canvas,
+          borderTopColor: color.divider,
         },
         tabBarActiveTintColor: TAB_TINT.active,
         tabBarInactiveTintColor: TAB_TINT.inactive,
-        tabBarLabelStyle: { fontFamily: font.bodyMedium, fontSize: 11, lineHeight: 14 },
+        tabBarLabelStyle: { fontFamily: font.bodySemibold, ...textStyle(type.small) },
       }}
     >
       <Tabs.Screen

@@ -21,14 +21,20 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
+import { SlantTag } from '@/components/brand/SlantTag';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { duration, easing, spring } from '@/theme/motion';
-import { color, font, glyph, radius, space, textStyle, type } from '@/theme/tokens';
+import { color, font, italicOverhang, textStyle, type } from '@/theme/tokens';
 
 /**
  * The app's signature object (spec §A3). Skia tick ring with trailing
  * illumination, spring-driven sweep, speed glow, idle breathe, rolling
  * odometer numeral, and a border-only PB pulse — no red flashing, no alarm.
+ *
+ * Nightrun: the ring is an instrument's lights, so the lit ticks and their
+ * spill are the brand's red on a night-blue unlit ring; the needle is white
+ * (a needle, not a light). The unit is set in the wide italic, as every
+ * Nightrun figure's unit is, and a personal best is a slanted deep-red tag.
  *
  * Performance: all geometry is precomputed in useMemo; per-frame work is
  * shared-value interpolation only. Nothing allocates per frame — the
@@ -73,9 +79,25 @@ type Props = {
   pb?: number | null;
   size?: number;
   active?: boolean;
+  /**
+   * The red bloom that swells behind the ring as the needle passes 30% of the
+   * dial. On by default (the onboarding demo dial). The live drive HUD turns
+   * it off: a light that grows brighter the faster you go is a reward for a
+   * number going up mid-drive, which NO_IN_DRIVE_SPEED_NUDGES forbids. The
+   * lit ticks still show the speed; they are the instrument.
+   */
+  speedGlow?: boolean;
 };
 
-export function Speedometer({ value, maxValue, unit, pb, size = 300, active = true }: Props) {
+export function Speedometer({
+  value,
+  maxValue,
+  unit,
+  pb,
+  size = 300,
+  active = true,
+  speedGlow = true,
+}: Props) {
   const reduced = useReducedMotion();
   const clamped = Math.max(0, Math.min(value, maxValue));
 
@@ -213,18 +235,20 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
         }}
       >
         <Group transform={[{ translateX: GLOW_ROOM }, { translateY: GLOW_ROOM }]}>
-          {/* glow underlay — radius/opacity scale with speed */}
-          <Path
-            path={glowPath}
-            style="stroke"
-            strokeWidth={20}
-            color={isPb ? color.text1 : color.accent}
-            start={0}
-            end={speed}
-            opacity={glowOpacity}
-          >
-            <BlurMask blur={18} style="outer" />
-          </Path>
+          {/* glow underlay — radius/opacity scale with speed (off on the live HUD) */}
+          {speedGlow ? (
+            <Path
+              path={glowPath}
+              style="stroke"
+              strokeWidth={20}
+              color={isPb ? color.text1 : color.accent}
+              start={0}
+              end={speed}
+              opacity={glowOpacity}
+            >
+              <BlurMask blur={18} style="outer" />
+            </Path>
+          ) : null}
           {/* unlit tick ring */}
           <Path
             path={ringPath}
@@ -260,9 +284,7 @@ export function Speedometer({ value, maxValue, unit, pb, size = 300, active = tr
         {/* Below the unit at any dial size: a fixed `bottom: 48` cleared it at
             300pt but sat over the lower half of "mph" on the 200pt HUD. */}
         <Animated.View style={[styles.pbBadge, { bottom: Math.round(size * 0.16) }, pbStyle]}>
-          <Text style={styles.pbText} maxFontSizeMultiplier={UNIT_MAX_SCALE}>
-            NEW PB
-          </Text>
+          <SlantTag label="NEW PB" variant="red" />
         </Animated.View>
       </View>
     </Animated.View>
@@ -280,24 +302,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   unit: {
-    fontFamily: font.bodyMedium,
-    ...textStyle(type.body),
+    fontFamily: font.display,
+    ...textStyle(type.title),
+    paddingRight: italicOverhang(type.title.size),
     color: color.text2,
-    // Was 17/21 with -6; the body token's line is 3pt taller, split above and
-    // below the glyphs, so the word itself sits where it did.
-    marginTop: -7.5,
+    // Pulled up under the numeral by the room its line box leaves below the
+    // glyphs, so the word sits where the body-set unit used to.
+    marginTop: -6.5,
   },
-  pbBadge: {
-    position: 'absolute',
-    backgroundColor: color.accent,
-    borderRadius: radius.pill,
-    paddingHorizontal: space.md,
-    paddingVertical: space.xs,
-  },
-  pbText: {
-    fontFamily: font.displayBlack,
-    ...textStyle(glyph.md),
-    color: color.onAccent,
-    letterSpacing: 1.5,
-  },
+  // The tag carries its own deep-red plate (accentFill under white: 4.98:1).
+  pbBadge: { position: 'absolute' },
 });

@@ -8,9 +8,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { PressableScale } from '@/components/PressableScale';
 import { haptic } from '@/lib/haptics';
+import { ChoiceMark, panel, RowLight } from '@/onboarding/ui/choice';
 import { duration, easing } from '@/theme/motion';
-import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
-import { CheckGlyph } from './glyphs';
+import { color, font, space, textStyle, type } from '@/theme/tokens';
 
 /** The mark's size at the default text size. */
 const ICON = 20;
@@ -21,8 +21,6 @@ const ICON_BOX = 28;
  * factor: past it a logo stops helping anyone read the row.
  */
 const ICON_MAX_SCALE = 1.8;
-/** The radio ring and the selected disc. */
-const MARK = 22;
 
 type Props = {
   label: string;
@@ -30,22 +28,23 @@ type Props = {
   spoken?: string;
   selected: boolean;
   onPress: () => void;
-  /** Draws the icon at `size` in the colour given: white at rest, black once selected. */
+  /** Draws the icon at `size` in the colour given. */
   renderIcon: (color: string, size: number) => React.ReactNode;
 };
 
 /**
  * One answer in a single-select list — "How did you hear about us?".
  *
- * At rest a dark surface2 row with an empty ring; selected, the whole row
- * turns white with a black label and a black tick disc (docs/ONBOARDING.md,
- * "Selected row: white, black label, check"). A press lifts an unselected row
- * to surface3 for as long as the finger is down: the reference's touch
- * highlight, which is feedback and not a third state.
+ * A night panel with the answer's mark, its name and an empty ring; chosen,
+ * it lights up — the red light down its left edge, the mark and the name
+ * turning white, the ring filling white with a check (src/onboarding/ui/
+ * choice.tsx). A press lifts an unchosen row to a raised panel for as long as
+ * the finger is down: the reference's touch highlight, which is feedback and
+ * not a third state.
  *
- * The change is a colour crossfade over `duration.fast`, never a movement, so
- * it stays the same with Reduce Motion on. The icon cannot interpolate its
- * fill, so two copies — white and black — crossfade instead.
+ * Every change is a crossfade over `duration.fast`, never a movement, so it
+ * is the same with Reduce Motion on. The icon cannot interpolate its fill, so
+ * two copies — soft and white — crossfade instead.
  */
 export function SelectRow({ label, spoken, selected, onPress, renderIcon }: Props) {
   const on = useSharedValue(selected ? 1 : 0);
@@ -61,13 +60,13 @@ export function SelectRow({ label, spoken, selected, onPress, renderIcon }: Prop
 
   const fill = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
-      on.value,
+      pressed.value * (1 - on.value),
       [0, 1],
-      [interpolateColor(pressed.value, [0, 1], [color.surface2, color.surface3]), color.text1],
+      [color.surface1, color.surface2],
     ),
   }));
   const labelColor = useAnimatedStyle(() => ({
-    color: interpolateColor(on.value, [0, 1], [color.text1, color.onAccent]),
+    color: interpolateColor(on.value, [0, 1], [color.text2, color.text1]),
   }));
   const restLayer = useAnimatedStyle(() => ({ opacity: 1 - on.value }));
   const onLayer = useAnimatedStyle(() => ({ opacity: on.value }));
@@ -93,31 +92,24 @@ export function SelectRow({ label, spoken, selected, onPress, renderIcon }: Prop
       style={styles.row}
     >
       <Animated.View style={[StyleSheet.absoluteFill, fill]} />
+      <RowLight on={on} />
       <View style={{ width: box, height: box }}>
         <Animated.View style={[styles.layer, restLayer]}>
-          {renderIcon(color.text1, icon)}
+          {renderIcon(color.text2, icon)}
         </Animated.View>
         <Animated.View style={[styles.layer, onLayer]}>
-          {renderIcon(color.onAccent, icon)}
+          {renderIcon(color.text1, icon)}
         </Animated.View>
       </View>
       <Animated.Text style={[styles.label, labelColor]}>{label}</Animated.Text>
-      <View style={styles.mark}>
-        <Animated.View style={[styles.layer, restLayer]}>
-          <View style={styles.ring} />
-        </Animated.View>
-        <Animated.View style={[styles.layer, onLayer]}>
-          <View style={styles.disc}>
-            <CheckGlyph size={14} color={color.text1} />
-          </View>
-        </Animated.View>
-      </View>
+      <ChoiceMark on={on} />
     </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
+    ...panel,
     // minHeight, so a label at the largest text sizes grows the row instead
     // of being cut by it.
     minHeight: 56,
@@ -126,7 +118,6 @@ const styles = StyleSheet.create({
     gap: space.md,
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
-    borderRadius: radius.card,
     overflow: 'hidden',
   },
   layer: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
@@ -134,23 +125,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: font.bodyMedium,
     ...textStyle(type.body),
-  },
-  mark: { width: MARK, height: MARK },
-  ring: {
-    width: MARK,
-    height: MARK,
-    borderRadius: MARK / 2,
-    borderWidth: 2,
-    // text3 rather than hairline: the ring is the control's only boundary, and
-    // hairline is 1.3:1 on surface2 where WCAG asks 3:1 of one.
-    borderColor: color.text3,
-  },
-  disc: {
-    width: MARK,
-    height: MARK,
-    borderRadius: MARK / 2,
-    backgroundColor: color.onAccent,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

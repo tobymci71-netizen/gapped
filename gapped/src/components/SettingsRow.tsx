@@ -1,18 +1,19 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { SectionHeader } from '@/components/brand/SectionHeader';
 import { Card } from '@/components/Card';
+import { Icon, type IconName } from '@/components/icons';
 import { PressableScale } from '@/components/PressableScale';
 import { Text } from '@/components/Text';
 import { color, space } from '@/theme/tokens';
 
-const TILE = 28;
-/** Separators start after the glyph tile, iOS-style. */
-const SEPARATOR_INSET = space.lg + TILE + space.md;
+const ICON = 22;
+/** Separators start after the icon, iOS-style. */
+const SEPARATOR_INSET = space.lg + ICON + space.md;
 
 type Props = {
-  /** An emoji or text glyph rendered inside the tinted tile. */
-  glyph: string;
-  tint: string;
+  /** The row's stroke icon (components/icons.tsx). Never an emoji. */
+  icon: IconName;
   label: string;
   /** Right-aligned muted value (e.g. a version number). Replaces the chevron. */
   value?: string;
@@ -27,17 +28,17 @@ type Props = {
 };
 
 export function SettingsRow({
-  glyph,
-  tint,
+  icon,
   label,
   value,
   destructive,
   onPress,
 }: Props): React.JSX.Element {
+  const ink = destructive ? color.danger : color.text2;
   const body = (
     <View style={styles.row}>
-      <View style={[styles.tile, { backgroundColor: tint }]}>
-        <Text style={styles.glyph}>{glyph}</Text>
+      <View style={styles.icon}>
+        <Icon name={icon} size={ICON} color={ink} />
       </View>
       <Text
         variant="bodyMedium"
@@ -47,11 +48,13 @@ export function SettingsRow({
         {label}
       </Text>
       {value != null ? (
-        // caption's own text2, not text3: the row sits on a surface1 card,
-        // where text3 measures 4.30:1 — under AA for a value people read.
-        <Text variant="caption">{value}</Text>
+        // Data, so mono (Units, Country, the version), in the soft text.
+        <Text variant="mono" style={styles.value}>
+          {value}
+        </Text>
       ) : onPress ? (
-        <Text style={styles.chevron}>›</Text>
+        // Decorative, so it only needs the 3:1 of a graphic; text3 is 6.06:1.
+        <Icon name="chevronRight" size={18} color={color.text3} strokeWidth={2} />
       ) : null}
     </View>
   );
@@ -76,6 +79,10 @@ export function SettingsRow({
   );
 }
 
+/**
+ * A titled group of rows: the title in the wide italic (SectionHeader), the
+ * rows on one night panel with hairlines between them.
+ */
 export function SettingsSection({
   title,
   children,
@@ -86,9 +93,7 @@ export function SettingsSection({
   const rows = React.Children.toArray(children).filter(Boolean);
   return (
     <View style={styles.section}>
-      <Text variant="caption" style={styles.sectionTitle}>
-        {title.toUpperCase()}
-      </Text>
+      <SectionHeader title={title} />
       <Card style={styles.card}>
         {rows.map((row, i) => (
           <View key={i}>
@@ -109,19 +114,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     gap: space.md,
   },
-  tile: {
-    width: TILE,
-    height: TILE,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  glyph: { fontSize: 15, lineHeight: 20, color: color.text1, textAlign: 'center' },
+  icon: { width: ICON, height: ICON, alignItems: 'center', justifyContent: 'center' },
   label: { flex: 1 },
-  // A decorative glyph, so text3 only needs the 3:1 of a graphic; 4.30 clears it.
-  chevron: { fontSize: 20, lineHeight: 22, color: color.text3 },
-  section: { marginTop: space.xl },
-  sectionTitle: { color: color.text3, letterSpacing: 1, marginBottom: space.sm },
+  value: { color: color.text2 },
+  section: { marginTop: space.lg },
   // Rows own their padding so separators can run full-bleed from the inset.
   card: { padding: 0, overflow: 'hidden' },
   separator: {

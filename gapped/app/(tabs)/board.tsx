@@ -1,15 +1,16 @@
 import { FlashList } from '@shopify/flash-list';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { AppState, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Easing, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { countryByCode } from '@/data/countries';
-import { BottomSheet } from '@/components/BottomSheet';
+import { Button } from '@/components/Button';
 import { Entrance } from '@/components/Entrance';
-import { PressableScale } from '@/components/PressableScale';
-import { ProBadge, useGoPro } from '@/components/ProBadge';
+import { Icon } from '@/components/icons';
+import { useGoPro } from '@/components/ProBadge';
 import { ReportSheet, type ReportTarget } from '@/components/ReportSheet';
 import { Screen } from '@/components/Screen';
-import { Skeleton } from '@/components/Skeleton';
 import { Text } from '@/components/Text';
 import {
   boardSafetyLine,
@@ -37,39 +38,54 @@ import {
   settleHidden,
   withoutHidden,
 } from '@/board/hiddenRows';
+import {
+  barProgress,
+  boardBasis,
+  type BoardOrigin,
+  boardOrigin,
+  heroView,
+  periodWords,
+  rowAccessibilityLabel,
+  scopeName as scopeLabel,
+  valueParts,
+} from '@/board/present';
 import { BoardMetric, BoardPeriod, BoardRow, BoardScope } from '@/board/types';
+import { BoardHero } from '@/board/ui/BoardHero';
+import { BoardRowSkeleton, BoardRowView, SWEEP_TOTAL } from '@/board/ui/BoardRow';
+import {
+  BoardLink,
+  DropChip,
+  LARGE_TEXT,
+  MetricTabs,
+  type Option,
+  OptionSheet,
+  Segments,
+  VerifiedToggle,
+} from '@/board/ui/controls';
+import { barTrackWidth, EDGE } from '@/board/ui/layout';
 import { useDriveStore } from '@/drive/recorder';
-import { formatDistance, formatSpeed } from '@/drive/units';
 import { bracketLabel } from '@/vehicles/brackets';
 import { useAccess } from '@/lib/entitlements';
-import { haptic } from '@/lib/haptics';
+import { useReducedMotion } from '@/lib/useReducedMotion';
 import { useProfile } from '@/state/profile';
-import { color, glyph as glyphSize, radius, space, textStyle } from '@/theme/tokens';
-
-/**
- * `glyph` is the leading mark shown on the pill and beside the sheet row.
- * `detail` is a trailing note that must stay readable however long the label
- * runs — the class picker's driver count. `pro` marks a row the account's
- * plan does not open (src/board/bracketAccess.ts), with an
- * `accessibilityLabel` that says so; neither is set on an open row.
- */
-type Option<T extends string> = {
-  key: T;
-  label: string;
-  glyph?: string;
-  detail?: string;
-  pro?: boolean;
-  accessibilityLabel?: string;
-};
+import { color, space } from '@/theme/tokens';
 
 // Distance first, and the board the tab opens on: it ranks driving, not a
 // number that could be chased on a public road. Top speed and 0–60 stay a
 // tap away, each with its safety line (boardSafetyLine).
 const METRICS: Option<BoardMetric>[] = [
-  { key: 'distance', label: 'Distance' },
-  { key: 'trip_count', label: 'Drives' },
+  {
+    key: 'distance',
+    label: 'Distance',
+    accessibilityHint: "Ranks each driver's longest single drive.",
+  },
+  {
+    key: 'trip_count',
+    label: 'Drives',
+    accessibilityHint: 'Ranks how many drives each driver recorded.',
+  },
   { key: 'top_speed', label: 'Top speed' },
-  { key: 'zero_to_60', label: '0–60 mph' },
+  { key: 'zero_to_60', label: '0–60', accessibilityLabel: '0 to 60 mph' },
 ];
 // Rolling windows, labelled as what they are. Both the local board and
 // board_top count back from now, so "Today" listed last night's 22:00 run on
@@ -81,357 +97,37 @@ const PERIODS: Option<BoardPeriod>[] = [
   { key: 'all', label: 'All-time' },
 ];
 
-/** Literal table, not toLocaleString: the subtitle must read identically on
- *  every device, whatever ICU data the platform shipped with. */
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-function currentMonthLabel(): string {
-  const d = new Date();
-  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-/**
- * Text scale (iOS AX1 is ~1.79) above which the default layout stops fitting
- * a small phone. The fixed header — headline, pills, toggle, sample banner —
- * grew until the list beneath it had room for less than one row, and the
- * rank, chip and value beside each name could not shrink, so the name went to
- * zero width and the value ran off the edge. Past this scale the header
- * scrolls with the list and each row stacks its value and chips under the
- * name. Below it, nothing changes.
- */
-const LARGE_TEXT = 1.5;
-
-/**
- * Ceiling on how far the 9pt row chips scale. They are badges rather than
- * reading text, and at AX5 "UNVERIFIED" alone was wider than the row.
- */
-const CHIP_MAX_SCALE = 2;
-
-/** Fallback glyph when the profile carries no country. */
-const NO_FLAG = '🏳️';
-
 /** One stable empty list for the loading state, rather than a new [] per render. */
 const NO_ROWS: BoardRow[] = [];
 
 /** Nobody hidden on this screen yet. */
 const NONE_HIDDEN: HiddenHere = new Map();
 
-/**
- * Widens the 32pt '⋯' button to the 44pt minimum sideways, into the row's
- * own padding and the gap beside the value, without pushing the value left.
- */
-const MORE_HIT_SLOP = { left: 6, right: 6 } as const;
+/** Skeleton rows while a board loads: about a screenful. */
+const SKELETON_ROWS = 6;
 
 function labelFor<T extends string>(options: Option<T>[], value: T): string {
   return options.find((o) => o.key === value)?.label ?? '';
 }
 
-/** Compact dropdown trigger: glyph, current value, chevron. */
-function Pill({
-  glyph,
-  label,
-  onPress,
-  disabled,
-  pro,
-  accessibilityLabel,
-}: {
-  glyph: string;
-  label: string;
-  onPress: () => void;
-  /** Dimmed and inert — a filter we cannot honour must not look live. */
-  disabled?: boolean;
-  /** Carries the PRO chip: the choices behind this pill are Pro. */
-  pro?: boolean;
-  /** Defaults to `label`. */
-  accessibilityLabel?: string;
-}): React.JSX.Element {
-  return (
-    <PressableScale
-      silent
-      disabled={disabled}
-      onPress={() => {
-        haptic.selection();
-        onPress();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ disabled: disabled === true }}
-      style={[styles.pill, disabled === true && styles.pillOff]}
-    >
-      <Text style={styles.pillGlyph}>{glyph}</Text>
-      <Text variant="caption" style={styles.pillLabel} numberOfLines={1}>
-        {label}
-      </Text>
-      {/* Wrapped so the row centres the chip; the chip pins itself to the
-          start of its own box. */}
-      {pro ? (
-        <View>
-          <ProBadge />
-        </View>
-      ) : null}
-      <Text style={styles.pillChevron}>▾</Text>
-    </PressableScale>
-  );
-}
-
-function OptionSheet<T extends string>({
-  visible,
-  title,
-  options,
-  value,
-  onSelect,
-  onClose,
-  onHidden,
-}: {
-  visible: boolean;
-  title: string;
-  options: Option<T>[];
-  value: T;
-  onSelect: (v: T) => void;
-  onClose: () => void;
-  onHidden?: () => void;
-}): React.JSX.Element {
-  // Past LARGE_TEXT a row's detail moves under its label. Beside it, the
-  // driver count — which never shrinks — left the class name a few characters
-  // a line at AX sizes on a small phone.
-  const stacked = useWindowDimensions().fontScale >= LARGE_TEXT;
-  return (
-    <BottomSheet
-      visible={visible}
-      onClose={onClose}
-      onHidden={onHidden}
-      title={title}
-      heightFraction={0.5}
-    >
-      {/* Scrolls, because the sheet is a fixed half-screen that clips: the
-          class list has a row per class with drivers in it (up to sixty), and
-          at accessibility text sizes even the four metrics outgrow it. The
-          sheet's drag-to-dismiss lives on its header, so the two gestures
-          never compete. */}
-      <ScrollView
-        style={styles.sheetScroll}
-        contentContainerStyle={styles.sheetBody}
-        alwaysBounceVertical={false}
-      >
-        {options.map((o) => (
-          <PressableScale
-            key={o.key}
-            silent
-            onPress={() => {
-              haptic.selection();
-              onSelect(o.key);
-              onClose();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={o.accessibilityLabel}
-            accessibilityState={{ selected: o.key === value }}
-            style={styles.option}
-          >
-            <View style={styles.optionBody}>
-              {o.glyph ? <Text style={styles.optionGlyph}>{o.glyph}</Text> : null}
-              <View style={stacked ? styles.optionTextStacked : styles.optionText}>
-                {/* Two lines before an ellipsis: "All drivetrains · Stock · Open
-                    class" is the commonest class and is wider than one line.
-                    Stacked, nothing is cut: the sheet scrolls. */}
-                <Text
-                  variant="bodyMedium"
-                  numberOfLines={stacked ? undefined : 2}
-                  style={[
-                    stacked ? null : styles.optionLabel,
-                    { color: o.key === value ? color.accent : color.text1 },
-                  ]}
-                >
-                  {o.label}
-                </Text>
-                {o.detail ? (
-                  <Text variant="caption" style={stacked ? null : styles.optionDetail}>
-                    {o.detail}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-            {/* A Pro row is never the selected one, so the chip takes the
-                tick's place rather than crowding the label. */}
-            {o.key === value ? (
-              <Text style={styles.tick}>✓</Text>
-            ) : o.pro ? (
-              <View style={styles.optionPro}>
-                <ProBadge />
-              </View>
-            ) : null}
-          </PressableScale>
-        ))}
-      </ScrollView>
-    </BottomSheet>
-  );
-}
-
-/**
- * One board row. `stacked` is the large-text layout: value and chips move
- * under the name instead of competing with it for one line's width.
+/*
+ * LARGE_TEXT (src/board/ui/controls.tsx) is the text scale (iOS AX1 is ~1.79)
+ * above which the default layout stops fitting a small phone. The fixed
+ * controls — headline, tabs, segments, chips — grew until the list beneath
+ * them had room for less than one row, and the rank, tags and value beside
+ * each name could not shrink, so the name went to zero width and the value
+ * ran off the edge. Past this scale the controls scroll with the list, the
+ * hero drops its scene, and each row stacks its value and tags under the
+ * name. Below it, nothing changes.
  */
-function BoardRowView({
-  item,
-  value,
-  stacked,
-  menuSlot,
-  onMore,
-}: {
-  item: BoardRow;
-  value: string;
-  stacked: boolean;
-  /**
-   * The board has rows with a '⋯' button, so every row keeps the column, and
-   * values stay aligned whether or not their own row has one.
-   */
-  menuSlot: boolean;
-  /** Opens Report / Hide. Set only on another real driver's row. */
-  onMore?: () => void;
-}): React.JSX.Element {
-  const chips = (
-    <>
-      {item.kind === 'benchmark' ? (
-        <View style={styles.chip}>
-          <Text style={styles.chipText} maxFontSizeMultiplier={CHIP_MAX_SCALE}>
-            BENCHMARK
-          </Text>
-        </View>
-      ) : null}
-      {item.kind === 'sample' ? (
-        <View style={[styles.chip, { borderColor: color.text3 }]}>
-          <Text
-            style={[styles.chipText, { color: color.text3 }]}
-            maxFontSizeMultiplier={CHIP_MAX_SCALE}
-          >
-            SAMPLE
-          </Text>
-        </View>
-      ) : null}
-      {/* A run's verification state is per-row, so it is shown per
-          row — the filter chip alone cannot say which is which. */}
-      {(item.kind === 'you' || item.kind === 'user') && item.verification === 'unverified' ? (
-        <View style={[styles.chip, { borderColor: color.unverified }]}>
-          <Text
-            style={[styles.chipText, { color: color.unverified }]}
-            maxFontSizeMultiplier={CHIP_MAX_SCALE}
-          >
-            UNVERIFIED
-          </Text>
-        </View>
-      ) : null}
-    </>
-  );
-  const valueText = (
-    <Text
-      variant="bodyMedium"
-      style={{
-        color:
-          item.kind === 'you'
-            ? color.accent
-            : item.verification === 'verified'
-              ? color.text1
-              : color.text2,
-      }}
-    >
-      {value}
-    </Text>
-  );
-
-  // The visible, VoiceOver-reachable way to Report or Hide; the row's long
-  // press is the shortcut to the same sheet.
-  const more = onMore ? (
-    <PressableScale
-      silent
-      onPress={() => {
-        haptic.selection();
-        onMore();
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={`Report or hide ${item.username}`}
-      hitSlop={MORE_HIT_SLOP}
-      style={styles.more}
-    >
-      <Text style={styles.moreGlyph}>⋯</Text>
-    </PressableScale>
-  ) : menuSlot ? (
-    <View style={styles.more} />
-  ) : null;
-
-  const row = (
-    <View
-      style={[
-        styles.row,
-        item.kind === 'you' && styles.rowYou,
-        item.kind === 'benchmark' && styles.rowBenchmark,
-      ]}
-    >
-      <Text variant="bodyMedium" style={styles.rank}>
-        {item.rank}
-      </Text>
-      <View style={styles.rowBody}>
-        <Text
-          variant="bodyMedium"
-          style={item.kind === 'benchmark' ? { color: color.text2 } : undefined}
-          numberOfLines={stacked ? 2 : 1}
-        >
-          {item.username}
-        </Text>
-        {item.vehicle || item.note ? (
-          <Text variant="caption" numberOfLines={1}>
-            {item.vehicle ?? item.note}
-          </Text>
-        ) : null}
-        {stacked ? (
-          <View style={styles.rowStacked}>
-            {valueText}
-            {chips}
-          </View>
-        ) : null}
-      </View>
-      {stacked ? null : (
-        <>
-          {chips}
-          {valueText}
-        </>
-      )}
-      {more}
-    </View>
-  );
-  if (!onMore) return row;
-  // Not accessible itself, so VoiceOver still reaches the row's text and its
-  // '⋯' button one by one; a grouped row would swallow the button. No press
-  // styling either: every scroll that starts on a row would flash it.
-  return (
-    <Pressable
-      accessible={false}
-      onLongPress={() => {
-        haptic.selection();
-        onMore();
-      }}
-    >
-      {row}
-    </Pressable>
-  );
-}
 
 export default function BoardScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { username, country, unitPref } = useProfile();
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, width: windowWidth } = useWindowDimensions();
   const largeText = fontScale >= LARGE_TEXT;
+  const reduced = useReducedMotion();
   const [metric, setMetric] = useState<BoardMetric>('distance');
   const [scope, setScope] = useState<BoardScope>('global');
   const [period, setPeriod] = useState<BoardPeriod>('week');
@@ -455,27 +151,24 @@ export default function BoardScreen() {
   // the compiler can see it is as stable as `bracket` where `load` keys on it.
   const shownBracket = useMemo(() => appliedBracket(bracket, access), [bracket, access]);
   const classLabel = shownBracket ? bracketLabel(shownBracket) : ALL_CLASSES_LABEL;
-  const [sheet, setSheet] = useState<'scope' | 'metric' | 'period' | 'bracket' | null>(null);
-  // Refreshed on focus, not frozen at mount: the tab is never unmounted, so a
-  // label computed once still read "Sep" in October.
-  const [monthLabel, setMonthLabel] = useState(currentMonthLabel);
+  const [sheet, setSheet] = useState<'period' | 'bracket' | null>(null);
 
-  // The reference labels its scope options with flags; ours names the user's
-  // own country rather than a generic "Country".
+  // The segments read World / Country / Friends, as the mock sets them; the
+  // board's caption and VoiceOver name the viewer's own country (scopeName,
+  // below the board state).
   const countryEntry = useMemo(() => countryByCode(country), [country]);
   const scopes: Option<BoardScope>[] = useMemo(
     () => [
-      { key: 'global', label: 'World', glyph: '🌍' },
+      { key: 'global', label: 'World' },
       {
         key: 'country',
-        label: countryEntry?.name ?? 'Country',
-        glyph: countryEntry?.flag ?? NO_FLAG,
+        label: 'Country',
+        accessibilityLabel: countryEntry ? `Country, ${countryEntry.name}` : 'Country',
       },
-      { key: 'friends', label: 'Friends', glyph: '👥' },
+      { key: 'friends', label: 'Friends' },
     ],
     [countryEntry],
   );
-  const scopeGlyph = scopes.find((o) => o.key === scope)?.glyph ?? '🌍';
 
   // Driver counts are shown because a class of two is a different claim than a
   // class of two hundred, and the label alone hides that. The count is its
@@ -498,23 +191,31 @@ export default function BoardScreen() {
   // (clear to the skeleton: the old rows answer a different question) from
   // the same one again on refocus (refresh in place).
   const shownQuery = useRef<string | null>(null);
-  // `live`: a local board holds only this device's drives, so scope and
-  // verification are server concepts and those controls are shown inert
-  // rather than lying. Held beside `result` rather than derived from it so the
-  // controls do not flicker while `result` is null during a reload.
+  // `origin`: where the newest board's rows came from (boardOrigin). A local
+  // board holds only this device's drives, so scope and verification are
+  // server concepts and those controls are shown inert rather than lying, and
+  // the caption names the board for what it is. Held beside `result` rather
+  // than derived from it so neither flickers while `result` is null during a
+  // reload; null until the first board lands.
   // `answered`: the newest request the server has answered, whether or not
   // its board differed from the one showing, which says which hides the
   // server has applied by itself (below, and answeredAfter).
+  // `failed`: the newest request threw before it could answer at all (not
+  // the same as an empty board, which is an answer).
   const [board, setBoard] = useState<{
     result: BoardResult | null;
-    live: boolean;
+    origin: BoardOrigin | null;
     answered: number;
+    failed: boolean;
   }>({
     result: null,
-    live: false,
+    origin: null,
     answered: 0,
+    failed: false,
   });
-  const { result, live: filtersLive, answered } = board;
+  const { result, origin, answered, failed } = board;
+  const filtersLive = origin === 'server';
+  const scopeName = scopeLabel(scope, countryEntry?.name ?? null, origin);
   // Report / Hide. `hidden` takes a driver off this board the moment the hide
   // goes through, until a board fetched after it — which the server answers
   // without them — is the one on screen (src/board/hiddenRows.ts).
@@ -538,12 +239,25 @@ export default function BoardScreen() {
     const quiet = key === shownQuery.current;
     shownQuery.current = key;
     const seq = ++requestId.current;
-    if (!quiet) setBoard((b) => (b.result == null ? b : { ...b, result: null }));
-    const r = await fetchBoard(
-      { metric, scope, period, verifiedOnly, bracket: shownBracket },
-      username,
-      country,
-    );
+    if (!quiet) {
+      setBoard((b) => (b.result == null && !b.failed ? b : { ...b, result: null, failed: false }));
+    }
+    let r: BoardResult;
+    try {
+      r = await fetchBoard(
+        { metric, scope, period, verifiedOnly, bracket: shownBracket },
+        username,
+        country,
+      );
+    } catch {
+      // fetchBoard falls back to this device's drives when the server cannot
+      // be reached, so this is the device's own store failing. A quiet
+      // refetch keeps the board already showing; a new filter says so and
+      // offers to try again rather than holding the skeleton for ever.
+      if (seq !== requestId.current) return;
+      setBoard((b) => (b.result == null ? { ...b, failed: true } : b));
+      return;
+    }
     if (seq !== requestId.current) return;
     setBoard((b) => {
       const next = settleBoard(b.result, r, quiet);
@@ -551,9 +265,9 @@ export default function BoardScreen() {
       // made before any refetch comes back as exactly the board from before
       // the hide.
       const nowAnswered = answeredAfter(b.answered, seq, r.source);
-      return next === b.result && nowAnswered === b.answered
+      return next === b.result && nowAnswered === b.answered && !b.failed
         ? b
-        : { result: next, live: next.source === 'server', answered: nowAnswered };
+        : { result: next, origin: boardOrigin(next), answered: nowAnswered, failed: false };
     });
     // `country` is a real input now that it scopes the query — without it here
     // a country change would leave the previous country's board on screen.
@@ -563,23 +277,18 @@ export default function BoardScreen() {
   // mount-only load kept the SAMPLE board up after the first drive, and a
   // friend added through "Manage friends" never appeared on return. The
   // refocus fetch is quiet (see `load`), so switching tabs neither flashes
-  // the skeleton nor replays the row entrances.
+  // the skeleton nor replays the bars' sweep.
   //
   // Focus is not the only way back to a board that is showing, so while it is
   // focused it also refreshes on return to the foreground and when a drive
   // finishes with no navigation (auto-end with the phone left on this tab) —
   // the same triggers as the You tab. Focus alone left an app parked on Ranks
-  // overnight showing yesterday's board, and on the 1st still reading last
-  // month.
+  // overnight showing yesterday's board.
   useFocusEffect(
     useCallback(() => {
-      const refresh = () => {
-        setMonthLabel(currentMonthLabel());
-        void load();
-      };
-      refresh();
+      void load();
       const appState = AppState.addEventListener('change', (s) => {
-        if (s === 'active') refresh();
+        if (s === 'active') void load();
       });
       const unsubscribeDrives = useDriveStore.subscribe((s, prev) => {
         if (s.lastSummary !== prev.lastSummary) void load();
@@ -625,160 +334,240 @@ export default function BoardScreen() {
     }, [metric, period, scope, verifiedOnly, country]),
   );
 
-  // A lit chip over rows nothing has verified would assert the filter applied.
+  // The bars sweep out once per new board: from 0 when a board lands after
+  // the skeleton, never on a quiet refresh (the board object is kept) or a
+  // hide (the rows change, the board does not). One shared value for every
+  // row, so FlashList recycling a cell never replays it. Reduce Motion: drawn
+  // at full length.
+  const sweep = useSharedValue(0);
+  const hadBoard = useRef(false);
+  useEffect(() => {
+    const has = result != null;
+    if (!has) sweep.set(0);
+    else if (!hadBoard.current) {
+      sweep.set(
+        reduced ? 1 : withTiming(1, { duration: SWEEP_TOTAL, easing: Easing.linear }),
+      );
+    }
+    hadBoard.current = has;
+  }, [result, reduced, sweep]);
+
+  // A lit tick over rows nothing has verified would assert the filter applied.
   const verifiedShown = filtersLive && verifiedOnly;
 
-  /**
-   * Formats a row's value in the unit that row's metric is measured in.
-   *
-   * Two things changed here when BoardRow.value became a discriminated union.
-   *
-   * The unit no longer has to be asserted: `row.metric` narrows `row.value` to
-   * a single branded type, so `formatSpeed` can only ever be handed m/s. The
-   * smart-constructor calls that used to re-brand a bare number are gone, and
-   * with them the possibility that this switch and the one in boards.ts drift
-   * apart — they now share a discriminant, and adding a fifth metric fails to
-   * compile in both files until both handle it.
-   *
-   * More importantly, this switched on `metric` — the screen's *current*
-   * selection — rather than on the row. Rows fetched for one metric and still
-   * on screen when the pill changed were formatted in the new metric's units:
-   * a 0-60 time rendered as "4 m", a distance rendered as a speed. Switching
-   * on `row.metric` makes the row carry its own unit, so a stale row formats
-   * correctly no matter what the pill says.
-   */
-  const formatValue = (row: BoardRow): string => {
-    switch (row.metric) {
-      case 'top_speed':
-        return formatSpeed(row.value, unitPref);
-      case 'distance':
-        return formatDistance(row.value, unitPref);
-      case 'trip_count':
-        return `${Math.round(row.value)}`;
-      case 'zero_to_60':
-        return `${row.value.toFixed(2)} s`;
-      default: {
-        const unhandled: never = row;
-        return unhandled;
-      }
-    }
-  };
-
   const safetyLine = boardSafetyLine(metric);
+  const progress = useMemo(() => barProgress(rows), [rows]);
+  const track = barTrackWidth(windowWidth, menuSlot, largeText);
 
-  const header = (
-    <View style={styles.header}>
-      <Text variant="headline">Ranks</Text>
-      {/* The display face is upright by house rule — the reference sets this
-          subtitle in italic; we set it in the caption face instead. */}
-      <Text variant="caption" style={styles.subtitle}>
-        {monthLabel}
-      </Text>
+  const controls = (
+    <View style={styles.controls}>
+      <View style={styles.titleRow}>
+        <Text variant="headline" accessibilityRole="header">
+          Ranks
+        </Text>
+        <VerifiedToggle
+          on={verifiedShown}
+          disabled={!filtersLive}
+          onPress={() => setVerifiedOnly((v) => !v)}
+        />
+      </View>
 
-      {/* Pills size to their content inside a scroller. At flex: 1 the fourth
-          pill left roughly 14pt for a label, so "Top speed" and "All-time"
-          rendered as one glyph and an ellipsis. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.pillsScroll}
-        contentContainerStyle={styles.pills}
-      >
+      <MetricTabs options={METRICS} value={metric} onChange={setMetric} />
+
+      <View style={styles.scopeRow}>
         {/* Inert on a local board — but never while a narrower scope is
             still applied, or a board that fell back offline could hold the
             screen on Friends with no way back to World. */}
-        <Pill
-          glyph={scopeGlyph}
-          label={labelFor(scopes, scope)}
-          onPress={() => setSheet('scope')}
+        <Segments
+          options={scopes}
+          value={scope}
+          onChange={setScope}
           disabled={!filtersLive && scope === 'global'}
         />
-        <Pill glyph="⚡" label={labelFor(METRICS, metric)} onPress={() => setSheet('metric')} />
-        <Pill glyph="📅" label={labelFor(PERIODS, period)} onPress={() => setSheet('period')} />
-        {/* Locked, the pill still opens the sheet: the classes and their
+        <DropChip
+          label={labelFor(PERIODS, period)}
+          onPress={() => setSheet('period')}
+          accessibilityLabel={`Time period: ${periodWords(period)}`}
+          style={styles.period}
+        />
+      </View>
+
+      <View style={styles.captionRow}>
+        {/* What this board ranks, in words: Distance is each driver's
+            longest single drive, not miles added up. */}
+        <Text variant="mono" style={styles.caption} numberOfLines={2}>
+          {scopeName} · {boardBasis(metric)}
+        </Text>
+        {/* Locked, the chip still opens the sheet: the classes and their
             driver counts are real and worth seeing, and each one is marked
             PRO there. */}
         {brackets.length > 0 ? (
-          <Pill
-            glyph="🏁"
+          <DropChip
             label={classLabel}
+            mono
             onPress={() => setSheet('bracket')}
             disabled={!filtersLive && shownBracket == null}
             pro={classesLocked}
             accessibilityLabel={bracketPillAccessibilityLabel(classLabel, access)}
+            style={styles.classChip}
           />
         ) : null}
-      </ScrollView>
-
-      <View style={styles.toggleRow}>
-        {/* The press target is the full 44pt; the bordered box drawn inside
-            it keeps its compact size. */}
-        <PressableScale
-          silent
-          disabled={!filtersLive}
-          onPress={() => {
-            haptic.selection();
-            setVerifiedOnly((v) => !v);
-          }}
-          accessibilityRole="button"
-          accessibilityState={{ selected: verifiedShown, disabled: !filtersLive }}
-          accessibilityLabel="Verified runs only"
-          style={styles.verifiedHit}
-        >
-          <View
-            style={[
-              styles.verifiedToggle,
-              verifiedShown && styles.verifiedToggleOn,
-              !filtersLive && styles.pillOff,
-            ]}
-          >
-            <Text
-              variant="caption"
-              style={[
-                styles.verifiedLabel,
-                { color: verifiedShown ? color.verified : color.text3 },
-              ]}
-            >
-              VERIFIED
-            </Text>
-          </View>
-        </PressableScale>
       </View>
-
-      {safetyLine ? (
-        <Text variant="legal" style={styles.safety}>
-          {safetyLine}
-        </Text>
-      ) : null}
-
-      {result?.isSample ? (
-        <View style={styles.sampleBanner}>
-          <Text variant="caption" style={{ color: color.onAccent }}>
-            SAMPLE BOARD — record your first drive to start the real one
-          </Text>
-        </View>
-      ) : null}
-
-      {/* The friends board is only ever as full as you make it, so the way to
-          fill it belongs right here rather than buried in Settings. */}
-      {scope === 'friends' ? (
-        <PressableScale
-          onPress={() => router.push('/friends')}
-          accessibilityRole="button"
-          accessibilityLabel="Manage friends"
-          style={styles.manageFriends}
-        >
-          <Text variant="caption" style={{ color: color.accent }}>
-            Manage friends →
-          </Text>
-        </PressableScale>
-      ) : null}
     </View>
   );
 
+  const heroShown = useMemo(
+    () =>
+      result == null
+        ? null
+        : heroView(
+            rows,
+            { metric, period, scopeName, isSample: result.isSample, verifiedShown },
+            unitPref,
+          ),
+    [rows, result, metric, period, scopeName, verifiedShown, unitPref],
+  );
+  const hero = failed ? null : result == null ? (
+    <BoardHero kind="loading" compact={largeText} />
+  ) : heroShown ? (
+    <BoardHero {...heroShown} compact={largeText} />
+  ) : null;
+
+  // Scrolls with the list: the safety line, the friends link and the hero.
+  const lead = (
+    <View>
+      {safetyLine ? (
+        <View style={styles.safety}>
+          <Icon name="shield" size={16} color={color.text3} />
+          <Text variant="legal" style={styles.safetyText}>
+            {safetyLine}
+          </Text>
+        </View>
+      ) : null}
+      {/* The friends board is only ever as full as you make it, so the way to
+          fill it belongs right here rather than buried in Settings. */}
+      {scope === 'friends' ? (
+        <View style={styles.friends}>
+          <BoardLink
+            icon="friends"
+            label="Manage friends"
+            onPress={() => router.push('/friends')}
+          />
+        </View>
+      ) : null}
+      {hero}
+    </View>
+  );
+
+  const listHeader = largeText ? (
+    <View>
+      {controls}
+      {lead}
+    </View>
+  ) : (
+    lead
+  );
+
+  const extraData = useMemo(
+    () => ({ menuSlot, largeText, unitPref, track, progress }),
+    [menuSlot, largeText, unitPref, track, progress],
+  );
+
   return (
-    <Screen scroll={false}>
-      {largeText ? null : header}
+    <Screen
+      scroll={false}
+      style={{ paddingHorizontal: 0, paddingBottom: 0, paddingTop: insets.top + space.xs }}
+    >
+      {largeText ? null : controls}
+
+      {/* The list stays mounted through a reload, with the skeleton as its
+          empty state, so that at large text the header can live inside it
+          and scroll away rather than leaving the rows no room. It fades in
+          once, as a whole: an Entrance per row replayed its animation every
+          time FlashList recycled a cell into a new position. */}
+      <Entrance style={styles.list}>
+        <FlashList
+          data={rows}
+          extraData={extraData}
+          keyExtractor={(r: BoardRow) => r.id}
+          ListHeaderComponent={listHeader}
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item, index }: { item: BoardRow; index: number }) => (
+            <BoardRowView
+              item={item}
+              index={index}
+              value={valueParts(item, unitPref)}
+              accessibilityLabel={rowAccessibilityLabel(item, unitPref)}
+              progress={progress.get(item.id) ?? 0}
+              track={track}
+              sweep={sweep}
+              stacked={largeText}
+              menuSlot={menuSlot}
+              onMore={
+                isModeratable(item)
+                  ? () => setReportTarget({ profileId: item.profileId, username: item.username })
+                  : undefined
+              }
+            />
+          )}
+          ListEmptyComponent={
+            failed ? (
+              <View style={styles.empty}>
+                <Icon name="ranks" size={28} color={color.text3} />
+                <Text variant="cardTitle" accessibilityRole="header">
+                  Couldn&apos;t load the board
+                </Text>
+                {/* Only what is known: the board could not be built. Nothing
+                    here can say why, or vouch for the drives behind it. */}
+                <Text variant="callout">Something went wrong building this board.</Text>
+                <Button
+                  label="Try again"
+                  variant="secondary"
+                  arrow={false}
+                  onPress={() => {
+                    // Back to the skeleton while it asks again.
+                    setBoard((b) => ({ ...b, failed: false }));
+                    void load();
+                  }}
+                  style={styles.retry}
+                />
+              </View>
+            ) : result == null ? (
+              <View
+                style={styles.skeleton}
+                accessible
+                accessibilityLabel="Loading the board"
+              >
+                {Array.from({ length: SKELETON_ROWS }, (_, i) => (
+                  <BoardRowSkeleton key={i} index={i} track={track} />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <Icon name="ranks" size={28} color={color.text3} />
+                <Text variant="cardTitle" accessibilityRole="header">
+                  No entries yet
+                </Text>
+                <Text variant="callout">
+                  No drives match this slice. Drive, and this board fills with real entries —
+                  never invented ones.
+                </Text>
+              </View>
+            )
+          }
+          ListFooterComponent={
+            result != null && result.framing.length > 0 ? (
+              <View style={[styles.framing, rows.length > 0 && styles.framingRule]}>
+                {result.framing.map((f) => (
+                  <Text key={f} variant="legal">
+                    {f}
+                  </Text>
+                ))}
+              </View>
+            ) : null
+          }
+        />
+      </Entrance>
 
       <OptionSheet
         visible={sheet === 'bracket'}
@@ -799,80 +588,6 @@ export default function BoardScreen() {
           goPro();
         }}
       />
-
-      {/* The list stays mounted through a reload, with the skeleton as its
-          empty state, so that at large text the header can live inside it
-          and scroll away rather than leaving the rows no room. It fades in
-          once, as a whole: an Entrance per row replayed its animation every
-          time FlashList recycled a cell into a new position. */}
-      <Entrance style={styles.list}>
-        <FlashList
-          data={rows}
-          keyExtractor={(r: BoardRow) => r.id}
-          ListHeaderComponent={largeText ? header : null}
-          renderItem={({ item }: { item: BoardRow }) => (
-            <BoardRowView
-              item={item}
-              value={formatValue(item)}
-              stacked={largeText}
-              menuSlot={menuSlot}
-              onMore={
-                isModeratable(item)
-                  ? () => setReportTarget({ profileId: item.profileId, username: item.username })
-                  : undefined
-              }
-            />
-          )}
-          ListEmptyComponent={
-            result == null ? (
-              <View style={styles.skeleton}>
-                {Array.from({ length: 6 }, (_, i) => (
-                  <Skeleton key={i} style={{ height: 56 }} />
-                ))}
-              </View>
-            ) : (
-              <View style={styles.empty}>
-                <View style={styles.emptyTile}>
-                  <Text style={styles.emptyGlyph}>🏆</Text>
-                </View>
-                <Text variant="cardTitle">No entries yet</Text>
-                <Text variant="body" style={styles.emptyCopy}>
-                  No runs match this slice. Drive, and this board fills with real entries —
-                  never invented ones.
-                </Text>
-              </View>
-            )
-          }
-          ListFooterComponent={
-            result != null && result.framing.length > 0 ? (
-              <View style={styles.framing}>
-                {result.framing.map((f) => (
-                  <Text key={f} variant="caption" style={{ textAlign: 'center' }}>
-                    {f}
-                  </Text>
-                ))}
-              </View>
-            ) : null
-          }
-        />
-      </Entrance>
-
-      <OptionSheet
-        visible={sheet === 'scope'}
-        title="Scope"
-        options={scopes}
-        value={scope}
-        onSelect={setScope}
-        onClose={() => setSheet(null)}
-      />
-      <OptionSheet
-        visible={sheet === 'metric'}
-        title="Metric"
-        options={METRICS}
-        value={metric}
-        onSelect={setMetric}
-        onClose={() => setSheet(null)}
-      />
       <OptionSheet
         visible={sheet === 'period'}
         title="Period"
@@ -891,126 +606,59 @@ export default function BoardScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingBottom: space.md },
-  subtitle: { color: color.text3, marginTop: 2, letterSpacing: 0.4 },
-  pills: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
-  pillsScroll: { flexGrow: 0, marginTop: space.lg },
-  pill: {
+  controls: { paddingBottom: space.xs },
+  titleRow: {
+    minHeight: 48,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    // The 44pt touch minimum; the padding alone came to 40.
-    minHeight: 44,
-    borderRadius: radius.pill,
-    paddingHorizontal: space.md,
-    paddingVertical: 9,
-    backgroundColor: color.surface1,
-    borderWidth: 1,
-    borderColor: color.hairline,
-  },
-  pillGlyph: textStyle(glyphSize.md),
-  // No flex here. These pills live in a horizontal scroller, so there is no
-  // bounded width to take a share of: `flex: 1` made the first pill's label
-  // absorb the whole viewport, so "World" filled the row and the metric,
-  // period and class pills were pushed off-screen entirely — reachable only by
-  // scrolling a row that gave no sign it could scroll. Sizing to content is
-  // what lets all four sit side by side.
-  pillLabel: { color: color.text1 },
-  pillChevron: { ...textStyle(glyphSize.sm), color: color.text3 },
-  pillOff: { opacity: 0.45 },
-  // marginTop is small because the 44pt press target already centres the
-  // box with ~8pt of air above it.
-  toggleRow: { flexDirection: 'row', alignItems: 'center', marginTop: space.xs },
-  verifiedHit: { minHeight: 44, justifyContent: 'center' },
-  verifiedToggle: {
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: color.hairline,
-    paddingHorizontal: space.sm,
-    paddingVertical: 5,
-  },
-  verifiedToggleOn: { borderColor: color.verified },
-  verifiedLabel: { ...textStyle(glyphSize.sm), letterSpacing: 0.8 },
-  sheetScroll: { flex: 1 },
-  sheetBody: { paddingHorizontal: space.xl },
-  option: {
-    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: space.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: color.hairline,
+    columnGap: space.md,
+    paddingHorizontal: EDGE,
   },
-  optionBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, minWidth: 0 },
-  optionText: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, minWidth: 0 },
-  optionTextStacked: { flex: 1, minWidth: 0, gap: 2 },
-  optionLabel: { flex: 1 },
-  optionDetail: { flexShrink: 0 },
-  optionGlyph: textStyle(glyphSize.xl),
-  tick: { fontSize: 16, lineHeight: 20, color: color.accent },
-  optionPro: { marginLeft: space.sm },
-  // xs, not md: it follows the VERIFIED row, whose 44pt target already
-  // leaves ~8pt below the box.
-  sampleBanner: {
-    marginTop: space.xs,
-    backgroundColor: color.accent,
-    borderRadius: radius.card / 2,
-    paddingHorizontal: space.md,
-    paddingVertical: 6,
-  },
-  // A 44pt target with the link text centred in it. The 12pt that used to be
-  // a margin above the text is now inside the target, so the tap no longer
-  // has to land on a 20pt line of caption.
-  manageFriends: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
-  safety: { marginTop: space.xs },
-  list: { flex: 1 },
-  skeleton: { gap: space.md, paddingTop: space.md },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingVertical: space.md,
-    paddingHorizontal: space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: color.surface2,
-  },
-  rowYou: {
-    backgroundColor: 'rgba(204, 255, 0, 0.08)', // color.accent, tinted
-    borderRadius: radius.card / 2,
-  },
-  rowBenchmark: { opacity: 0.85 },
-  rank: { minWidth: 28, textAlign: 'center', color: color.text2 },
-  rowBody: { flex: 1, gap: 1, minWidth: 0 },
-  rowStacked: {
+  scopeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: space.sm,
-    marginTop: space.xs,
+    // The plates lean past their boxes; the extra inset keeps the first
+    // one's foot off the screen edge, as the mock sets it.
+    paddingLeft: EDGE + space.xs,
+    paddingRight: EDGE,
   },
-  chip: {
-    borderWidth: 1,
-    borderColor: color.accentDim,
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  chipText: { color: color.accentDim, fontSize: 9, lineHeight: 11, letterSpacing: 1 },
-  // 32pt wide, widened to 44 by MORE_HIT_SLOP; the full row height tall.
-  more: { width: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  moreGlyph: { ...textStyle(glyphSize.xxl), color: color.text2 },
-  empty: { alignItems: 'center', gap: space.md, paddingTop: space.xxl },
-  emptyTile: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  period: { marginLeft: 'auto' },
+  captionRow: {
+    minHeight: 32,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(204, 255, 0, 0.10)', // color.accent, tinted
-    borderWidth: 1,
-    borderColor: color.hairline,
+    justifyContent: 'space-between',
+    columnGap: space.md,
+    paddingLeft: EDGE,
+    paddingRight: EDGE,
   },
-  emptyGlyph: { fontSize: 32, lineHeight: 38 },
-  emptyCopy: { textAlign: 'center' },
-  framing: { gap: space.xs, paddingVertical: space.lg },
+  caption: { flexShrink: 1, color: color.text3 },
+  classChip: { flexShrink: 1, maxWidth: '62%' },
+  safety: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space.sm,
+    paddingHorizontal: EDGE,
+    paddingTop: space.sm,
+  },
+  safetyText: { flex: 1 },
+  friends: { paddingHorizontal: EDGE },
+  list: { flex: 1 },
+  listContent: { paddingBottom: space.xl },
+  skeleton: { paddingTop: space.xs },
+  empty: {
+    gap: space.sm,
+    paddingHorizontal: EDGE,
+    paddingTop: space.xl,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: color.divider,
+  },
+  retry: { marginTop: space.md, alignSelf: 'flex-start' },
+  framing: { gap: space.xs, paddingHorizontal: EDGE, paddingTop: space.lg },
+  framingRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.divider },
 });

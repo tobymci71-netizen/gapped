@@ -1,6 +1,7 @@
 /**
  * Step 0 of onboarding as numbers: the splash's beats, the carousel's pages
- * and the cornering demo's timeline.
+ * and the cornering demo's timeline. The welcome hero's own numbers are in
+ * ./hero/heroMath.
  *
  * docs/ONBOARDING.md ("Steps", "Copy", "Sound") is the contract. The timings
  * come from the reference recording, measured frame by frame rather than
@@ -14,26 +15,24 @@
 
 import { SHOW_PRO } from '@/config/flags';
 import type { PlanFeatureKey } from '@/config/plans';
-import { SIXTY_MPH_MS } from '@/drive/units';
 import type { VehicleKind } from '@/state/profile';
-import type { MetresPerSecond } from '@/types/units';
 import { vehicleNoun } from '../flow';
 
 // ─── Splash ──────────────────────────────────────────────────────────────────
 
-/** The wordmark fades in from this scale to 1 (the reference's ~0.96). */
+/** The splash's G mark fades in from this scale to 1 (the reference's ~0.96). */
 export const SPLASH_START_SCALE = 0.96;
 
 /**
- * How long the landed wordmark holds before it moves into the carousel
- * header. Measured from the reference, where the wordmark sat for ~1.5 s
+ * How long the landed mark holds before it rises into the welcome scene.
+ * Measured from the reference, where its wordmark sat for ~1.5 s
  * after landing while the sting rang out. The sting decays to silence at
  * 1.5 s too (scripts/generate-sting.py), so the move starts as it ends.
  */
 export const SPLASH_HOLD_MS = 1500;
 
 /**
- * A sting that cannot start within this long of the wordmark landing is
+ * A sting that cannot start within this long of the mark landing is
  * dropped. Arriving late, over the move into the header, it would mark a
  * moment that has already passed; silence is better than a sound out of sync.
  */
@@ -42,17 +41,16 @@ export const STING_GRACE_MS = 250;
 /** A view's frame in window coordinates, as `measureInWindow` reports it. */
 export type Rect = { x: number; y: number; width: number; height: number };
 
-/** How the splash wordmark travels: centre to centre, shrinking to fit. */
+/** How the splash mark travels: centre to centre, scaling to fit. */
 export type Landing = { dx: number; dy: number; scale: number };
 
 /**
- * The transform that lays the splash wordmark exactly over the header one.
+ * The transform that lays the splash mark exactly over the hero's.
  *
- * Both are the same word in the same face, so the ratio of their widths is the
- * ratio of their sizes, whatever Dynamic Type did to each. Scaling happens
- * about the view's centre, so moving the centres together is the whole
- * translation. Null when either frame has not been laid out: the caller
- * crossfades instead, which is also the reduced-motion path.
+ * Both are the same artwork, so the ratio of their widths is the ratio of
+ * their sizes. Scaling happens about the view's centre, so moving the centres
+ * together is the whole translation. Null when either frame has not been laid
+ * out: the caller crossfades instead, which is also the reduced-motion path.
  */
 export function landingFor(from: Rect | null, to: Rect | null): Landing | null {
   if (!from || !to) return null;
@@ -65,7 +63,7 @@ export function landingFor(from: Rect | null, to: Rect | null): Landing | null {
 
 // ─── Carousel ────────────────────────────────────────────────────────────────
 
-export type IntroPageKey = 'track' | 'stack' | 'corner' | 'built';
+export type IntroPageKey = 'welcome' | 'stack' | 'corner' | 'built';
 
 export type IntroPageCopy = {
   key: IntroPageKey;
@@ -85,6 +83,9 @@ export type IntroPageCopy = {
   proFeature?: PlanFeatureKey;
 };
 
+/** The welcome statement, one sentence a line; the last is lit (red). */
+export const WELCOME_LINES = ['Every drive.', 'Measured.', 'Verified.'] as const;
+
 /**
  * docs/ONBOARDING.md, "Carousel". Gapped's words, in the reference's shape.
  *
@@ -94,16 +95,18 @@ export type IntroPageCopy = {
  * says it is Pro whenever Pro is shown.
  *
  * Calm, and about the person's own drives: these are public roads, and
- * nothing here makes a speed a contest. Page 1 leads with distance, the
- * board the Ranks tab opens on, and says the figures are verified before they
- * are ranked, not that they are there to be beaten.
+ * nothing here makes a speed a contest. The welcome (Nightrun-Welcome) names
+ * no figure at all: it says every drive is measured and verified, and how —
+ * GPS, then a check on the server before anything counts. "Before it counts"
+ * rather than the mock's "so every number you see is real": two pages on,
+ * the board card may show labelled sample rows, and the first screen should
+ * not promise more than the app does.
  */
 export const INTRO_PAGES: readonly IntroPageCopy[] = [
   {
-    key: 'track',
-    title: 'Track every drive',
-    subtitle: 'Distance, top speed and 0–60. Verified, then ranked.',
-    spokenSubtitle: 'Distance, top speed and zero to sixty. Verified, then ranked.',
+    key: 'welcome',
+    title: WELCOME_LINES.join(' '),
+    subtitle: 'Gapped logs each drive with GPS and checks it on our servers before it counts.',
     cta: 'Get started',
   },
   {
@@ -184,11 +187,12 @@ export function clamp01(x: number): number {
 }
 
 /**
- * The header slot holds the wordmark on the first page and the page dots on
- * the rest, as the reference does. They trade places with the finger: the
- * wordmark is gone by the middle of the first swipe and the dots arrive over
- * its second half, so the two never overprint. `pos` is the scroll offset in
- * pages (0 = first page, 1.5 = halfway from the second to the third).
+ * The first page carries the G mark (the hero's, which the splash lands on)
+ * and the rest carry the page dots, as the reference trades its wordmark for
+ * dots. They trade places with the finger: the mark is gone by the middle of
+ * the first swipe and the dots arrive over its second half, so the two never
+ * overprint. `pos` is the scroll offset in pages (0 = first page, 1.5 =
+ * halfway from the second to the third).
  */
 export function wordmarkOpacity(pos: number): number {
   'worklet';
@@ -228,40 +232,6 @@ export function onScreenMask(pos: number, count: number): number {
 
 export function isOnScreen(mask: number, page: number): boolean {
   return (mask & (1 << page)) !== 0;
-}
-
-// ─── Page 1: the dial ────────────────────────────────────────────────────────
-
-/**
- * The needle's sweep from 0, ease-out (the reference's ~0.8 s).
- *
- * The Speedometer follows its value on a spring tuned for live speed, which
- * overshoots a step by about 16%. Fed this sweep a frame at a time instead,
- * its spring trails the curve and settles with under half a percent of
- * overshoot, which is well under a degree of needle.
- */
-export const DIAL_SWEEP_MS = 800;
-
-/**
- * The speed the welcome dial sweeps to: 60 mph (about 97 km/h), the top of
- * the 0–60 the page talks about and a legal speed on many open roads. It was
- * 87 mph (140 km/h), over the national limit in the UK and in most countries,
- * on the first screen anyone sees.
- *
- * Branded, as SIXTY_MPH_MS is: this is where the 313 km/h bug lived, when a
- * bare 87 already in mph was converted a second time. A bare number in
- * display units no longer compiles here.
- */
-export const DIAL_DEMO_MS: MetresPerSecond = SIXTY_MPH_MS;
-
-/**
- * The welcome dial for VoiceOver. It shows a speed nobody drove, so it says
- * it is a demo, as the cornering gauge does, and gives the speed it holds in
- * words: "mph" is read letter by letter and "km/h" as "km slash h".
- */
-export function dialDemoLabel(speed: number, unit: 'mph' | 'km/h'): string {
-  const words = unit === 'mph' ? 'miles per hour' : 'kilometres per hour';
-  return `Demo. Speedometer reading ${Math.round(speed)} ${words}.`;
 }
 
 // ─── Page 3: the cornering demo ──────────────────────────────────────────────
@@ -389,7 +359,7 @@ export function formatG(hundredths: number): string {
  * reading, so it says so first, and gives the end state the animation holds.
  * While Pro is shown it names the plan too: someone who swipes straight onto
  * the gauge has not heard the title's "Gapped Pro", and cornering G is Pro.
- * With Pro hidden it is just a demo, as the welcome dial is.
+ * With Pro hidden it is just a demo.
  */
 export function corneringDemoLabel(showPro: boolean = SHOW_PRO): string {
   return (

@@ -1,31 +1,13 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
-import { Text } from '@/components/Text';
-import { color, font, textStyle, type } from '@/theme/tokens';
+import { GappedMark } from '@/components/brand/GappedMark';
 
 /**
- * The small lime GAPPED at the head of setup and the paywall — the splash's
- * wordmark at header size, as the reference carries its own through to the
- * last screens.
+ * The G mark at the head of setup and the paywall — the splash's mark at
+ * header size, as the reference carries its own through to the last screens.
+ * The red streaks are tail lights, so it carries its red glow.
  *
- * Capped at twice its size under Dynamic Type: it is a logo, not reading
- * text, and at the largest settings an uncapped one crowded out the heading
- * it sits above.
+ * Read as "Gapped": on these screens it is the only statement of the brand.
  */
 export function Wordmark() {
-  return (
-    <Text accessibilityLabel="Gapped" maxFontSizeMultiplier={2} style={styles.mark}>
-      GAPPED
-    </Text>
-  );
+  return <GappedMark size="sm" glow accessibilityLabel="Gapped" />;
 }
-
-const styles = StyleSheet.create({
-  mark: {
-    fontFamily: font.displayBlack,
-    ...textStyle(type.cardTitle),
-    letterSpacing: 2,
-    color: color.accent,
-    textAlign: 'center',
-  },
-});

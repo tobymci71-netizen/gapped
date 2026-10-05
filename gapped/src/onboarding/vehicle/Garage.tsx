@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
+import { SlantTag } from '@/components/brand/SlantTag';
 import { Button } from '@/components/Button';
 import { PressableScale } from '@/components/PressableScale';
 import { ProBadge } from '@/components/ProBadge';
@@ -8,9 +9,10 @@ import { Text } from '@/components/Text';
 import { haptic } from '@/lib/haptics';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { vehicleNoun } from '@/onboarding/flow';
+import { panel } from '@/onboarding/ui/choice';
 import type { ExtraVehicle, VehicleKind } from '@/state/profile';
 import { duration, easing } from '@/theme/motion';
-import { color, font, radius, space } from '@/theme/tokens';
+import { color, radius, slant, space } from '@/theme/tokens';
 import { draftReady, type DraftsByKind, vehicleTitle } from './draft';
 import { CloseIcon, PlusIcon } from './icons';
 import { SegmentedControl, type Segment } from './SegmentedControl';
@@ -79,8 +81,7 @@ function Thumb({
 
 /**
  * The main vehicle, as chosen on the ride step: picture, name (the nickname
- * when there is one, with make and model under it), and the lime "Main car"
- * caption.
+ * when there is one, with make and model under it), and a "Main car" tag.
  */
 export function MainVehicleCard({
   kind,
@@ -113,9 +114,7 @@ export function MainVehicleCard({
             {subtitle}
           </Text>
         ) : null}
-        <Text variant="caption" style={styles.mainCaption}>
-          Main {noun}
-        </Text>
+        <SlantTag label={`Main ${noun}`} size="sm" decorative style={styles.mainTag} />
       </View>
     </View>
   );
@@ -171,6 +170,7 @@ export function AddVehicleRow({ noun, onPress }: { noun: 'car' | 'bike'; onPress
         style={[styles.card, styles.addRow]}
       >
         <View style={styles.plus}>
+          <View style={styles.plusPlate} />
           <PlusIcon />
         </View>
         <Text variant="bodyMedium">Add another {noun}</Text>
@@ -243,16 +243,10 @@ export function VehicleComposer({
       />
       {/*
         Outlined, not white: Continue below is the step's one primary, and two
-        white pills a thumb apart made it a guess which one moved on. Dimmed
-        until the vehicle is chosen — secondary has no disabled fill of its own.
+        white plates a thumb apart made it a guess which one moved on. Until
+        the vehicle is chosen it wears the flat disabled plate.
       */}
-      <Button
-        label="Add to garage"
-        variant="secondary"
-        disabled={!ready}
-        onPress={onAdd}
-        style={ready ? undefined : styles.addDisabled}
-      />
+      <Button label="Add to garage" variant="secondary" disabled={!ready} onPress={onAdd} />
       <PressableScale
         onPress={onCancel}
         silent
@@ -270,45 +264,42 @@ export function VehicleComposer({
 
 const styles = StyleSheet.create({
   card: {
+    ...panel,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.lg,
     padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: color.surface2,
   },
   cardText: { flex: 1, gap: 2 },
   thumb: {
     borderRadius: THUMB_RADIUS,
-    backgroundColor: color.surface3,
+    backgroundColor: color.surface2,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mainCaption: { color: color.accent, fontFamily: font.bodySemibold, marginTop: 2 },
+  mainTag: { marginTop: space.xs },
   extra: { paddingVertical: space.md, paddingRight: space.xs },
   extraInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.lg },
   remove: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   addRow: { minHeight: 56, paddingVertical: space.md },
-  plus: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: color.accentTile,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // A slanted outlined plate with a white plus: an action, not a light.
+  plus: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  plusPlate: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: radius.xs,
+    borderWidth: 1,
+    borderColor: color.outline,
+    transform: slant.transform,
   },
   // The plus tile's width at least; the chip grows past it with Dynamic Type.
   badgeSlot: { minWidth: 32 },
   // Wraps rather than running off the card at large Dynamic Type.
   rowLabel: { flex: 1 },
   composer: {
+    ...panel,
     gap: space.md,
     padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: color.surface1,
-    borderWidth: 1,
-    borderColor: color.hairline,
   },
   cancel: {
     minHeight: 44,
@@ -317,5 +308,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
   },
   cancelLabel: { color: color.text2 },
-  addDisabled: { opacity: 0.45 },
 });

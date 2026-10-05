@@ -44,7 +44,6 @@ export function pickBracket(key: string, access: Access): BracketPick {
 export type BracketOption = {
   key: string;
   label: string;
-  glyph: string;
   /** The driver count, kept apart from the label so the ellipsis never takes it. */
   detail?: string;
   /** Marked PRO in the sheet; set only when the class is locked. */
@@ -61,11 +60,11 @@ export type BracketOption = {
 export function bracketOptions(brackets: Bracket[], access: Access): BracketOption[] {
   const locked = bracketsLocked(access);
   return [
-    { key: ALL_CLASSES, label: ALL_CLASSES_LABEL, glyph: '🌐' },
+    { key: ALL_CLASSES, label: ALL_CLASSES_LABEL },
     ...brackets.map((b): BracketOption => {
       const label = bracketLabel(b.key);
       const detail = `${b.drivers} driver${b.drivers === 1 ? '' : 's'}`;
-      const row: BracketOption = { key: b.key, label, detail, glyph: '🏁' };
+      const row: BracketOption = { key: b.key, label, detail };
       return locked
         ? { ...row, pro: true, accessibilityLabel: `${label}, ${detail}, Gapped Pro` }
         : row;

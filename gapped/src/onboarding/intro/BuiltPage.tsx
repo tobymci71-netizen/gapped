@@ -33,8 +33,8 @@ type Props = {
 
 /**
  * Page 4, "Built by drivers": a large white silhouette, the ride the next step
- * asks about. A coupé, the shape most people read as "a car"; a motorbike if
- * the person picked one on the ride step and came Back here.
+ * asks about, tail light lit. A coupé, the shape most people read as "a car";
+ * a motorbike if the person picked one on the ride step and came Back here.
  *
  * The silhouette mounts with the carousel, under the splash, so its own
  * draw-on reveal has finished long before anyone swipes here. What this page
@@ -82,6 +82,7 @@ export function BuiltPage({ copy, width, hidden, onScreen, onVerticalDrag }: Pro
             bodyType={kind === 'motorbike' ? 'motorbike' : 'coupe'}
             size={size}
             color={color.text1}
+            lit
           />
         </Animated.View>
       </View>

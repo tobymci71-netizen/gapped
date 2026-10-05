@@ -14,6 +14,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { SlantTag } from '@/components/brand/SlantTag';
 import { Button } from '@/components/Button';
 import { Entrance } from '@/components/Entrance';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
@@ -24,14 +25,15 @@ import { PAYWALL_PLACEHOLDER_PRICES } from '@/config/flags';
 import { PRIVACY_URL, TERMS_URL } from '@/config/links';
 import { PAYWALL_PRO_NOTE, paywallRedirect, PRO_PLANS, type ProPlan } from '@/config/plans';
 import { haptic } from '@/lib/haptics';
-import { CheckGlyph, CloseGlyph } from '@/onboarding/identity/glyphs';
+import { CloseGlyph } from '@/onboarding/identity/glyphs';
 import { SAMPLE_DRIVE } from '@/onboarding/identity/sampleDrive';
 import { useHardwareBack } from '@/onboarding/identity/useHardwareBack';
 import { Wordmark } from '@/onboarding/identity/Wordmark';
+import { ChoiceMark, RowLight } from '@/onboarding/ui/choice';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
 import { useProfile } from '@/state/profile';
 import { duration, easing } from '@/theme/motion';
-import { color, font, glyph, radius, space, textStyle } from '@/theme/tokens';
+import { color, radius, space } from '@/theme/tokens';
 
 type Plan = ProPlan;
 
@@ -117,7 +119,7 @@ export default function PaywallRoute() {
  * full history, cornering G, class brackets and clean share cards, and it
  * says in the same sentence that recording and the boards stay free. The
  * hero is still the sample share card, the reference's shape, drawn as every
- * plan draws it, GAPPED badge and all.
+ * plan draws it, Gapped mark and all.
  */
 function PaywallStep() {
   const finish = useOnboardingAdvance('/onboarding/paywall');
@@ -309,20 +311,16 @@ function SampleCard({ size }: { size: number }) {
         size the card is drawn, and over nothing the card itself shows.
       */}
       <View style={styles.sampleRow}>
-        <View style={styles.sample}>
-          <Text style={styles.sampleText} maxFontSizeMultiplier={1.5}>
-            SAMPLE
-          </Text>
-        </View>
+        <SlantTag label="SAMPLE" variant="dark" />
       </View>
     </View>
   );
 }
 
 /**
- * One plan: name and radio on top, price beneath. The selected card takes the
- * lime outline and a filled radio; the other clears to a plain surface
- * (docs/ONBOARDING.md).
+ * One plan: name and radio on top, price beneath. A night panel; the selected
+ * one lights up as every chosen row in the flow does — the red light down its
+ * left edge and the mark filled white (src/onboarding/ui/choice).
  *
  * Side by side, each card takes half the row and both match the taller one's
  * height. Stacked, each is simply as tall as it needs: `flex: 1` in a column
@@ -347,13 +345,8 @@ function PlanCard({
     on.set(withTiming(selected ? 1 : 0, { duration: duration.fast, easing: easing.standard }));
   }, [selected, on]);
   const outline = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(on.value, [0, 1], [color.surface2, color.accent]),
+    borderColor: interpolateColor(on.value, [0, 1], [color.hairline, color.outline]),
   }));
-  const ring = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(on.value, [0, 1], [color.text3, color.accent]),
-    backgroundColor: interpolateColor(on.value, [0, 1], [color.surface2, color.accent]),
-  }));
-  const tick = useAnimatedStyle(() => ({ opacity: on.value }));
 
   return (
     <PressableScale
@@ -368,15 +361,12 @@ function PlanCard({
       style={stacked ? undefined : styles.planSlot}
     >
       <Animated.View style={[styles.plan, !stacked && styles.planFill, outline]}>
+        <RowLight on={on} />
         <View style={styles.planTop}>
           <Text variant="bodyMedium" style={styles.planTitle}>
             {title}
           </Text>
-          <Animated.View style={[styles.radio, ring]}>
-            <Animated.View style={tick}>
-              <CheckGlyph size={14} color={color.onAccent} />
-            </Animated.View>
-          </Animated.View>
+          <ChoiceMark on={on} size={RADIO} />
         </View>
         <Text variant="body" style={styles.planPrice}>
           {price}
@@ -439,20 +429,6 @@ const styles = StyleSheet.create({
   },
   heroBorder: { borderRadius: radius.card, borderWidth: 1, borderColor: color.hairline },
   sampleRow: { position: 'absolute', top: -TAB_RISE, left: 0, right: 0, alignItems: 'center' },
-  sample: {
-    borderWidth: 1,
-    borderColor: color.text3,
-    borderRadius: 4,
-    paddingHorizontal: space.sm,
-    paddingVertical: 2,
-    backgroundColor: color.canvas,
-  },
-  sampleText: {
-    fontFamily: font.bodySemibold,
-    ...textStyle(glyph.sm),
-    letterSpacing: 1.2,
-    color: color.text2,
-  },
   pitch: { gap: space.sm, marginTop: space.sm },
   centerText: { textAlign: 'center' },
   plans: { flexDirection: 'row', gap: space.md, marginBottom: space.xs },
@@ -465,18 +441,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
     borderRadius: radius.card,
-    borderWidth: 2,
-    backgroundColor: color.surface2,
+    borderWidth: 1,
+    backgroundColor: color.surface1,
+    overflow: 'hidden',
   },
   planTop: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  radio: {
-    width: RADIO,
-    height: RADIO,
-    borderRadius: RADIO / 2,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   planTitle: { flex: 1 },
   planPrice: { color: color.text1 },
   footer: { gap: space.sm },

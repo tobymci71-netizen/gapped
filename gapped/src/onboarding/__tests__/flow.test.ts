@@ -235,7 +235,8 @@ describe('option lists', () => {
       'beatFriends',
     ]);
     for (const o of FOCUS_OPTIONS) expect(o.sublabel).toBeTruthy();
-    expect(focusOption('beatFriends').label).toBe('Beat friends');
+    // The key keeps its stored name; the words compare rather than compete.
+    expect(focusOption('beatFriends').label).toBe('Friends');
   });
 
   test('focus measures; it never invites a launch or a race', () => {
@@ -247,7 +248,7 @@ describe('option lists', () => {
     // Top speed says where it belongs.
     expect(focusOption('topSpeed').sublabel).toMatch(/tracks and closed roads/);
     for (const o of FOCUS_OPTIONS) {
-      expect(`${o.label} ${o.sublabel}`).not.toMatch(/launch|race|racing|fastest/i);
+      expect(`${o.label} ${o.sublabel}`).not.toMatch(/launch|race|racing|fastest|faster|beat/i);
     }
   });
 

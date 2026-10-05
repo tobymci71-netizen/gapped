@@ -3,8 +3,10 @@ import { AccessibilityInfo, Platform, StyleSheet, TextInput, View } from 'react-
 import { PressableScale } from '@/components/PressableScale';
 import { SearchableListSheet } from '@/components/SearchableListSheet';
 import { Text } from '@/components/Text';
+import { raisedPanel } from '@/onboarding/ui/choice';
+import { NightLink } from '@/onboarding/ui/StepTitle';
 import type { VehicleKind } from '@/state/profile';
-import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
+import { color, font, space, textStyle, type } from '@/theme/tokens';
 import { MAKE_NOT_ALLOWED } from '@/lib/username';
 import { modelsForMake, popularMakes, searchMakes, searchModels } from '@/vehicles/catalog';
 import {
@@ -101,17 +103,7 @@ export function VehicleFields({ kind, draft, onChange }: Props) {
         </Text>
       ) : null}
 
-      <PressableScale
-        silent
-        onPress={() => setTyping((t) => !t)}
-        accessibilityRole="button"
-        accessibilityLabel={linkLabel}
-        style={styles.link}
-      >
-        <Text variant="caption" style={styles.linkLabel}>
-          {linkLabel}
-        </Text>
-      </PressableScale>
+      <NightLink label={linkLabel} role="button" onPress={() => setTyping((t) => !t)} />
 
       <SearchableListSheet
         visible={sheet === 'make'}
@@ -143,9 +135,9 @@ export function VehicleFields({ kind, draft, onChange }: Props) {
 }
 
 /**
- * A dark row that opens a picker: the value (or its placeholder) on the left,
- * a lime check once chosen or a grey chevron before. The check is the
- * reference's own signal that a field is done, and lime is for checks.
+ * A raised night panel that opens a picker: the value (or its placeholder)
+ * on the left, a white check once chosen or a grey chevron before. The check
+ * is the reference's own signal that a field is done.
  */
 function PickerField({
   label,
@@ -253,13 +245,12 @@ function TypedFields({ kind, draft, onChange }: Props) {
 const styles = StyleSheet.create({
   root: { gap: space.md },
   field: {
+    ...raisedPanel,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     minHeight: FIELD_HEIGHT,
     paddingHorizontal: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: color.surface2,
   },
   fieldDisabled: { opacity: 0.45 },
   // flex so a long make ellipsizes instead of pushing the check out.
@@ -274,12 +265,5 @@ const styles = StyleSheet.create({
     // Android pads single-line inputs; the row already sets the height.
     paddingVertical: 0,
   },
-  link: {
-    minHeight: 44,
-    alignSelf: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: space.md,
-  },
-  linkLabel: { color: color.accent, fontFamily: font.bodySemibold, textAlign: 'center' },
   refused: { color: color.warning, paddingHorizontal: space.lg },
 });

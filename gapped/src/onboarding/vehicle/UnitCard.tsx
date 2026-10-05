@@ -7,12 +7,21 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { PressableScale } from '@/components/PressableScale';
+import { Text } from '@/components/Text';
 import type { UnitPref } from '@/drive/units';
 import { haptic } from '@/lib/haptics';
 import { useReducedMotion } from '@/lib/useReducedMotion';
+import { ChoiceMark, panel, RowLight } from '@/onboarding/ui/choice';
 import { duration, easing } from '@/theme/motion';
-import { color, font, radius, space, textStyle, type } from '@/theme/tokens';
-import { CheckIcon, RingIcon } from './icons';
+import {
+  color,
+  font,
+  italicOverhang,
+  maxFontScale,
+  space,
+  textStyle,
+  type,
+} from '@/theme/tokens';
 
 export type UnitOption = {
   key: UnitPref;
@@ -43,14 +52,12 @@ export const UNIT_OPTIONS: readonly UnitOption[] = [
   },
 ];
 
-/** The detail line on a white card: black, quietened to read as secondary. */
-const DETAIL_ON_WHITE_OPACITY = 0.7;
-
 /**
- * One unit as a card. Selected is the flow's selected state — white fill,
- * black text, a check — and the change crossfades fill, text and mark
- * together on the standard curve, so the white moves from one card to the
- * other rather than one card blinking off as the other blinks on.
+ * One unit as a card: a night panel that lights up when chosen — the red
+ * light down its left edge, its words turning white, the mark filling white
+ * with a check (src/onboarding/ui/choice). The change crossfades on the
+ * standard curve, so the light moves from one card to the other rather than
+ * one blinking off as the other blinks on.
  */
 export function UnitCard({
   option,
@@ -73,18 +80,9 @@ export function UnitCard({
     );
   }, [selected, reduced, on]);
 
-  const cardStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(on.get(), [0, 1], [color.surface2, color.text1]),
-  }));
   const primaryStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(on.get(), [0, 1], [color.text1, color.onAccent]),
+    color: interpolateColor(on.get(), [0, 1], [color.text2, color.text1]),
   }));
-  const detailStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(on.get(), [0, 1], [color.text2, color.onAccent]),
-    opacity: 1 - (1 - DETAIL_ON_WHITE_OPACITY) * on.get(),
-  }));
-  const ringStyle = useAnimatedStyle(() => ({ opacity: 1 - on.get() }));
-  const checkStyle = useAnimatedStyle(() => ({ opacity: on.get() }));
 
   return (
     <PressableScale
@@ -101,23 +99,21 @@ export function UnitCard({
       accessibilityState={{ checked: selected }}
       style={shared ? styles.shared : undefined}
     >
-      <Animated.View style={[styles.card, cardStyle]}>
+      <View style={styles.card}>
+        <RowLight on={on} />
         <View style={styles.top}>
-          <Animated.Text style={[styles.unit, primaryStyle]} numberOfLines={1}>
+          <Animated.Text
+            style={[styles.unit, primaryStyle]}
+            numberOfLines={1}
+            maxFontSizeMultiplier={maxFontScale.title}
+          >
             {option.unit}
           </Animated.Text>
-          <View style={styles.mark}>
-            <Animated.View style={[styles.markLayer, ringStyle]}>
-              <RingIcon />
-            </Animated.View>
-            <Animated.View style={[styles.markLayer, checkStyle]}>
-              <CheckIcon size={20} color={color.onAccent} />
-            </Animated.View>
-          </View>
+          <ChoiceMark on={on} />
         </View>
         <Animated.Text style={[styles.system, primaryStyle]}>{option.system}</Animated.Text>
-        <Animated.Text style={[styles.detail, detailStyle]}>{option.detail}</Animated.Text>
-      </Animated.View>
+        <Text variant="mono">{option.detail}</Text>
+      </View>
     </PressableScale>
   );
 }
@@ -127,11 +123,12 @@ const styles = StyleSheet.create({
   // flexGrow, not flex: side by side the two cards stretch to the taller
   // one's height; stacked, each keeps its own content height.
   card: {
+    ...panel,
     flexGrow: 1,
     minHeight: 112,
     padding: space.lg,
-    borderRadius: radius.card,
     gap: 2,
+    overflow: 'hidden',
   },
   top: {
     flexDirection: 'row',
@@ -140,17 +137,11 @@ const styles = StyleSheet.create({
     gap: space.sm,
     marginBottom: space.sm,
   },
-  unit: { flexShrink: 1, fontFamily: font.display, ...textStyle(type.cardTitle) },
-  mark: { width: 24, height: 24 },
-  markLayer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
+  unit: {
+    flexShrink: 1,
+    fontFamily: font.display,
+    ...textStyle(type.cardTitle),
+    paddingRight: italicOverhang(type.cardTitle.size),
   },
-  system: { fontFamily: font.bodyMedium, ...textStyle(type.body) },
-  detail: { fontFamily: font.body, ...textStyle(type.caption) },
+  system: { fontFamily: font.bodyMedium, ...textStyle(type.callout) },
 });

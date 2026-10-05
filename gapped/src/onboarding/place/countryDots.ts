@@ -18,7 +18,7 @@ import data from '@/data/countryDots.json';
 export type CountryDots = {
   cols: number;
   rows: number;
-  /** The main landmass, drawn lime. Row-major: `row * cols + col`. */
+  /** The main landmass, drawn bright. Row-major: `row * cols + col`. */
   main: number[];
   /** Land kept near it — islands — drawn dim. */
   near: number[];

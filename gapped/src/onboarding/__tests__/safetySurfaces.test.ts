@@ -1,7 +1,7 @@
 /**
  * The safety lines onboarding agrees to, where they are seen again after it:
- * the Drive tab beside Start drive, and every share card. And the developer
- * readout kept out of release builds.
+ * the Drive tab beside Start drive, and every share card. The developer
+ * readout kept out of release builds, and the live dial that rewards nothing.
  *
  * Read from source, as flow.test.ts reads the steps: both screens pull in
  * maps, Skia and the recorder, which jest has no native side for, and what
@@ -42,6 +42,14 @@ describe('Drive tab', () => {
     expect(src).toMatch(/\{INTERNAL_TOOLS && debugHud \? <DebugStrip/);
     // No other mount that skips the flag.
     expect(src.match(/<DebugStrip\b/g)).toHaveLength(1);
+  });
+
+  test('the live dial rewards nothing: no PB badge, no speed glow (NO_IN_DRIVE_SPEED_NUDGES)', () => {
+    // The one dial on the tab is the recording HUD's.
+    const mounts = src.match(/<Speedometer\b[\s\S]*?\/>/g) ?? [];
+    expect(mounts).toHaveLength(1);
+    expect(mounts[0]).not.toMatch(/\bpb=/);
+    expect(mounts[0]).toMatch(/\bspeedGlow=\{false\}/);
   });
 });
 

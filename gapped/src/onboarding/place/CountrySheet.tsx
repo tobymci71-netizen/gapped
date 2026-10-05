@@ -225,7 +225,7 @@ function CountryRow({
           {country.name}
         </Text>
         {suggested || region ? (
-          <Text variant="caption" numberOfLines={1}>
+          <Text variant="mono" numberOfLines={1}>
             {suggested ? <Text style={styles.suggested}>Suggested{region ? ' · ' : ''}</Text> : null}
             {region}
           </Text>
@@ -246,12 +246,14 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     paddingHorizontal: space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: color.hairline,
+    borderBottomColor: color.divider,
   },
   flag: textStyle(glyph.huge),
   // flex so a long name ellipsizes before it can push the check out.
   rowText: { flex: 1, minWidth: 0 },
-  suggested: { color: color.accent },
+  // The phone's own region, offered first: white, the one row that is a
+  // suggestion. Not red: a suggestion is not a light.
+  suggested: { color: color.text1, fontFamily: font.monoMedium },
   empty: { padding: space.xl, textAlign: 'center' },
   searchBar: {
     paddingHorizontal: space.lg,
@@ -265,7 +267,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 48,
-    borderRadius: radius.pill,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: color.hairline,
     backgroundColor: color.surface2,
     paddingLeft: space.lg,
     paddingRight: space.xs,

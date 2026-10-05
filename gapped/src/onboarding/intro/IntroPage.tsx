@@ -11,12 +11,9 @@ type Props = {
   width: number;
   /** Off-page: hidden from VoiceOver so its focus stays on the page in view. */
   hidden: boolean;
-  /**
-   * Heading above the visual, left-aligned (the cornering page, as in the
-   * reference), instead of centred beneath it.
-   */
+  /** Heading above the visual (the cornering page, as in the reference), not under it. */
   headingFirst?: boolean;
-  /** The page's object: the dial, the board card, the gauge, the car. */
+  /** The page's object: the board card, the gauge, the car. */
   children: React.ReactNode;
   /** A vertical drag began on this page (see the pager's `settle`). */
   onVerticalDrag?: () => void;
@@ -29,10 +26,12 @@ type Props = {
 };
 
 /**
- * One carousel page: a visual and its heading. A page that demos a Pro
- * feature (`copy.proFeature`) wears the PRO chip above its title, but only
- * while Pro is shown at all (marksPro, SHOW_PRO): until then it is a plain
- * page, with no chip and no "Gapped Pro" in its spoken title.
+ * One carousel page after the welcome: a visual and its heading, set on the
+ * night the way the welcome sets its words — left-aligned, the title in the
+ * wide italic, the line under it soft. A page that demos a Pro feature
+ * (`copy.proFeature`) wears the PRO chip above its title, but only while Pro
+ * is shown at all (marksPro, SHOW_PRO): until then it is a plain page, with no
+ * chip and no "Gapped Pro" in its spoken title.
  *
  * Each page scrolls vertically inside the horizontal pager. At 375×667 every
  * page fits; at the largest Dynamic Type sizes the copy outgrows the screen,
@@ -53,9 +52,8 @@ export function IntroPage({
   const heading = (
     <View style={[styles.heading, headingFirst ? styles.headingFirst : styles.headingAfter]}>
       {pro ? (
-        // Over the title, as an eyebrow. ProBadge pins itself to the start;
-        // on a centred page the row around it centres it.
-        <View style={[styles.chip, !headingFirst && styles.chipCentred]}>
+        // Over the title, as an eyebrow.
+        <View style={styles.chip}>
           <ProBadge />
         </View>
       ) : null}
@@ -66,16 +64,15 @@ export function IntroPage({
         accessibilityLabel={pro ? spokenTitle(copy) : undefined}
         // No one-word last line ("See where you stack / up").
         lineBreakStrategyIOS="push-out"
-        style={headingFirst ? undefined : styles.centerText}
       >
         {copy.title}
       </Text>
       {copy.subtitle ? (
         <Text
-          variant="body"
+          variant="callout"
           lineBreakStrategyIOS="push-out"
           accessibilityLabel={copy.spokenSubtitle}
-          style={[styles.subtitle, !headingFirst && styles.centerText]}
+          style={styles.subtitle}
         >
           {copy.subtitle}
         </Text>
@@ -125,10 +122,7 @@ const styles = StyleSheet.create({
   },
   heading: { alignSelf: 'stretch' },
   headingFirst: { marginBottom: space.xl },
-  headingAfter: { marginTop: space.xl },
-  centerText: { textAlign: 'center' },
+  headingAfter: { marginTop: space.xxl },
   subtitle: { marginTop: space.sm },
   chip: { marginBottom: space.sm },
-  // A row, so the chip's own alignSelf works on the vertical and this centres it.
-  chipCentred: { flexDirection: 'row', justifyContent: 'center' },
 });

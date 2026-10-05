@@ -1,9 +1,13 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
-import { AppState, StyleSheet, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState, StyleSheet, TextInput, View, type LayoutChangeEvent } from 'react-native';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
+import { NumberPlate } from '@/components/brand/NumberPlate';
+import { SectionHeader } from '@/components/brand/SectionHeader';
+import { StreakBar } from '@/components/brand/StreakArrow';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { Icon, type IconName } from '@/components/icons';
 import { PressableScale } from '@/components/PressableScale';
 import { ProBadge, useGoPro } from '@/components/ProBadge';
 import { Screen } from '@/components/Screen';
@@ -12,7 +16,7 @@ import { Stat } from '@/components/Stat';
 import { Text } from '@/components/Text';
 import { StreakGrid } from '@/components/StreakGrid';
 import { SHOW_PRO } from '@/config/flags';
-import { Achievement, listAchievements } from '@/state/achievements';
+import { Achievement, type AchievementIcon, listAchievements } from '@/state/achievements';
 import {
   addBins,
   binLabel,
@@ -31,9 +35,15 @@ import {
 } from '@/drive/driveAccess';
 import { aggregateManeuvers, countManeuvers, ManeuverCounts } from '@/drive/maneuvers';
 import { useDriveStore } from '@/drive/recorder';
+import { durationFigure } from '@/drive/summary/format';
 import { DriveSummary } from '@/drive/types';
+import { DriveRow, LockedDrivesRow, ROW_INSET } from '@/drive/ui/DriveRows';
+import { driveRowModel } from '@/drive/ui/driveTabModel';
+import { routeThumb, type RouteThumb } from '@/drive/ui/routeGeometry';
+import { ROUTE_TILE } from '@/drive/ui/RouteTile';
+import { useVerifiedDrives } from '@/drive/ui/useVerifiedDrives';
 import { LocalDrive, listDrives, readFixes } from '@/drive/wal';
-import { distanceForDisplay, formatDistance, formatDuration, formatSpeed, UnitPref } from '@/drive/units';
+import { distanceForDisplay, formatDuration, formatSpeed, UnitPref } from '@/drive/units';
 import { useAccess } from '@/lib/entitlements';
 import { haptic } from '@/lib/haptics';
 import { isUsernameAvailable } from '@/lib/sync';
@@ -46,17 +56,24 @@ import {
 import { metres, mps, seconds } from '@/types/units';
 import { useProfile } from '@/state/profile';
 import { useRecords } from '@/state/records';
-import { color, font, glyph, radius, space, textStyle, type } from '@/theme/tokens';
-
-/** Glyph-tile tints: palette colours at low alpha, matching the Settings screen. */
-const tint = {
-  accent: 'rgba(204, 255, 0, 0.16)', // color.accent
-  steel: 'rgba(200, 205, 212, 0.16)', // color.rank2
-  danger: 'rgba(255, 59, 48, 0.18)', // color.danger
-  gold: 'rgba(240, 180, 41, 0.18)', // color.rank1
-} as const;
+import {
+  alpha,
+  color,
+  font,
+  gutter,
+  radius,
+  slant,
+  space,
+  textStyle,
+  type,
+} from '@/theme/tokens';
+import { DriverHeader } from '@/you/DriverHeader';
+import { YouIcon, type YouIconName } from '@/you/youIcons';
 
 const EM_DASH = '—';
+
+/** How far the distance plate rides up over the header's horizon (pt). */
+const PLATE_OVERLAP = 34;
 
 type FinalizedDrive = LocalDrive & { summary: DriveSummary };
 
@@ -74,8 +91,44 @@ type DriveStats = { maneuvers: ManeuverCounts; bins: SpeedBins };
  */
 const statsCache = new Map<string, DriveStats>();
 
+/**
+ * Per-drive route tiles for the history rows, cached the same way and for the
+ * same reason. The rows are the Driving tab's own (DriveRow, src/drive/ui/
+ * DriveRows.tsx) and so is the geometry (routeGeometry.ts), so a drive's row
+ * is the same on both tabs. null is a drive with no route to draw.
+ */
+const thumbCache = new Map<string, RouteThumb | null>();
+
 /** Drives processed per tick, so a long history cannot block the JS thread. */
 const STATS_CHUNK = 4;
+
+/**
+ * Reads one drive's fixes once and derives whatever is still missing from
+ * them: its route tile always, its telemetry only when asked (`withStats`, off
+ * while telemetry is locked, when nothing would show it). Both caches are
+ * filled from the one read, so the history tiles and the telemetry never read
+ * the same drive twice.
+ */
+function deriveFromFixes(id: string, withStats: boolean): void {
+  const needsThumb = !thumbCache.has(id);
+  const needsStats = withStats && !statsCache.has(id);
+  if (!needsThumb && !needsStats) return;
+  let fixes: ReturnType<typeof readFixes>;
+  try {
+    fixes = readFixes(id);
+  } catch (e) {
+    // A tile that cannot be read is an empty tile, not an error, as on the
+    // Driving tab (useRouteThumbs). The telemetry read throws as it always
+    // has: dropping a drive from the counts would undercount them silently.
+    if (needsThumb) thumbCache.set(id, null);
+    if (needsStats) throw e;
+    return;
+  }
+  if (needsThumb) thumbCache.set(id, routeThumb(fixes, ROUTE_TILE));
+  if (needsStats) {
+    statsCache.set(id, { maneuvers: countManeuvers(fixes), bins: speedBins(fixes) });
+  }
+}
 
 function aggregateCached(ids: string[]): DriveStats {
   const entries = ids
@@ -87,7 +140,12 @@ function aggregateCached(ids: string[]): DriveStats {
   };
 }
 
-/** One band of the speed distribution, scaled against the busiest band. */
+/**
+ * One band of the speed distribution: a mono band label, the count drawn as a
+ * red light streak scaled against the busiest band (StreakBar, the board's
+ * bar), and the count itself. An empty band is a bare rule, not a stub of
+ * light, so nothing is drawn for a count of zero.
+ */
 function DistributionBar({
   index,
   count,
@@ -99,46 +157,81 @@ function DistributionBar({
   peak: number;
   unitPref: UnitPref;
 }): React.JSX.Element {
+  const [width, setWidth] = useState(0);
+  const onLayout = (e: LayoutChangeEvent) => setWidth(Math.floor(e.nativeEvent.layout.width));
+  const unit = unitPref === 'imperial' ? 'mph' : 'km/h';
   return (
-    <View style={styles.distRow}>
-      <Text variant="caption" style={styles.distLabel}>
+    // One element to VoiceOver per band: the label and its count, not a bare
+    // range, a picture and a number read as three stops.
+    <View
+      style={styles.distRow}
+      accessible
+      accessibilityLabel={`${binLabel(index, unitPref)} ${unit}, ${count} ${count === 1 ? 'sample' : 'samples'}`}
+    >
+      <Text variant="mono" style={styles.distLabel}>
         {binLabel(index, unitPref)}
       </Text>
-      <View style={styles.distTrack}>
-        <View style={[styles.distFill, { flex: Math.max(count / peak, 0) }]} />
-        <View style={{ flex: Math.max(1 - count / peak, 0) }} />
+      <View style={styles.distTrack} onLayout={onLayout}>
+        <View style={styles.distRule} />
+        {width > 0 && count > 0 ? (
+          <StreakBar width={width} progress={count / peak} height={6} />
+        ) : null}
       </View>
-      <Text variant="caption" style={styles.distCount}>
+      <Text variant="mono" style={styles.distCount}>
         {count}
       </Text>
     </View>
   );
 }
 
-function ManeuverTile({
-  glyph,
-  glyphColor,
-  tileTint,
+/**
+ * A manoeuvre count, open on the night: a stroke glyph and a mono label over
+ * the rolling figure. `divider` draws the slanted rule before it, as Stat does.
+ */
+function ManeuverFigure({
+  icon,
   value,
   label,
+  divider,
 }: {
-  glyph: string;
-  glyphColor: string;
-  tileTint: string;
+  icon: YouIconName;
   value: number;
   label: string;
+  divider?: boolean;
 }): React.JSX.Element {
   return (
-    <Card style={styles.tileCard}>
-      <View style={[styles.tile, { backgroundColor: tileTint }]}>
-        <Text style={[styles.tileGlyph, { color: glyphColor }]}>{glyph}</Text>
+    <View
+      style={[styles.figure, divider ? styles.figureDivided : null]}
+      accessible
+      accessibilityLabel={`${label}, ${value}`}
+    >
+      {divider ? <View style={styles.slantRule} /> : null}
+      <View style={styles.figureLabel}>
+        <YouIcon name={icon} size={18} color={color.text2} />
+        {/* Two lines, not one: at the accessibility sizes "Lane changes"
+            outgrows half a phone, and a truncated label is a guess. */}
+        <Text variant="mono" numberOfLines={2} style={styles.figureLabelText}>
+          {label}
+        </Text>
       </View>
-      <AnimatedNumber value={String(value)} size={26} />
-      <Text variant="caption" style={styles.tileLabel} numberOfLines={1}>
-        {label}
-      </Text>
-    </Card>
+      <AnimatedNumber value={String(value)} size={type.numeral.size} weight="extrabold" />
+    </View>
   );
+}
+
+/**
+ * The stroke icon beside an earned achievement (src/state/achievements.ts
+ * names it). The stopwatch is the You tab's own; the rest are shared.
+ */
+function achievementIcon(icon: AchievementIcon): { shared?: IconName; own?: YouIconName } {
+  switch (icon) {
+    case 'verified':
+      return { shared: 'verified' };
+    case 'stopwatch':
+      return { own: 'stopwatch' };
+    default:
+      return { shared: 'check' };
+  }
 }
 
 /**
@@ -190,21 +283,21 @@ function UsernameTakenCard({ taken }: { taken: string | null }): React.JSX.Eleme
 
   return (
     <Card style={styles.takenCard}>
-      <Text variant="caption" style={{ color: color.danger }}>
-        USERNAME UNAVAILABLE
+      <Text variant="mono" style={{ color: color.danger }}>
+        Username unavailable
       </Text>
-      <Text variant="body">
+      <Text variant="callout">
         {taken ? `@${taken} can't be used` : "Your username can't be used"} (it is taken or not
         allowed), so your runs appear on the boards without a name. Pick another.
       </Text>
       <View style={styles.takenRow}>
-        <Text variant="bodyMedium" style={{ color: color.text3 }}>
+        <Text variant="mono" style={styles.takenAt}>
           @
         </Text>
         <TextInput
           style={styles.takenInput}
           placeholder="username"
-          placeholderTextColor={color.text2}
+          placeholderTextColor={color.text3}
           value={value}
           onChangeText={(t) => {
             setValue(t);
@@ -230,6 +323,7 @@ function UsernameTakenCard({ taken }: { taken: string | null }): React.JSX.Eleme
         label={checking ? 'Checking…' : 'Use this name'}
         onPress={save}
         disabled={!valid || checking}
+        arrow={false}
       />
     </Card>
   );
@@ -323,7 +417,8 @@ export default function YouScreen() {
   // Counting manoeuvres and binning speeds means reading every drive's fixes
   // back off disk, so it runs outside render, in cached chunks, behind
   // skeletons — never as a synchronous walk of the whole history. Locked,
-  // nothing shows them, so no fixes are read.
+  // nothing shows them, so no telemetry is derived (the history's route
+  // tiles, below, still read the open drives).
   const [stats, setStats] = useState<DriveStats | null>(null);
   useEffect(() => {
     if (telemetryLocked) return;
@@ -339,11 +434,7 @@ export default function YouScreen() {
     const step = () => {
       if (!alive) return;
       const end = Math.min(ids.length, i + STATS_CHUNK);
-      for (; i < end; i++) {
-        if (statsCache.has(ids[i])) continue;
-        const fixes = readFixes(ids[i]);
-        statsCache.set(ids[i], { maneuvers: countManeuvers(fixes), bins: speedBins(fixes) });
-      }
+      for (; i < end; i++) deriveFromFixes(ids[i], true);
       if (i < ids.length) {
         timer = setTimeout(step, 0);
         return;
@@ -379,229 +470,292 @@ export default function YouScreen() {
   // locked ones included: they are the person's own numbers, and top speed
   // is a Free row of the matrix. `now` moves on focus and at midnight, so a
   // drive crossing Free's window locks on the next refresh, not mid-scroll.
-  const history = splitHistory(drives, now, access);
+  const { isPro, enforced } = access;
+  const history = useMemo(
+    () => splitHistory(drives, now, { isPro, enforced }),
+    [drives, now, isPro, enforced],
+  );
   const lockedRow = lockedHistoryRow(history.locked);
 
+  // Route tiles for the open rows, read in the same cached chunks as the
+  // telemetry (and from the same read, when that is open too). Keyed on the
+  // ids, so a refresh that changes nothing reads nothing.
+  const openKey = history.open.map((d) => d.id).join(',');
+  const openIds = useMemo(() => (openKey ? openKey.split(',') : []), [openKey]);
+  // Not during a drive, as on the Driving tab (useRouteThumbs): the recorder
+  // appends fixes on this same thread, and a tile is not worth competing
+  // with it. Rows show their empty tile until the drive ends.
+  const recording = useDriveStore((s) => s.engineState === 'recording');
+  const [, setThumbsRead] = useState(0);
+  useEffect(() => {
+    if (recording) return;
+    const missing = openIds.filter((id) => !thumbCache.has(id));
+    if (missing.length === 0) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let i = 0;
+    const step = () => {
+      if (!alive) return;
+      const end = Math.min(missing.length, i + STATS_CHUNK);
+      for (; i < end; i++) deriveFromFixes(missing[i], !telemetryLocked);
+      setThumbsRead((n) => n + 1);
+      if (i < missing.length) timer = setTimeout(step, 0);
+    };
+    timer = setTimeout(step, 0);
+    return () => {
+      alive = false;
+      if (timer != null) clearTimeout(timer);
+    };
+  }, [openIds, telemetryLocked, recording]);
+
+  // The server's verdict per drive, the same lookup the Driving tab's rows
+  // use, so a drive ticked there is ticked here. Only `verified` draws the
+  // tick; offline, signed out or not yet asked, nothing is claimed. Not asked
+  // during a drive, as on the Driving tab.
+  const verified = useVerifiedDrives(openIds, !recording);
+  // Worked out when the list, the units or a verdict change, with one stable
+  // opener per row, so the memoised rows (DriveRow) skip the renders each
+  // tile chunk, focus and achievements load causes, as on the Driving tab.
+  const rowModels = useMemo(
+    () => history.open.map((d) => driveRowModel(d, unitPref, verified.has(d.id))),
+    [history, unitPref, verified],
+  );
+  const rowOpeners = useMemo(
+    () =>
+      history.open.map(
+        (d) => () => router.push({ pathname: '/drive/[id]', params: { id: d.id, from: 'you' } }),
+      ),
+    [history, router],
+  );
+
   return (
-    <Screen>
-      <View style={styles.header}>
-        <Text variant="cardTitle" style={styles.headerTitle}>
-          You
-        </Text>
-        <PressableScale
-          onPress={() => router.push('/settings')}
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
-          style={styles.gear}
-        >
-          <Text style={styles.gearGlyph}>⚙︎</Text>
-        </PressableScale>
-      </View>
-
-      <Text variant="headline" style={styles.identity} numberOfLines={1}>
-        {username ? `@${username}` : 'Driver'}
-      </Text>
+    <Screen backdrop="plain">
+      <DriverHeader
+        username={username}
+        country={country}
+        vehicleMake={vehicleMake}
+        vehicleModel={vehicleModel}
+        onSettings={() => router.push('/settings')}
+        footRoom={usernameTaken ? 0 : PLATE_OVERLAP}
+      />
       {usernameTaken ? <UsernameTakenCard taken={username} /> : null}
-      {country || vehicleMake ? (
-        <Text variant="caption" style={styles.meta}>
-          {[country, vehicleMake && `${vehicleMake} ${vehicleModel ?? ''}`.trim()]
-            .filter(Boolean)
-            .join(' · ')}
-        </Text>
-      ) : null}
 
-      <View style={styles.grid}>
-        <Stat label="Total distance" value={dist.value.toFixed(1)} unit={dist.unit} />
-        <Stat label="Total time" value={formatDuration(totalDurationS)} />
-      </View>
-      <View style={styles.grid}>
+      {/* The totals: distance on the plate, the rest in one ruled line. */}
+      <NumberPlate
+        label="Total distance"
+        value={dist.value.toFixed(1)}
+        unit={dist.unit}
+        // The unit in words, as the history rows say it: "62.6 miles", not "mi".
+        accessibilityLabel={`Total distance, ${dist.value.toFixed(1)} ${dist.unit === 'mi' ? 'miles' : 'kilometres'}`}
+        style={usernameTaken ? styles.plateAfterCard : styles.plate}
+      />
+      <View style={styles.band}>
+        <Stat
+          label="Total time"
+          value={formatDuration(totalDurationS)}
+          // "2 hours 13 minutes", not "2 h 13 m".
+          spoken={totalDurationS >= 60 ? durationFigure(totalDurationS).spoken : undefined}
+        />
         <Stat
           label="Top speed"
           value={topSpeed ? topSpeed[0] : EM_DASH}
           unit={topSpeed ? topSpeed[1] : undefined}
-          accent={topSpeedMs != null && topSpeedMs > 0}
+          divider
         />
-        <Stat label="Total drives" value={String(drives.length)} />
+        <Stat label="Total drives" value={String(drives.length)} divider />
       </View>
 
-      <Card style={styles.streakCard}>
+      <View style={styles.section}>
         <StreakGrid driveDays={driveDays} now={now} />
-      </Card>
+      </View>
 
       {achievements.length > 0 ? (
-        <View style={styles.achievements}>
-          <Text variant="caption">EARNED</Text>
-          {achievements.map((a) => (
-            <Card key={a.kind} style={styles.achievementCard}>
-              <Text style={styles.achievementGlyph}>{a.glyph}</Text>
-              <View style={styles.achievementBody}>
-                <Text variant="cardTitle">{a.title}</Text>
-                <Text variant="caption">{a.detail}</Text>
+        <View style={styles.section}>
+          <SectionHeader title="Earned" />
+          {achievements.map((a) => {
+            const glyph = achievementIcon(a.icon);
+            return (
+              <View
+                key={a.kind}
+                style={styles.achievement}
+                accessible
+                accessibilityLabel={`${a.title}. ${a.detail}`}
+              >
+                <View style={styles.medal}>
+                  <View style={styles.medalPlate} />
+                  {glyph.own ? (
+                    <YouIcon name={glyph.own} size={20} color={color.text1} />
+                  ) : (
+                    <Icon name={glyph.shared ?? 'check'} size={20} color={color.text1} />
+                  )}
+                </View>
+                <View style={styles.achievementBody}>
+                  <Text variant="bodySemibold">{a.title}</Text>
+                  <Text variant="caption">{a.detail}</Text>
+                </View>
               </View>
-            </Card>
-          ))}
-          <Text variant="legal">
+            );
+          })}
+          <Text variant="legal" style={styles.sectionNote}>
             Achievements are granted on the server, off verified drives only — never by the app.
           </Text>
         </View>
       ) : null}
 
-      {pbs.zeroTo60S != null ? (
-        <Card style={styles.pbCard}>
-          <Text variant="caption">PERSONAL BEST · 0–60 MPH</Text>
-          <Text variant="cardTitle">{pbs.zeroTo60S.toFixed(2)} s</Text>
-        </Card>
-      ) : null}
-
-      <Text variant="cardTitle" style={styles.sectionTitle}>
-        Manoeuvres
-      </Text>
-      {telemetry.locked ? (
-        // One card for all three: the tiles, the turn bar and the bands are
-        // one Pro row of the matrix, and three locked cards would say it
-        // three times. The section title stays, so nothing silently goes.
-        <PressableScale
-          onPress={goPro}
-          accessibilityRole="button"
-          accessibilityLabel={telemetry.accessibilityLabel}
-          style={styles.lockedCardPress}
-        >
-          <Card style={styles.lockedCard}>
-            <View style={styles.lockedTitleRow}>
-              <Text variant="bodyMedium">{telemetry.title}</Text>
-              {/* Wrapped so the chip centres on the title instead of pinning to the top. */}
-              <View>
-                <ProBadge />
+      <View style={styles.section}>
+        <SectionHeader title="Manoeuvres" />
+        {telemetry.locked ? (
+          // One card for all three: the tiles, the turn bar and the bands are
+          // one Pro row of the matrix, and three locked cards would say it
+          // three times. The section title stays, so nothing silently goes.
+          <PressableScale
+            onPress={goPro}
+            accessibilityRole="button"
+            accessibilityLabel={telemetry.accessibilityLabel}
+          >
+            <Card style={styles.lockedCard}>
+              <View style={styles.lockedTitleRow}>
+                <Icon name="lock" size={18} color={color.text3} />
+                <Text variant="bodySemibold">{telemetry.title}</Text>
+                {/* Wrapped so the chip centres on the title instead of pinning to the top. */}
+                <View>
+                  <ProBadge />
+                </View>
               </View>
-            </View>
-            <Text variant="caption">{telemetry.detail}</Text>
-          </Card>
-        </PressableScale>
-      ) : (
-        <>
-          {stats == null ? (
-            <>
-              <View style={styles.grid}>
-                <Skeleton style={styles.tileSkeleton} />
-                <Skeleton style={styles.tileSkeleton} />
-              </View>
-              <View style={styles.grid}>
-                <Skeleton style={styles.tileSkeleton} />
-                <Skeleton style={styles.tileSkeleton} />
-              </View>
-            </>
-          ) : (
-            <>
-              <View style={styles.grid}>
-                <ManeuverTile
-                  glyph="↰"
-                  glyphColor={color.accent}
-                  tileTint={tint.accent}
-                  value={stats.maneuvers.leftTurns}
-                  label="Left turns"
-                />
-                <ManeuverTile
-                  glyph="↱"
-                  glyphColor={color.rank2}
-                  tileTint={tint.steel}
-                  value={stats.maneuvers.rightTurns}
-                  label="Right turns"
-                />
-              </View>
-              <View style={styles.grid}>
-                <ManeuverTile
-                  glyph="⊗"
-                  glyphColor={color.danger}
-                  tileTint={tint.danger}
-                  value={stats.maneuvers.hardBraking}
-                  label="Hard braking"
-                />
-                <ManeuverTile
-                  glyph="⇄"
-                  glyphColor={color.rank1}
-                  tileTint={tint.gold}
-                  value={stats.maneuvers.laneChanges}
-                  label="Lane changes"
-                />
-              </View>
-            </>
-          )}
-
-          <Card style={styles.turnCard}>
-            <Text variant="caption" style={styles.cardLabel}>
-              TURN PREFERENCE
-            </Text>
+              <Text variant="caption">{telemetry.detail}</Text>
+            </Card>
+          </PressableScale>
+        ) : (
+          <>
             {stats == null ? (
-              <Skeleton style={styles.barSkeleton} />
-            ) : pref ? (
-              <>
-                <View style={styles.bar}>
-                  <View style={[styles.barLeft, { flex: pref.leftPct }]} />
-                  <View style={[styles.barRight, { flex: pref.rightPct }]} />
+              <View style={styles.figures}>
+                <View style={styles.figureRow}>
+                  <Skeleton style={styles.figureSkeleton} />
+                  <Skeleton style={styles.figureSkeleton} />
                 </View>
-                <View style={styles.barLegend}>
-                  <Text variant="caption" style={{ color: color.accent }}>
-                    Left {pref.leftPct}%
-                  </Text>
-                  <Text variant="caption" style={{ color: color.rank2 }}>
-                    Right {pref.rightPct}%
-                  </Text>
+                <View style={styles.figureRow}>
+                  <Skeleton style={styles.figureSkeleton} />
+                  <Skeleton style={styles.figureSkeleton} />
                 </View>
-              </>
+              </View>
             ) : (
-              <Text variant="body">
-                Not enough data yet — turns are counted from recorded heading, and none of your
-                drives carry enough of it.
-              </Text>
-            )}
-          </Card>
-
-          <Card style={styles.turnCard}>
-            <Text variant="caption" style={styles.cardLabel}>
-              SPEED DISTRIBUTION
-            </Text>
-            {stats == null ? (
-              <Skeleton style={styles.barSkeleton} />
-            ) : distBins != null && distTotal > 0 && distPeak > 0 ? (
-              <>
-                <View style={styles.distList}>
-                  {distBins.map((count, i) => (
-                    <DistributionBar
-                      key={i}
-                      index={i}
-                      count={count}
-                      peak={distPeak}
-                      unitPref={unitPref}
-                    />
-                  ))}
+              <View style={styles.figures}>
+                <View style={styles.figureRow}>
+                  <ManeuverFigure
+                    icon="turnLeft"
+                    value={stats.maneuvers.leftTurns}
+                    label="Left turns"
+                  />
+                  <ManeuverFigure
+                    icon="turnRight"
+                    value={stats.maneuvers.rightTurns}
+                    label="Right turns"
+                    divider
+                  />
                 </View>
-                <Text variant="legal">
-                  {distTotal} gated GPS samples, banded in {unitPref === 'imperial' ? 'mph' : 'km/h'}.
+                <View style={styles.figureRule} />
+                <View style={styles.figureRow}>
+                  <ManeuverFigure
+                    icon="hardBrake"
+                    value={stats.maneuvers.hardBraking}
+                    label="Hard braking"
+                  />
+                  <ManeuverFigure
+                    icon="laneChange"
+                    value={stats.maneuvers.laneChanges}
+                    label="Lane changes"
+                    divider
+                  />
+                </View>
+              </View>
+            )}
+
+            <View style={styles.subsection}>
+              <Text variant="mono" style={styles.subTitle} accessibilityRole="header">
+                Turn preference
+              </Text>
+              {stats == null ? (
+                <Skeleton style={styles.barSkeleton} />
+              ) : pref ? (
+                // One statement to VoiceOver: the bar alone says nothing.
+                <View
+                  style={styles.turnBlock}
+                  accessible
+                  accessibilityLabel={`Left ${pref.leftPct}%, right ${pref.rightPct}%`}
+                >
+                  <View style={styles.turnBar}>
+                    <View style={[styles.turnLeft, { flex: pref.leftPct }]} />
+                    <View style={[styles.turnRight, { flex: pref.rightPct }]} />
+                  </View>
+                  <View style={styles.turnLegend}>
+                    <Text variant="mono" style={{ color: color.text1 }}>
+                      Left {pref.leftPct}%
+                    </Text>
+                    <Text variant="mono" style={{ color: color.text2 }}>
+                      Right {pref.rightPct}%
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <Text variant="callout">
+                  Not enough data yet — turns are counted from recorded heading, and none of your
+                  drives carry enough of it.
                 </Text>
-              </>
-            ) : (
-              <Text variant="body">
-                Nothing to plot yet — a distribution needs recorded fixes that pass accuracy gating.
-              </Text>
-            )}
-          </Card>
-        </>
-      )}
+              )}
+            </View>
 
-      <Text variant="cardTitle" style={styles.sectionTitle}>
-        More stats
-      </Text>
-      <View style={styles.grid}>
-        <Stat
-          label="Avg drive length"
-          value={avgDistance ? avgDistance.value.toFixed(1) : EM_DASH}
-          unit={avgDistance ? avgDistance.unit : undefined}
-        />
-        <Stat
-          label="Longest drive"
-          value={longest ? longest.value.toFixed(1) : EM_DASH}
-          unit={longest ? longest.unit : undefined}
-        />
+            <View style={styles.subsection}>
+              <Text variant="mono" style={styles.subTitle} accessibilityRole="header">
+                Speed distribution
+              </Text>
+              {stats == null ? (
+                <Skeleton style={styles.barSkeleton} />
+              ) : distBins != null && distTotal > 0 && distPeak > 0 ? (
+                <>
+                  <View style={styles.distList}>
+                    {distBins.map((count, i) => (
+                      <DistributionBar
+                        key={i}
+                        index={i}
+                        count={count}
+                        peak={distPeak}
+                        unitPref={unitPref}
+                      />
+                    ))}
+                  </View>
+                  <Text variant="legal">
+                    {distTotal} gated GPS samples, banded in {unitPref === 'imperial' ? 'mph' : 'km/h'}.
+                  </Text>
+                </>
+              ) : (
+                <Text variant="callout">
+                  Nothing to plot yet — a distribution needs recorded fixes that pass accuracy
+                  gating.
+                </Text>
+              )}
+            </View>
+          </>
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title="More stats" />
+        <View style={styles.band}>
+          <Stat
+            label="Avg drive length"
+            value={avgDistance ? avgDistance.value.toFixed(1) : EM_DASH}
+            unit={avgDistance ? avgDistance.unit : undefined}
+          />
+          <Stat
+            label="Longest drive"
+            value={longest ? longest.value.toFixed(1) : EM_DASH}
+            unit={longest ? longest.unit : undefined}
+            divider
+          />
+          {pbs.zeroTo60S != null ? (
+            <Stat label="Best 0–60 mph" value={pbs.zeroTo60S.toFixed(2)} unit="s" divider />
+          ) : null}
+        </View>
       </View>
 
       {/*
@@ -610,96 +764,87 @@ export default function YouScreen() {
         and /plans redirects back here then anyway.
       */}
       {SHOW_PRO ? (
-        <PressableScale onPress={() => router.push('/plans')} accessibilityRole="button">
-          <Card style={styles.plansLink}>
-            <Text variant="bodyMedium">Free vs Pro — the whole matrix, published</Text>
+        <PressableScale
+          onPress={() => router.push('/plans')}
+          accessibilityRole="button"
+          style={styles.plansLink}
+        >
+          <Icon name="document" size={22} color={color.text2} />
+          <View style={styles.plansBody}>
+            <Text variant="bodySemibold">Free vs Pro — the whole matrix, published</Text>
             <Text variant="caption">{PLANS_LINK_NOTE.text}</Text>
-          </Card>
+          </View>
+          <Icon name="chevronRight" size={18} color={color.text3} strokeWidth={2} />
         </PressableScale>
       ) : null}
 
-      <Text variant="cardTitle" style={styles.sectionTitle}>
-        History
-      </Text>
-      {drives.length === 0 ? (
-        <Card style={styles.historyCard}>
-          <Text variant="body">{historyEmptyText(access)}</Text>
-        </Card>
-      ) : (
-        history.open.map((d) => (
-          <PressableScale
-            key={d.id}
-            onPress={() => router.push(`/drive/${d.id}`)}
-            accessibilityRole="button"
-            // The label replaces the card's text for VoiceOver, so it carries
-            // the stats too — not just the date (matches the Drive tab rows).
-            accessibilityLabel={`Drive on ${new Date(d.startedAt).toLocaleString()}, ${formatDistance(d.summary.distanceM, unitPref)}, ${formatDuration(d.summary.durationS)}, top speed ${formatSpeed(d.summary.maxSpeedMs, unitPref)}`}
-          >
-            <Card style={styles.historyCard}>
-              <Text variant="bodyMedium">{new Date(d.startedAt).toLocaleString()}</Text>
-              <Text variant="caption">
-                {distanceForDisplay(d.summary.distanceM, unitPref).value.toFixed(1)}{' '}
-                {distanceForDisplay(d.summary.distanceM, unitPref).unit} ·{' '}
-                {formatDuration(d.summary.durationS)} · top{' '}
-                {formatSpeed(d.summary.maxSpeedMs, unitPref)}
-              </Text>
-            </Card>
-          </PressableScale>
-        ))
-      )}
       {/*
-        Drives past Free's window, as one row at the foot of the list: it is
-        newest first, so they all sort below the last open one. Why one row
-        and not one per drive: lockedHistoryRow, src/drive/driveAccess.ts.
+        The Driving tab's own rows (DriveRow), so the two lists cannot drift:
+        the same route tile, human title, mono line, figures, server tick and
+        large-text stacking.
       */}
-      {lockedRow ? (
-        <PressableScale
-          onPress={goPro}
-          accessibilityRole="button"
-          accessibilityLabel={lockedRow.accessibilityLabel}
-        >
-          <Card style={styles.historyCard}>
-            <View style={styles.lockedTitleRow}>
-              <Text variant="bodyMedium">{lockedRow.title}</Text>
-              {/* Wrapped so the chip centres on the title instead of pinning to the top. */}
-              <View>
-                <ProBadge />
-              </View>
-            </View>
-            <Text variant="caption">{lockedRow.detail}</Text>
-          </Card>
-        </PressableScale>
-      ) : null}
+      <View style={[styles.section, styles.bleed]}>
+        <SectionHeader title="History" style={styles.historyHeader} />
+        {drives.length === 0 ? (
+          <View style={styles.historyEmpty}>
+            <Text variant="callout">{historyEmptyText(access)}</Text>
+          </View>
+        ) : (
+          history.open.map((d, i) => (
+            <DriveRow
+              key={d.id}
+              first={i === 0}
+              model={rowModels[i]}
+              thumb={thumbCache.get(d.id)}
+              verified={verified.has(d.id)}
+              onPress={rowOpeners[i]}
+            />
+          ))
+        )}
+        {/*
+          Drives past Free's window, as one row at the foot of the list: it is
+          newest first, so they all sort below the last open one. Why one row
+          and not one per drive: lockedHistoryRow, src/drive/driveAccess.ts.
+        */}
+        {lockedRow ? (
+          <LockedDrivesRow row={lockedRow} onPress={goPro} first={history.open.length === 0} />
+        ) : null}
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { minHeight: 44, justifyContent: 'center' },
-  headerTitle: { textAlign: 'center' },
-  gear: {
-    position: 'absolute',
-    right: -space.md,
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // The plate rides up over the header's horizon, like the drive summary's
+  // over its map; after the username card it sits in the flow instead.
+  plate: { marginTop: -PLATE_OVERLAP },
+  plateAfterCard: { marginTop: space.xl },
+  band: {
+    flexDirection: 'row',
+    gap: space.md,
+    marginTop: space.lg,
+    paddingVertical: space.md,
+    borderTopWidth: StyleSheet.hairlineWidth * 2,
+    borderBottomWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: color.divider,
   },
-  gearGlyph: { ...textStyle(glyph.xxl), color: color.text1 },
-  identity: { marginTop: space.lg },
-  meta: { marginTop: space.xs },
-  takenCard: { marginTop: space.md, gap: space.sm },
+  section: { marginTop: space.xxl },
+  sectionNote: { marginTop: space.md },
+  bleed: { marginHorizontal: -gutter },
+
+  takenCard: { marginTop: space.lg, gap: space.sm, borderColor: alpha(color.danger, 0.4) },
   takenRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 48,
-    borderRadius: radius.pill,
+    minHeight: 52,
+    borderRadius: radius.sm,
     backgroundColor: color.surface2,
     borderWidth: 1,
     borderColor: color.hairline,
     paddingHorizontal: space.lg,
     gap: space.xs,
   },
+  takenAt: { color: color.text3 },
   takenInput: {
     flex: 1,
     color: color.text1,
@@ -707,50 +852,104 @@ const styles = StyleSheet.create({
     ...textStyle(type.body),
     paddingVertical: space.sm,
   },
-  grid: { flexDirection: 'row', gap: space.md, marginTop: space.md },
-  achievements: { marginTop: space.xl, gap: space.sm },
-  achievementCard: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  achievementGlyph: { ...textStyle(glyph.huge) },
-  achievementBody: { flex: 1, gap: 2 },
-  streakCard: { marginTop: space.xl },
-  pbCard: { marginTop: space.md, gap: space.xs },
-  sectionTitle: { marginTop: space.xl },
-  tileCard: { flex: 1, gap: space.sm },
-  tile: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tileGlyph: { ...textStyle(glyph.lg), color: color.text1, textAlign: 'center' },
-  tileLabel: { textTransform: 'uppercase', letterSpacing: 0.6, ...textStyle(type.label) },
-  turnCard: { marginTop: space.md, gap: space.md },
-  cardLabel: { textTransform: 'uppercase', letterSpacing: 0.6, ...textStyle(type.label) },
-  bar: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden' },
-  barLeft: { backgroundColor: color.accent },
-  barRight: { backgroundColor: color.rank2 },
-  barLegend: { flexDirection: 'row', justifyContent: 'space-between' },
-  tileSkeleton: { flex: 1, height: 96 },
-  barSkeleton: { height: 40 },
-  distList: { gap: 6 },
-  distRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  distLabel: { minWidth: 56, color: color.text2, ...textStyle(type.label) },
-  distTrack: {
-    flex: 1,
+
+  achievement: {
     flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    backgroundColor: color.surface3,
+    alignItems: 'center',
+    gap: space.lg,
+    paddingVertical: space.md,
+    borderTopWidth: StyleSheet.hairlineWidth * 2,
+    borderTopColor: color.divider,
   },
-  distFill: { backgroundColor: color.accent },
-  distCount: { minWidth: 40, textAlign: 'right', color: color.text2, ...textStyle(type.label) },
-  plansLink: { marginTop: space.xl, gap: space.xs },
-  historyCard: { marginTop: space.md, gap: space.xs },
+  // A white-outlined slanted plate, the "Verified" tag's shape, holding the icon upright.
+  medal: { width: 44, height: 34, alignItems: 'center', justifyContent: 'center' },
+  medalPlate: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: radius.xs,
+    transform: slant.transform,
+    backgroundColor: alpha(color.text1, 0.07),
+    borderWidth: 1,
+    borderColor: alpha(color.text1, 0.22),
+  },
+  achievementBody: { flex: 1, gap: 2 },
+
+  lockedCard: { gap: space.xs },
   // Wraps at large text sizes rather than pushing the chip off the card.
   lockedTitleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm },
-  // The gap above sits outside the pressable, so a tap in it does not open Pro.
-  lockedCardPress: { marginTop: space.md },
-  lockedCard: { gap: space.xs },
+
+  figures: {
+    borderTopWidth: StyleSheet.hairlineWidth * 2,
+    borderBottomWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: color.divider,
+  },
+  figureRow: { flexDirection: 'row', gap: space.md, paddingVertical: space.md },
+  figureRule: { height: StyleSheet.hairlineWidth * 2, backgroundColor: color.divider },
+  figure: { flex: 1, gap: space.xs },
+  figureDivided: { paddingLeft: 18 },
+  slantRule: {
+    position: 'absolute',
+    left: 0,
+    top: 2,
+    bottom: 2,
+    width: StyleSheet.hairlineWidth * 2,
+    backgroundColor: color.hairline,
+    transform: slant.transform,
+  },
+  figureLabel: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  figureLabelText: { flexShrink: 1 },
+  figureSkeleton: { flex: 1, height: 56 },
+
+  subsection: { marginTop: space.xl, gap: space.md },
+  subTitle: { color: color.text2 },
+  barSkeleton: { height: 40 },
+  // The subsection's own gap, kept inside the grouped element.
+  turnBlock: { gap: space.md },
+  turnBar: { flexDirection: 'row', height: 8, gap: 4, paddingHorizontal: 2 },
+  turnLeft: { backgroundColor: color.text1, borderRadius: radius.xs, transform: slant.transform },
+  turnRight: {
+    backgroundColor: color.outline,
+    borderRadius: radius.xs,
+    transform: slant.transform,
+  },
+  turnLegend: { flexDirection: 'row', justifyContent: 'space-between' },
+
+  distList: { gap: space.sm },
+  distRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 18 },
+  distLabel: { minWidth: 56, color: color.text2 },
+  distTrack: { flex: 1, height: 6, justifyContent: 'center' },
+  distRule: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: StyleSheet.hairlineWidth * 2,
+    backgroundColor: color.divider,
+  },
+  distCount: { minWidth: 40, textAlign: 'right', color: color.text2 },
+
+  plansLink: {
+    marginTop: space.xxl,
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingVertical: space.md,
+    borderTopWidth: StyleSheet.hairlineWidth * 2,
+    borderBottomWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: color.divider,
+  },
+  plansBody: { flex: 1, gap: 2 },
+
+  historyHeader: { paddingHorizontal: ROW_INSET },
+  // Ruled as the Driving tab's rows are: a hairline above and below.
+  historyEmpty: {
+    paddingHorizontal: ROW_INSET,
+    paddingVertical: space.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: color.divider,
+  },
 });

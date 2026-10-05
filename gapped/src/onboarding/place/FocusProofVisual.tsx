@@ -6,14 +6,16 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
+import { SlantTag } from '@/components/brand/SlantTag';
 import { Numeral, OnSurface, Text } from '@/components/Text';
 import { countryByCode } from '@/data/countries';
 import { speedForDisplay, type UnitPref } from '@/drive/units';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { focusOption } from '@/onboarding/flow';
+import { panel } from '@/onboarding/ui/choice';
 import type { Focus } from '@/state/profile';
 import { duration, easing } from '@/theme/motion';
-import { color, font, glyph, radius, space, textStyle, type } from '@/theme/tokens';
+import { alpha, color, font, glow, glyph, radius, slant, space, type } from '@/theme/tokens';
 import { countryInSentence } from './countryCopy';
 import {
   PROOF_POINTS,
@@ -42,13 +44,13 @@ export type ProofContext = {
 
 /** The appear motion: ~0.5 s, decelerating, as the reference's bars grow. */
 const APPEAR = duration.slow;
-/** "Grey first, lime a beat later." */
+/** "Grey first, the lit one a beat later." */
 const BEAT = duration.fast;
 
 /**
- * Ceiling on how far the small capitals (SAMPLE, VERIFIED, YOUR FOCUS) scale,
- * as the board caps its row chips: they are labels on a badge, not reading
- * text, and at the accessibility sizes they outgrew the card they label.
+ * Ceiling on how far the chart labels scale, as the board caps its row chips:
+ * they are labels on a chart, not reading text, and at the accessibility
+ * sizes they outgrew the card they label.
  */
 const TAG_MAX_SCALE = 2;
 
@@ -98,7 +100,10 @@ export function FocusProofVisual({
   }
 }
 
-/** The pill at the top that repeats the answer just given. */
+/**
+ * The tag at the top that repeats the answer just given: a slanted night
+ * plate with the focus's glyph and name, and "Your focus" in mono.
+ */
 export function FocusPill({ focus }: { focus: Focus }) {
   const option = focusOption(focus);
   return (
@@ -107,12 +112,13 @@ export function FocusPill({ focus }: { focus: Focus }) {
       accessible
       accessibilityLabel={`Your focus: ${option.spoken ?? option.label}`}
     >
-      <FocusIcon focus={focus} size={16} tint={color.accent} />
+      <View pointerEvents="none" style={styles.pillPlate} />
+      <FocusIcon focus={focus} size={16} tint={color.text1} />
       <Text variant="caption" style={styles.pillLabel}>
         {option.label}
       </Text>
-      <Text style={styles.pillEyebrow} maxFontSizeMultiplier={TAG_MAX_SCALE}>
-        YOUR FOCUS
+      <Text variant="monoSmall" maxFontSizeMultiplier={TAG_MAX_SCALE}>
+        Your focus
       </Text>
     </View>
   );
@@ -124,7 +130,7 @@ const POINT_ICON: Record<ProofPoint, (p: { color: string }) => React.JSX.Element
   'Ranking context': PodiumIcon,
 };
 
-/** The three lime marks under every variant. */
+/** The three marks under every variant: stroke glyphs, soft white. */
 export function ProofPoints() {
   const large = useWindowDimensions().fontScale > LARGE_TEXT;
   return (
@@ -133,7 +139,7 @@ export function ProofPoints() {
         const Icon = POINT_ICON[p];
         return (
           <View key={p} style={[styles.point, large && styles.pointLarge]} accessible accessibilityLabel={p}>
-            <Icon color={color.accent} />
+            <Icon color={color.text2} />
             {/* legal, a step under caption: at caption size "Progress history"
                 broke onto two lines in a third of a 375pt screen. */}
             <Text variant="legal" style={[styles.pointLabel, large && styles.pointLabelLarge]}>
@@ -148,14 +154,9 @@ export function ProofPoints() {
 
 // ─── shared pieces ─────────────────────────────────────────────────────────
 
+/** Read with the card's own label, which starts "Sample"; drawn for the eye. */
 function SampleTag() {
-  return (
-    <View style={styles.sampleTag}>
-      <Text style={styles.sampleText} maxFontSizeMultiplier={TAG_MAX_SCALE}>
-        SAMPLE
-      </Text>
-    </View>
-  );
+  return <SlantTag label="SAMPLE" size="sm" decorative />;
 }
 
 function Card({
@@ -215,11 +216,8 @@ function VerifiedChip({ play, delay }: { play: boolean; delay: number }) {
     transform: [{ scale: 0.92 + 0.08 * v.get() }],
   }));
   return (
-    <Animated.View style={[styles.verified, style]}>
-      <CheckIcon size={12} color={color.verified} />
-      <Text style={styles.verifiedText} maxFontSizeMultiplier={TAG_MAX_SCALE}>
-        VERIFIED
-      </Text>
+    <Animated.View style={style}>
+      <SlantTag label="Verified" icon="check" size="sm" decorative />
     </Animated.View>
   );
 }
@@ -234,12 +232,11 @@ function TopSpeedCard({ context, play }: { context: ProofContext; play: boolean 
     <Card
       label={`Sample board row: ${SAMPLE_TOP_SPEED_ROW.name}, ${SAMPLE_TOP_SPEED_ROW.vehicle}, ${value} ${unit}, verified.`}
       title={
-        <>
-          <View style={styles.liveDot} />
-          <Text variant="caption" style={styles.cardTitleText}>
-            Top speed
-          </Text>
-        </>
+        // No live light: this is a sample row, and a light would claim
+        // what the SAMPLE tag beside it denies.
+        <Text variant="caption" style={styles.cardTitleText}>
+          Top speed
+        </Text>
       }
     >
       <View style={[styles.boardRow, large && styles.boardRowLarge]}>
@@ -289,11 +286,7 @@ function ZeroSixtyCard({ play }: { play: boolean }) {
           conditions next to the reading: the time only counts because of them. */}
       <View style={styles.timerRow}>
         <View style={styles.timer}>
-          <Numeral
-            size={type.heroNumeral.size}
-            color={t >= 1 ? color.accent : color.text1}
-            maxFontSizeMultiplier={FIGURE_MAX_SCALE}
-          >
+          <Numeral size={type.heroNumeral.size} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
             {seconds}
           </Numeral>
           <Text variant="body" maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
@@ -304,7 +297,7 @@ function ZeroSixtyCard({ play }: { play: boolean }) {
           {/* No-break spaces: a figure and its unit stay on one line. */}
           {['Standstill ≥\u00A02\u00A0s', '1\u00A0ft rollout'].map((r) => (
             <View key={r} style={styles.rule}>
-              <CheckIcon size={12} color={color.accent} />
+              <CheckIcon size={12} color={color.text2} />
               <Text variant="caption" style={styles.ruleText}>
                 {r}
               </Text>
@@ -347,7 +340,7 @@ function RankCard({ context, play }: { context: ProofContext; play: boolean }) {
       }
     >
       <View style={styles.rankLine}>
-        <Numeral size={type.heroNumeral.size} color={color.accent} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
+        <Numeral size={type.heroNumeral.size} maxFontSizeMultiplier={FIGURE_MAX_SCALE}>
           #{SAMPLE_RANK.rank}
         </Numeral>
         <Text variant="body">
@@ -369,7 +362,7 @@ function RankCard({ context, play }: { context: ProofContext; play: boolean }) {
   );
 }
 
-// ─── Beat friends: a sample friends board ──────────────────────────────────
+// ─── Friends: a sample friends board ────────────────────────────────────────
 
 function FriendsCard({ context, play }: { context: ProofContext; play: boolean }) {
   const rows = SAMPLE_FRIENDS.map((f) => ({ ...f, ...displaySpeed(f.topSpeed, context.unitPref) }));
@@ -453,28 +446,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
-    // At the largest text sizes the label and YOUR FOCUS wrap inside the pill
-    // rather than running off both edges of the screen.
+    // At the largest text sizes the label and "Your focus" wrap inside the
+    // plate rather than running off both edges of the screen.
     maxWidth: '100%',
     columnGap: space.sm,
     minHeight: 36,
-    paddingHorizontal: space.md,
+    paddingHorizontal: space.lg,
     paddingVertical: space.xs,
-    borderRadius: radius.pill,
-    backgroundColor: color.surface2,
+  },
+  // The plate is skewed; its words are not.
+  pillPlate: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: radius.xs,
+    borderWidth: 1,
+    borderColor: color.hairline,
+    backgroundColor: color.surface1,
+    transform: slant.transform,
   },
   pillLabel: { color: color.text1, fontFamily: font.bodySemibold },
-  pillEyebrow: { ...textStyle(glyph.sm), color: color.text2, letterSpacing: 1 },
   points: { flexDirection: 'row', gap: space.sm },
   pointsLarge: { flexDirection: 'column', gap: space.md },
   point: { flex: 1, alignItems: 'center', gap: space.xs, minWidth: 0 },
   pointLarge: { flex: 0, flexDirection: 'row', gap: space.md },
   pointLabel: { textAlign: 'center', color: color.text2 },
   pointLabelLarge: { flex: 1, textAlign: 'left' },
-  // surface2, as every card in the flow (docs/ONBOARDING.md, "Look and motion").
+  // A night panel, as every card in the flow.
   card: {
-    backgroundColor: color.surface2,
-    borderRadius: radius.card,
+    ...panel,
     padding: space.lg,
     gap: space.md,
   },
@@ -483,16 +481,6 @@ const styles = StyleSheet.create({
   cardTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm },
   cardTitleLarge: { flex: 0, alignSelf: 'stretch' },
   cardTitleText: { color: color.text1, fontFamily: font.bodySemibold, flexShrink: 1 },
-  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.accent },
-  // text2, not text3: the tag sits on surface2, where text3 falls short of AA.
-  sampleTag: {
-    borderWidth: 1,
-    borderColor: color.text2,
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  sampleText: { ...textStyle(glyph.sm), color: color.text2, letterSpacing: 1, fontFamily: font.bodySemibold },
   boardRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   boardRowLarge: { flexDirection: 'column', alignItems: 'stretch' },
   boardWho: { flex: 1, gap: 2 },
@@ -500,17 +488,6 @@ const styles = StyleSheet.create({
   boardValue: { alignItems: 'flex-end', gap: space.xs },
   boardValueLarge: { alignItems: 'flex-start' },
   valueLine: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs },
-  verified: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    borderWidth: 1,
-    borderColor: color.verified,
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  verifiedText: { ...textStyle(glyph.sm), color: color.verified, letterSpacing: 1, fontFamily: font.bodySemibold },
   timerRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -535,6 +512,8 @@ const styles = StyleSheet.create({
   rankLine: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: space.sm },
   rankTrack: { height: 16, justifyContent: 'center' },
   rankRail: { height: 2, borderRadius: 1, backgroundColor: color.disabled },
+  // Where "you" sit in the field: a light, as the Ranks tab lights the
+  // viewer's own row.
   rankMarker: {
     position: 'absolute',
     left: -7,
@@ -543,7 +522,8 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: color.accent,
     borderWidth: 3,
-    borderColor: color.surface2,
+    borderColor: color.surface1,
+    boxShadow: `0 0 ${glow.tight}px ${alpha(color.accent, 0.8)}`,
   },
   friends: { gap: space.md },
   friend: { gap: space.xs },
@@ -554,13 +534,14 @@ const styles = StyleSheet.create({
     columnGap: space.sm,
   },
   friendName: { color: color.text1, flexShrink: 1 },
-  you: { color: color.accent, fontFamily: font.bodySemibold },
+  // Red text is accentHot: racing red is a light, too dark to be ink.
+  you: { color: color.accentHot, fontFamily: font.bodySemibold },
   barTrack: { height: BAR, borderRadius: BAR / 2, backgroundColor: color.hairline, overflow: 'hidden' },
   bar: {
     height: BAR,
     width: '100%',
     borderRadius: BAR / 2,
-    backgroundColor: color.text3,
+    backgroundColor: color.outline,
     // Scaled, not resized: width cannot be animated on the UI thread.
     transformOrigin: 'left center',
   },

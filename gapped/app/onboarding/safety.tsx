@@ -19,12 +19,13 @@ import {
   TERMS_SENTENCE,
 } from '@/onboarding/place/consentCopy';
 import { FlagIcon } from '@/onboarding/place/icons';
+import { panel } from '@/onboarding/ui/choice';
 import { useOnboardingAdvance } from '@/onboarding/useOnboardingAdvance';
 import { useProfile } from '@/state/profile';
-import { color, radius, space } from '@/theme/tokens';
+import { color, space } from '@/theme/tokens';
 
-/** The lime glyph tiles beside each guideline. */
-const TILE = 40;
+/** The glyph column beside each guideline: the glyphs line up, the words after them. */
+const GLYPH_BOX = 28;
 
 /**
  * The guidelines. The first is the line the public top-speed board rests on
@@ -87,8 +88,8 @@ export default function SafetyStep() {
           <OnSurface>
             {GUIDELINES.map(({ Glyph, text }) => (
               <View key={text} style={styles.row}>
-                <View style={styles.tile}>
-                  <Glyph size={22} color={color.accent} />
+                <View style={styles.glyph}>
+                  <Glyph size={22} color={color.text2} />
                 </View>
                 <Text variant="body" style={styles.guideline}>
                   {text}
@@ -124,20 +125,12 @@ export default function SafetyStep() {
 
 const styles = StyleSheet.create({
   card: {
+    ...panel,
     gap: space.lg,
     padding: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: color.surface2,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  tile: {
-    width: TILE,
-    height: TILE,
-    borderRadius: 12,
-    backgroundColor: color.accentTile,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  glyph: { width: GLYPH_BOX, alignItems: 'center' },
   guideline: { flex: 1, color: color.text1 },
   checks: { gap: space.md },
 });
