@@ -53,6 +53,7 @@ ap.add_argument('--samples', type=int, default=256)
 ap.add_argument('--passes', default='beauty,lights')
 ap.add_argument('--preview', action='store_true')
 ap.add_argument('--inspect', action='store_true', help='print objects and materials, render nothing')
+ap.add_argument('--ev', type=float, default=None, help='a fixed exposure for the beauty pass, in stops (default: auto_exposure)')
 args = ap.parse_args(argv)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -84,7 +85,10 @@ def srgb01(hexstr):
 TAIL = '#E8282C'
 CANVAS = '#07070A'
 RIM = '#DCE4FF'
-NIGHT_FILL = '#3D5598'
+NIGHT_FILL = '#A9BBEA'
+# The vehicle's brightness the beauty pass is exposed for: the 75th
+# percentile of its luma, 0-255 (auto_exposure).
+EXPOSE_FOR = (115, 205)
 
 # ---------------------------------------------------------------------------
 # Scene
@@ -643,8 +647,9 @@ def area_light(name, loc, target, size, energy, colour, size_y=None):
 
 def rig(spec, lo, hi, view):
     """Lit for the camera: a street light overhead, white rims behind the car
-    as the camera sees it (so they trace its outline), a dim blue fill from
-    the camera's side so the face toward us is night, not black."""
+    as the camera sees it (so they trace its outline), and a big soft night-
+    blue fill from the camera's side, which the face toward us reflects, so a
+    dark paint reads as its colour rather than as black."""
     for o in list(bpy.context.scene.objects):
         if o.type == 'LIGHT':
             bpy.data.objects.remove(o, do_unlink=True)
@@ -664,11 +669,11 @@ def rig(spec, lo, hi, view):
         loc = -d * (R + 2.2) + p * side * (W * 0.5 + 2.4) + mathutils.Vector((0, 0, H * 1.1))
         area_light(name, tuple(loc), tuple(c), 0.6, 520 * k, RIM, size_y=2.8)
     area_light('rimTop', tuple(-d * (R + 3.0) + mathutils.Vector((0, 0, H + 2.4))), tuple(c), 2.2, 220 * k, RIM, size_y=0.5)
-    # Night fill from the camera's side, big and dim and blue.
-    area_light('fill', tuple(d * (R + 5.0) + mathutils.Vector((0, 0, 1.2))), tuple(c), 6.0, 75 * k, NIGHT_FILL, size_y=3.0)
+    # Night fill from the camera's side, big, soft and pale blue.
+    area_light('fill', tuple(d * (R + 5.0) + mathutils.Vector((0, 0, 1.2))), tuple(c), 6.0, 375 * k, NIGHT_FILL, size_y=3.0)
     # A soft white card high on the camera side: it lays the colour on the
     # flank the camera sees, so every paint reads as its own colour.
-    area_light('card', tuple(d * (R + 3.5) + p * (R * 0.6) + mathutils.Vector((0, 0, H + 1.6))), tuple(c), 2.5, 120 * k * spec.get('cardScale', 1.0), '#E9EDF5', size_y=1.0)
+    area_light('card', tuple(d * (R + 3.5) + p * (R * 0.6) + mathutils.Vector((0, 0, H + 1.6))), tuple(c), 2.5, 240 * k * spec.get('cardScale', 1.0), '#E9EDF5', size_y=1.0)
     if not bpy.context.scene.objects.get('ground'):
         bpy.ops.mesh.primitive_plane_add(size=80, location=(0, 0, 0))
         ground = bpy.context.active_object
@@ -875,6 +880,41 @@ def bloom(path, width):
     write_png(path, np.concatenate([col, a], axis=2))
 
 
+def auto_exposure(scene, out_dir, view):
+    """The beauty pass's exposure for this view, from quick probe renders:
+    a dark paint is lifted until the brighter half of the vehicle reads (its
+    75th-percentile luma reaches EXPOSE_FOR[0]), a light one held back before
+    it blows out (EXPOSE_FOR[1]). Up to three probes, a quarter the size."""
+    if args.ev is not None:
+        return args.ev
+    r = scene.render
+    kept = (r.resolution_percentage, scene.cycles.samples, r.filepath)
+    r.resolution_percentage = 25
+    scene.cycles.samples = 8
+    probe = os.path.join(out_dir, '_probe-%s.png' % view)
+    r.filepath = probe
+    low, high = EXPOSE_FOR
+    ev, p75 = 0.0, 0.0
+    for _ in range(3):
+        scene.view_settings.exposure = ev
+        bpy.ops.render.render(write_still=True)
+        px = read_png(probe)
+        opaque = px[..., 3] > 0.95
+        luma = (0.2126 * px[..., 0] + 0.7152 * px[..., 1] + 0.0722 * px[..., 2])[opaque] * 255
+        p75 = float(np.percentile(luma, 75)) if luma.size else low
+        if p75 < low:
+            step = min(1.0, math.log2(low / max(p75, 1.0)) * 1.2)
+        elif p75 > high:
+            step = -min(1.0, math.log2(p75 / high) * 1.5)
+        else:
+            break
+        ev = max(-1.5, min(2.5, ev + step))
+    os.remove(probe)
+    r.resolution_percentage, scene.cycles.samples, r.filepath = kept
+    print('[bake] %s exposure %+.2f EV (vehicle p75 %d)' % (view, ev, p75))
+    return ev
+
+
 def fade_edges(path):
     """The contact shadow fades out before the image's edges, so it never ends
     on a hard line wherever the app lays the image. frame_camera keeps the
@@ -967,11 +1007,15 @@ def bake(spec):
     for view in VIEWS:
         rig(spec, lo, hi, view)
         cam = frame_camera(view, lo, hi, args.width)
+        set_pass(shaders, glow, 'beauty')
+        scene.view_settings.view_transform = 'AgX'
+        ev = auto_exposure(scene, out_dir, view) if 'beauty' in PASSES else 0.0
         for p in PASSES:
             set_pass(shaders, glow, p)
             # The lights pass is tone-mapped flat: AgX rolls a bright red off
             # to pink-white, and a tail light must stay red.
             scene.view_settings.view_transform = 'Standard' if p == 'lights' else 'AgX'
+            scene.view_settings.exposure = 0.0 if p == 'lights' else ev
             # The lights pass is emission over holdouts: it settles in a few samples.
             scene.cycles.samples = min(args.samples, 32) if p == 'lights' else args.samples
             path = os.path.join(out_dir, '%s-%s.png' % (view, p))
@@ -991,6 +1035,7 @@ def bake(spec):
             'box': box,
             'groundY': round(box[1] + box[3], 1),
             'tailLights': {k: to_px(scene, cam, v) for k, v in tails.items()},
+            'exposure': round(ev, 2),
         }
         if args.preview:
             preview(out_dir, view)

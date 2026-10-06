@@ -159,5 +159,5 @@ const styles = StyleSheet.create({
   image: { position: 'absolute' },
   // The placeholder, quiet: it stands for "a vehicle goes here". Dimmed, not
   // tinted: a tint would grey the soft contact shadow into a smear.
-  idle: { opacity: 0.4 },
+  idle: { opacity: 0.55 },
 });

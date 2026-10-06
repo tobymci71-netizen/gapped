@@ -12,9 +12,14 @@ add one, still wins over the render.
 ## Look
 
 - **One rig for all of them.** A street light overhead, white rim lights behind
-  the vehicle as the camera sees it (they trace its outline), a dim blue night
-  fill and a soft card from the camera side. The background is transparent: the
-  app draws the night.
+  the vehicle as the camera sees it (they trace its outline), and a big, soft,
+  pale night-blue fill and a white card from the camera side, which the flank
+  facing us reflects, so a dark paint reads as its colour, not as black. The
+  background is transparent: the app draws the night.
+- **Exposed per view.** Quick probe renders set each view's exposure: a dark
+  paint is lifted until the brighter half of the vehicle reads (its 75th-
+  percentile luma at 115 of 255), a light one held back before it blows out
+  (205). The stops used are in meta.json (`exposure`); `--ev` fixes them.
 - **Every body type has its own livery, in the app's colours.** The paints
   are the theme's own: the night's blacks and blues, the rank metals (silver,
   champagne, bronze), white, and the primary button's deep red (`accentFill`,
