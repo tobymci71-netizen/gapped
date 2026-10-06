@@ -1,4 +1,4 @@
-# Launch checklist (v1.0.0, build 6)
+# Launch checklist (v1.0.0, build 7)
 
 The owner's list for the first App Store release, in order. Each step says what "done" looks
 like. The steps before App Store Connect matter most: App Review opens the privacy and support
