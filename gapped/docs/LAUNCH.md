@@ -12,9 +12,10 @@ links, and a dead link is a rejection.
   `country_number_one` rows. Step 5 was not needed: the only real drive (m061087, 31 mph) is under
   every limit. The 21 test accounts (buddy_*, vin_*, the nameless ones) were deleted; tobym, toby,
   gayahhnga and m061087 remain.
-- Section 6: build 1.0.0 (6), the Nightrun redesign, archived locally in Xcode (not EAS) and
-  uploaded to App Store Connect, after `npm run check:release` passed. It replaces build 5 as
-  the launch candidate.
+- Section 6: build 1.0.0 (7), uploaded to App Store Connect on 6 October 2026: every vehicle
+  is now a liveried 3D render (docs/VEHICLE_ART.md), on top of build 6's Nightrun redesign.
+  Archived locally in Xcode (not EAS) after `npm run check:release` passed. It replaces build 6
+  as the launch candidate.
 
 Still open for the owner: sections 1, 4, 5 step 7 (Email provider off), 7, 8 and 9.
 
