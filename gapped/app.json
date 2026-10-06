@@ -9,7 +9,7 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#07070A",
     "ios": {
-      "buildNumber": "7",
+      "buildNumber": "8",
       "appleTeamId": "X3YGYXTB3F",
       "bundleIdentifier": "com.tobym.gapped",
       "supportsTablet": false,
