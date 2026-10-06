@@ -29,7 +29,7 @@ const KINDS: readonly Segment<VehicleKind>[] = [
 /**
  * Step 1, "Choose your ride" (docs/ONBOARDING.md). Car | Motorbike, make and
  * model from the catalogue (or typed, via "Not listed? Add it yourself"), an
- * optional nickname, and the silhouette resolving to the chosen body as the
+ * optional nickname, and the rendered vehicle resolving to the chosen body as the
  * picks land.
  *
  * Nothing is written to the profile until Continue. The picks are a draft,

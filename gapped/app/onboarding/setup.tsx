@@ -20,7 +20,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Button } from '@/components/Button';
-import { CarSilhouette } from '@/components/CarSilhouette';
 import { OnboardingFrame } from '@/components/OnboardingFrame';
 import { Text } from '@/components/Text';
 import { syncIdentity } from '@/lib/sync';
@@ -52,6 +51,7 @@ import { vehiclePhotoSource } from '@/onboarding/vehicle/vehiclePhoto';
 import { useProfile, type VehicleKind } from '@/state/profile';
 import { duration, easing } from '@/theme/motion';
 import { alpha, color, font, glow, radius, slant, space, textStyle, type } from '@/theme/tokens';
+import { VehicleRender } from '@/vehicles/art/VehicleRender';
 import { inferBodyType } from '@/vehicles/bodyType';
 
 /** The progress line under "Making it yours": the flow's own line, a red light at its head. */
@@ -304,9 +304,9 @@ const Heading = memo(function Heading({ allSet, noun }: { allSet: boolean; noun:
 });
 
 /**
- * The person's car: their photo if they added one, otherwise the silhouette,
- * in white with its tail light on. Make (in mono) over model (in the wide
- * italic), as a car's name is set on the Drive tab.
+ * The person's car: their photo if they added one, otherwise its rendered
+ * vehicle, tail lights on. Make (in mono) over model (in the wide italic), as
+ * a car's name is set on the Drive tab.
  */
 const VehicleHero = memo(function VehicleHero({
   kind,
@@ -324,7 +324,7 @@ const VehicleHero = memo(function VehicleHero({
   // The stored URI is re-anchored to this install's Documents folder first
   // (vehiclePhoto.ts: every screen that shows the photo goes through it — the
   // app container's path is not stable across updates). A file that is gone
-  // anyway falls back to the drawing rather than a blank, remembered per URI.
+  // anyway falls back to the render rather than a blank, remembered per URI.
   const source = useMemo(() => (photo ? vehiclePhotoSource(photo) : null), [photo]);
   const [failed, setFailed] = useState<string | null>(null);
   const bodyType = inferBodyType(
@@ -344,7 +344,13 @@ const VehicleHero = memo(function VehicleHero({
           resizeMode="cover"
         />
       ) : (
-        <CarSilhouette bodyType={bodyType} size={size} color={color.text1} lit />
+        // From behind and to one side, lights catching: ready to drive.
+        <VehicleRender
+          bodyType={bodyType}
+          view="rear34"
+          width={Math.round(size * 1.7)}
+          height={Math.round(size * 0.9)}
+        />
       )}
       {make ? (
         <Text variant="mono" style={styles.make}>

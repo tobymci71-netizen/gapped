@@ -1,0 +1,23 @@
+{
+  "bodyType": "sportbike",
+  "source": "art-source/vehicles/sportbike/model.blend",
+  "prep": "scripts/render-vehicles/prep/sportbike.py",
+  "lengthM": 2.05,
+  "forward": "-y",
+  "materials": {
+    "carpaint_red": "paint",
+    "paintRed": "rim",
+    "paintGoldSemi": "metal",
+    "goldChrome": "metal",
+    "metal_rough": "metal",
+    "plasticOrange": "trim",
+    "plasticBrown": "trim",
+    "plasticRed": "trim",
+    "glass_orange": "glass",
+    "glass_red": "tail",
+    "decals": "hide",
+    "reflector": "trim"
+  },
+  "exposure": 2.0,
+  "cardScale": 3.0
+}

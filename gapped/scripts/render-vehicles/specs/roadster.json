@@ -1,0 +1,30 @@
+{
+  "bodyType": "roadster",
+  "source": "art-source/vehicles/roadster/model.blend",
+  "prep": "scripts/render-vehicles/prep/roadster.py",
+  "lengthM": 4.4,
+  "forward": "-y",
+  "materials": {
+    "car-body": "paint",
+    "black-plastic": "trim",
+    "black-metal": "trim",
+    "mechanics": "trim",
+    "headlight-inner": "head",
+    "wheel-brake-disc": "rim",
+    "tire-low.001": "tyre",
+    "Glass - Red": "tail",
+    "Glass - Red - Rough": "tail",
+    "Glass - Clear - Ridged - UV": "trim",
+    "Glass - Clear": "glass",
+    "Glass - Clear - Bumps": "glass",
+    "Glass - Clear - Ridged ": "glass",
+    "Glass ext": "glass",
+    "Glass ext-tinted": "glass",
+    "Rubber - Black": "trim",
+    "mirror": "glass",
+    "interior": "interior",
+    "media": "trim",
+    "front-grille-texture": "trim",
+    "wipers": "trim"
+  }
+}

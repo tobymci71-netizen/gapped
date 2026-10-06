@@ -25,6 +25,8 @@ import { FilmGrain } from '@/components/brand/FilmGrain';
 import { GappedMark } from '@/components/brand/GappedMark';
 import { Text } from '@/components/Text';
 import { color } from '@/theme/tokens';
+import { SkiaVehicleImage, useSkiaVehicle, type SkiaVehicle } from '@/vehicles/art/SkiaVehicle';
+import type { BodyType } from '@/vehicles/bodyType';
 import { wordmarkOpacity } from '../introTimeline';
 import {
   approachOpacity,
@@ -48,10 +50,16 @@ import {
   trailReach,
 } from './heroMath';
 import type { HeroClock } from './useHeroClock';
-import { NightVehicleRear, poly, ROAD_REFLECTIONS } from './NightVehicle';
 import { pigment, tint } from './pigments';
 
 const VP = vec(SCENE.vp.x, SCENE.vp.y);
+
+/** A polygon from flat x, y pairs, as an SVG path. */
+const poly = (pts: readonly number[]): string => {
+  let d = `M${pts[0]} ${pts[1]}`;
+  for (let i = 2; i < pts.length; i += 2) d += ` L${pts[i]} ${pts[i + 1]}`;
+  return `${d} Z`;
+};
 
 /**
  * How far the road's static rays (its lit edges) are carried past the mock's
@@ -108,21 +116,27 @@ const TRAILS = {
   ],
 } as const;
 
-/** The car's frame and the reticle that locks onto it, per vehicle (scene coordinates). */
-const VEHICLE_AT = { x: 105, y: 374, scale: 0.9 } as const;
-const RETICLE: Record<'car' | 'motorbike', { left: number; right: number }> = {
-  car: { left: 95, right: 295 },
-  motorbike: { left: 140, right: 250 },
-};
-const RETICLE_TOP = 362;
+/**
+ * The vehicle on the road ahead (scene coordinates): which render stands in
+ * for a car or a bike before the person has chosen theirs (as on the "Built"
+ * page), where its tyres meet the road, and the room it may take.
+ */
+const INTRO_BODY: Record<'car' | 'motorbike', BodyType> = { car: 'coupe', motorbike: 'motorbike' };
+const VEHICLE_SPOT = { cx: 195, groundY: 481, perMetre: 97, maxWidth: 186, maxHeight: 104 } as const;
+/** It rises the last few points onto the road as it fades in. */
+const CAR_IN_RISE = 12;
+/** The reticle locks on round the vehicle, with this much room. */
+const RETICLE_PAD = { x: 12, top: 10 } as const;
+/** Before the render has decoded: the car's frame. */
+const RETICLE_FALLBACK = { left: 95, right: 295, top: 362 } as const;
 const RETICLE_BOTTOM = 498;
 const LOCK_ORIGIN = vec(195, 430);
 
 /** The caption under the reticle, and its dot. */
 const GPS_Y = 497;
 
-function reticlePath(left: number, right: number): string {
-  const t = RETICLE_TOP;
+function reticlePath({ left, right, top }: { left: number; right: number; top: number }): string {
+  const t = top;
   const b = RETICLE_BOTTOM;
   const a = 12;
   return (
@@ -529,15 +543,15 @@ const LiveScene = memo(function LiveScene({
   const lit = useDerivedValue(() => igniteAt(t.value));
   const halo = useDerivedValue(() => breatheAt(t.value));
   const carIn = useDerivedValue(() => carInAt(t.value));
-  const carTransform = useDerivedValue(() => [
-    { translateX: VEHICLE_AT.x },
-    { translateY: VEHICLE_AT.y + 12 * (1 - carIn.value) },
-    { scale: VEHICLE_AT.scale },
-  ]);
+  const carTransform = useDerivedValue(() => [{ translateY: CAR_IN_RISE * (1 - carIn.value) }]);
+  // The halo breathes the lights between full and a soft glow.
+  const glow = useDerivedValue(() => lit.value * (0.7 + 0.3 * halo.value));
   const lock = useDerivedValue(() => lockAt(t.value));
   const lockTransform = useDerivedValue(() => [{ scale: 1.14 - 0.14 * lock.value }]);
   const flare = useDerivedValue(() => 0.62 * flareAt(t.value));
-  const reticle = RETICLE[kind];
+  const vehicle = useSkiaVehicle(INTRO_BODY[kind], 'rear', VEHICLE_SPOT);
+  const reticle = useMemo(() => reticleFor(vehicle), [vehicle]);
+  const reflections = useMemo(() => roadReflections(vehicle, kind), [vehicle, kind]);
 
   return (
     <>
@@ -630,7 +644,7 @@ const LiveScene = memo(function LiveScene({
         {/* The tail lights on the wet road under the car. */}
         <Group opacity={lit}>
           <Rippled stripes={stripes}>
-            {ROAD_REFLECTIONS[kind].map((pts) => (
+            {reflections.map((pts) => (
               <Path key={pts.join()} path={poly(pts)}>
                 <ReflectRed top={490} bottom={600} />
                 <BlurMask blur={2} style="normal" />
@@ -639,13 +653,15 @@ const LiveScene = memo(function LiveScene({
           </Rippled>
         </Group>
 
-        <Group transform={carTransform} opacity={carIn}>
-          <NightVehicleRear kind={kind} lit={lit} halo={halo} streak={shimmer} />
-        </Group>
+        {vehicle ? (
+          <Group transform={carTransform} opacity={carIn}>
+            <SkiaVehicleImage vehicle={vehicle} lit={glow} streak={shimmer} />
+          </Group>
+        ) : null}
 
         <Group transform={lockTransform} origin={LOCK_ORIGIN} opacity={lock}>
           <Path
-            path={reticlePath(reticle.left, reticle.right)}
+            path={reticlePath(reticle)}
             style="stroke"
             strokeWidth={1}
             color={tint(color.text1, 0.5)}
@@ -691,6 +707,31 @@ const LiveScene = memo(function LiveScene({
 });
 
 // ─── Pieces ──────────────────────────────────────────────────────────────────
+
+/** The reticle's corners, round the vehicle once its render has decoded. */
+function reticleFor(vehicle: SkiaVehicle | null) {
+  if (!vehicle) return RETICLE_FALLBACK;
+  const { box } = vehicle;
+  return {
+    left: box.x - RETICLE_PAD.x,
+    right: box.x + box.w + RETICLE_PAD.x,
+    top: box.y - RETICLE_PAD.top,
+  };
+}
+
+/**
+ * Where each tail light lands on the wet road: long and thin, as a
+ * reflection on wet tarmac stretches toward the camera, with a brighter core.
+ */
+function roadReflections(vehicle: SkiaVehicle | null, kind: 'car' | 'motorbike'): number[][] {
+  if (!vehicle) return [];
+  const w = kind === 'motorbike' ? 17 : 21;
+  const top = VEHICLE_SPOT.groundY + 2;
+  return vehicle.tailLights.flatMap(({ x }) => [
+    [x - w, top, x + w, top, x + w * 0.62, 600, x - w * 0.62, 600],
+    [x - 3, top, x + 3, top, x + 3, 576, x - 3, 576],
+  ]);
+}
 
 /** One road light rushing from the vanishing point past the camera. */
 function Approach({

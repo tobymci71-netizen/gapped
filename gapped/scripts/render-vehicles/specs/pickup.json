@@ -1,0 +1,22 @@
+{
+  "bodyType": "pickup",
+  "source": "art-source/vehicles/pickup/model.blend",
+  "prep": "scripts/render-vehicles/prep/pickup.py",
+  "lengthM": 5.4,
+  "forward": "-y",
+  "include": ["Pickup"],
+  "keepNearby": true,
+  "materials": {
+    "paint": "paint",
+    "trim": "trim",
+    "grille": "trim",
+    "grey": "trim",
+    "glass": "glass",
+    "tyre": "tyre",
+    "rim": "rim",
+    "tail light": "tail",
+    "head light": "chrome",
+    "side glass": "keep",
+    "lamp off": "emissive_off"
+  }
+}

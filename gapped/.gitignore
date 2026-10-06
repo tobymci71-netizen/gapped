@@ -52,3 +52,10 @@ supabase/functions/.env
 *.ipa
 *.xcarchive
 *.dSYM.zip
+
+# 3D source models for the vehicle renders: large, fetched by hand, never shipped
+# (docs/VEHICLE_ART.md lists each source and licence).
+/art-source/
+
+# Python bytecode from the render scripts
+__pycache__/

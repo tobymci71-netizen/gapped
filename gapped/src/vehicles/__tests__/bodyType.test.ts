@@ -13,7 +13,7 @@ const CAR_BODIES: BodyType[] = [
   'pickup',
   'van',
 ];
-const BIKE_BODIES: BodyType[] = ['motorbike', 'cruiser', 'scooter'];
+const BIKE_BODIES: BodyType[] = ['motorbike', 'sportbike', 'cruiser', 'scooter'];
 
 describe('curated model overrides', () => {
   const cases: [string, string, BodyType][] = [
@@ -200,10 +200,66 @@ describe('motorbikes', () => {
     expect(inferBodyType('motorbike', 'BMW', 'R 1200 GS')).toBe('motorbike');
   });
 
+  test('fully faired sports bikes', () => {
+    expect(inferBodyType('motorbike', 'Kawasaki', 'Ninja ZX-6R')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Kawasaki', 'Ninja 400')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Ducati', 'Panigale V4')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Ducati', '1299 Superleggera/Panigale')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Yamaha', 'YZF-R1M')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Yamaha', 'R7')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Honda', 'CBR1000RR')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Honda', 'RC51')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Suzuki', 'GSX-R750')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Suzuki', 'Hayabusa')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'BMW', 'S 1000 RR')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Aprilia', 'RSV4')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'Triumph', 'Daytona 675')).toBe('sportbike');
+    expect(inferBodyType('motorbike', 'KTM', 'RC 390')).toBe('sportbike');
+  });
+
+  test('sports bikes by their catalogue names, variant letters and all', () => {
+    const cases: [string, string][] = [
+      ['Suzuki', 'GSX-R1000R'],
+      ['Suzuki', 'GSX-8R'],
+      ['Suzuki', 'GSX250R'],
+      ['Suzuki', 'TL1000R'],
+      ['Kawasaki', 'ZX-6RR'],
+      ['Kawasaki', 'ZX-7RR'],
+      ['Kawasaki', 'ZZR1200'],
+      ['Honda', 'RC 45'],
+      ['Honda', 'CBR600F4i'],
+      ['Yamaha', 'YZF-R1S'],
+      ['Yamaha', 'YZF-R6S'],
+      ['KTM', 'RC 8C'],
+      ['Ducati', '916'],
+      ['Ducati', '996'],
+      ['Ducati', '999'],
+      ['Ducati', '1098 S'],
+    ];
+    for (const [make, model] of cases) {
+      expect([make, model, inferBodyType('motorbike', make, model)]).toEqual([make, model, 'sportbike']);
+    }
+  });
+
+  test('upright bikes that share a sports code name stay plain motorbikes', () => {
+    expect(inferBodyType('motorbike', 'KTM', 'V-twin RC8 Adventure')).toBe('motorbike');
+    expect(inferBodyType('motorbike', 'KTM', 'V-twin RC8 Super Duke R')).toBe('motorbike');
+    expect(inferBodyType('motorbike', 'Suzuki', 'GSX-8S')).toBe('motorbike');
+    expect(inferBodyType('motorbike', 'Suzuki', 'GSX-S1000')).toBe('motorbike');
+    expect(inferBodyType('motorbike', 'Ducati', 'Monster 821')).toBe('motorbike');
+  });
+
+  test('naked bikes with sporty names stay plain motorbikes', () => {
+    expect(inferBodyType('motorbike', 'Aprilia', 'Tuono V4 1100 RR')).toBe('motorbike');
+    expect(inferBodyType('motorbike', 'Triumph', 'Speed Triple 1200 RR')).toBe('motorbike');
+    expect(inferBodyType('motorbike', 'Honda', 'CB650R')).toBe('motorbike');
+    expect(inferBodyType('motorbike', 'Yamaha', 'XSR900')).toBe('motorbike');
+    expect(inferBodyType('motorbike', 'Yamaha', 'TT-R110')).toBe('motorbike');
+    expect(inferBodyType('motorbike', 'BMW', 'R 1250 R')).toBe('motorbike');
+  });
+
   test('everything else is a plain motorbike', () => {
-    expect(inferBodyType('motorbike', 'Kawasaki', 'Ninja ZX-6R')).toBe('motorbike');
     expect(inferBodyType('motorbike', 'Yamaha', 'MT-09')).toBe('motorbike');
-    expect(inferBodyType('motorbike', 'Ducati', 'Panigale V4')).toBe('motorbike');
     expect(inferBodyType('motorbike', 'BMW', 'R 1250 GS')).toBe('motorbike');
     expect(inferBodyType('motorbike', 'KTM', '390 Duke')).toBe('motorbike');
     expect(inferBodyType('motorbike', 'Triumph', 'Tiger 900')).toBe('motorbike');
@@ -295,6 +351,7 @@ describe('bodyTypeLabel', () => {
     expect(bodyTypeLabel('coupe')).toBe('Coupe');
     expect(bodyTypeLabel('estate')).toBe('Estate');
     expect(bodyTypeLabel('motorbike')).toBe('Motorbike');
+    expect(bodyTypeLabel('sportbike')).toBe('Sports bike');
     expect(bodyTypeLabel('scooter')).toBe('Scooter');
   });
 

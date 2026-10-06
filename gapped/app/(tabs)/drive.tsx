@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { GappedMark } from '@/components/brand/GappedMark';
 import { Button } from '@/components/Button';
-import { CarSilhouette } from '@/components/CarSilhouette';
 import { DriveMap, DriveMapHandle } from '@/components/DriveMap';
 import { Entrance } from '@/components/Entrance';
 import { Icon } from '@/components/icons';
@@ -66,6 +65,7 @@ import {
   textStyle,
   type,
 } from '@/theme/tokens';
+import { VehicleRender } from '@/vehicles/art/VehicleRender';
 import { BodyType, inferBodyType } from '@/vehicles/bodyType';
 
 /**
@@ -535,11 +535,12 @@ export default function DriveScreen() {
               </View>
               <View style={styles.avatar}>
                 {bodyType ? (
-                  <CarSilhouette
+                  <VehicleRender
                     bodyType={bodyType}
-                    size={AVATAR - 10}
-                    color={color.text2}
-                    revealKey={`${vehicleMake}-${vehicleModel}`}
+                    view="side"
+                    width={AVATAR - 6}
+                    height={AVATAR - 6}
+                    lights="off"
                   />
                 ) : (
                   <Text variant="caption" style={styles.avatarEmpty}>
@@ -586,6 +587,8 @@ export default function DriveScreen() {
                 height={heroBox.height}
                 stageTop={stageTop}
                 vehicle={vehicleKind === 'motorbike' ? 'motorbike' : 'car'}
+                // No vehicle named yet: a saloon (or a bike) stands in.
+                bodyType={bodyType ?? (vehicleKind === 'motorbike' ? 'motorbike' : 'saloon')}
                 paused={!heroInView}
               />
             ) : null}

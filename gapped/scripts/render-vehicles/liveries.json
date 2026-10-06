@@ -1,0 +1,120 @@
+{
+  "palette": {
+    "Obsidian": { "hex": "#0B0C10", "finish": "solid", "from": "after canvas, a step up so a body still reads on it" },
+    "Midnight": { "hex": "#1A2752", "finish": "metallic", "from": "after surface2, lifted to read as paint" },
+    "Horizon": { "hex": "#3D5598", "finish": "metallic", "from": "horizon" },
+    "Gunmetal": { "hex": "#3A4156", "finish": "satin", "from": "outline" },
+    "Night steel": { "hex": "#8A90A2", "finish": "metallic", "from": "text3" },
+    "Silver": { "hex": "#C8CDD4", "finish": "metallic", "from": "rank2" },
+    "Pearl": { "hex": "#F2F3F5", "finish": "pearl", "from": "after text1, a touch off white" },
+    "Champagne": { "hex": "#E8C468", "finish": "metallic", "from": "rank1" },
+    "Bronze": { "hex": "#C98A55", "finish": "metallic", "from": "rank3" },
+    "Racing red": { "hex": "#D02226", "finish": "solid", "from": "accentFill" },
+    "Oxblood": { "hex": "#4A1019", "finish": "metallic", "from": "after accentTile, deepened from 12% red to a paint" }
+  },
+  "liveries": {
+    "hatchback": {
+      "name": "Horizon blue, twin pearl stripes and a side stripe",
+      "paint": "Horizon",
+      "layers": [
+        { "colour": "Pearl", "y": [0.07, 0.27], "absY": true },
+        { "colour": "Pearl", "zRef": "belt", "z": [0.58, 0.7], "x": [0.17, 0.83], "slant": true, "faces": "side" }
+      ]
+    },
+    "saloon": {
+      "name": "Midnight blue, silver and red coachlines",
+      "paint": "Midnight",
+      "layers": [
+        { "colour": "Silver", "zRef": "belt", "z": [0.86, 0.885], "x": [0.04, 0.96], "faces": "side" },
+        { "colour": "Racing red", "zRef": "belt", "z": [0.835, 0.847], "x": [0.04, 0.96], "faces": "side" }
+      ]
+    },
+    "estate": {
+      "name": "Silver, obsidian roof",
+      "paint": "Silver",
+      "layers": [
+        { "colour": "Obsidian", "zRef": "belt", "z": [1.0, 9], "finish": "satin" }
+      ]
+    },
+    "coupe": {
+      "name": "Obsidian, three red slashes",
+      "paint": "Obsidian",
+      "layers": [
+        { "colour": "Racing red", "slant": true, "x": [0.3, 0.33], "repeat": [3, 0.055], "zRef": "belt", "z": [0.3, 0.97], "faces": "side" }
+      ]
+    },
+    "roadster": {
+      "name": "Racing red, pearl Le Mans stripe and roundel",
+      "paint": "Racing red",
+      "belt": 0.72,
+      "layers": [
+        { "colour": "Pearl", "y": [-0.45, -0.15] },
+        { "colour": "Pearl", "disc": [0.47, 0.62, 0.2], "faces": "side", "zRef": "belt" }
+      ]
+    },
+    "supercar": {
+      "name": "Champagne, obsidian tail split on the slant",
+      "paint": "Champagne",
+      "layers": [
+        { "colour": "Obsidian", "slant": true, "x": [-9, 0.45], "faces": "side" },
+        { "colour": "Racing red", "slant": true, "x": [0.45, 0.47], "faces": "side" }
+      ]
+    },
+    "suv": {
+      "name": "Gunmetal, obsidian lower with a red pinline",
+      "paint": "Gunmetal",
+      "layers": [
+        { "colour": "Obsidian", "z": [-1, 0.34] },
+        { "colour": "Racing red", "z": [0.34, 0.355], "faces": "side" }
+      ]
+    },
+    "pickup": {
+      "name": "Bronze, obsidian rally band",
+      "paint": "Bronze",
+      "belt": 0.6,
+      "layers": [
+        { "colour": "Obsidian", "slant": true, "x": [0.06, 0.82], "zRef": "belt", "z": [0.5, 0.78], "faces": "side" }
+      ]
+    },
+    "van": {
+      "name": "Pearl, obsidian chequer band",
+      "paint": "Pearl",
+      "layers": [
+        { "colour": "Obsidian", "zM": [0.84, 1.08], "checker": 0.12, "x": [0.03, 0.97], "faces": "side" },
+        { "colour": "Racing red", "zM": [1.1, 1.13], "x": [0.03, 0.97], "faces": "side" }
+      ]
+    },
+    "motorbike": {
+      "name": "Night steel, red tank stripes",
+      "paint": "Night steel",
+      "layers": [
+        { "colour": "Racing red", "y": [0.03, 0.1], "absY": true, "faces": "top" },
+        { "colour": "Racing red", "slant": true, "x": [0.5, 0.53], "repeat": [2, 0.045], "z": [0.55, 0.85], "faces": "side" }
+      ]
+    },
+    "sportbike": {
+      "name": "Pearl, red lower fairing, obsidian slashes",
+      "paint": "Pearl",
+      "layers": [
+        { "colour": "Racing red", "z": [-1, 0.5] },
+        { "colour": "Obsidian", "slant": true, "x": [0.55, 0.58], "repeat": [2, 0.05], "z": [0.35, 0.8], "faces": "side" }
+      ]
+    },
+    "cruiser": {
+      "name": "Obsidian, champagne coachlines",
+      "paint": "Obsidian",
+      "rim": "#C9CED6",
+      "layers": [
+        { "colour": "Champagne", "z": [0.675, 0.69], "faces": "side" },
+        { "colour": "Champagne", "z": [0.657, 0.663], "faces": "side" }
+      ]
+    },
+    "scooter": {
+      "name": "Oxblood, pearl lower",
+      "paint": "Oxblood",
+      "layers": [
+        { "colour": "Pearl", "z": [-1, 0.4] }
+      ]
+    }
+  }
+}

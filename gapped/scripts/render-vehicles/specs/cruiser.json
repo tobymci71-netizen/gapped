@@ -1,0 +1,19 @@
+{
+  "bodyType": "cruiser",
+  "source": "art-source/vehicles/cruiser/model.blend",
+  "prep": "scripts/render-vehicles/prep/cruiser.py",
+  "lengthM": 2.3,
+  "forward": "-x",
+  "materials": {
+    "paint": "paint",
+    "trim": "trim",
+    "chrome": "chrome",
+    "metal": "metal",
+    "tyre": "tyre",
+    "rim": "rim",
+    "interior": "interior",
+    "tail light": "tail"
+  },
+  "exposure": 2.3,
+  "cardScale": 2.0
+}

@@ -1,0 +1,23 @@
+{
+  "bodyType": "scooter",
+  "source": "art-source/vehicles/scooter/model.blend",
+  "prep": "scripts/render-vehicles/prep/scooter.py",
+  "lengthM": 1.85,
+  "forward": "-y",
+  "materials": {
+    "body paint": "paint",
+    "body black": "trim",
+    "seat": "interior",
+    "tail light": "tail",
+    "head light": "head",
+    "floor strip": "trim",
+    "mechanics": "metal",
+    "mechanics dark": "trim",
+    "brake disc": "rim",
+    "fork dark": "trim",
+    "tyre": "tyre",
+    "wheel rim": "rim"
+  },
+  "exposure": 1.6,
+  "cardScale": 3.0
+}

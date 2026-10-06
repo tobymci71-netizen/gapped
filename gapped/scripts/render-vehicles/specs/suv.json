@@ -1,0 +1,11 @@
+{
+  "bodyType": "suv",
+  "source": "art-source/vehicles/suv/model.blend",
+  "prep": "scripts/render-vehicles/prep/suv.py",
+  "lengthM": 4.9,
+  "cardScale": 1.8,
+  "materials": {
+    "lamp lens": "emissive_off",
+    "side glass": "keep"
+  }
+}

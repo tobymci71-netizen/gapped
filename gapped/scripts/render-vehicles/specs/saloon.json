@@ -1,0 +1,18 @@
+{
+  "bodyType": "saloon",
+  "source": "art-source/vehicles/_downloads/generic-sedan-car/source/01-passat-generic-sedan-full-v1.blend",
+  "lengthM": 4.8,
+  "forward": "-y",
+  "hideObjects": ["taillight-lens", "glass-rear"],
+  "paintMaterial": "Car Paint - All Colors",
+  "materials": {
+    "Headlight Metal": "trim",
+    "Metal - Black - Rough 0.2": "trim",
+    "car-bottom": "trim",
+    "Metal-dark": "trim",
+    "engine": "trim"
+  },
+  "materialRules": [
+    ["rim", ["MetalStainlessSteel"]]
+  ]
+}

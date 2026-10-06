@@ -1,0 +1,26 @@
+{
+  "bodyType": "motorbike",
+  "source": "art-source/vehicles/motorbike/model.blend",
+  "prep": "scripts/render-vehicles/prep/motorbike.py",
+  "lengthM": 2.1,
+  "forward": "-y",
+  "materials": {
+    "paint": "paint",
+    "tanque": "paint",
+    "plastico preto": "trim",
+    "rim": "rim",
+    "banco": "interior",
+    "Motor": "metal",
+    "metal claro": "metal",
+    "Pneu": "tyre",
+    "tail light": "tail",
+    "indicator": "emissive_off",
+    "luzes de tras": "emissive_off",
+    "farol": "head",
+    "PAINEL": "trim",
+    "ACELERADOR": "trim",
+    "RETROVIZOR": "glass"
+  },
+  "exposure": 2.2,
+  "cardScale": 2.0
+}

@@ -107,7 +107,7 @@ centred. It rises into the welcome page and lands on the hero's own mark.
    (`proFeature: 'advancedTelemetry'`), so when `SHOW_PRO` turns on the PRO tag
    (`<ProBadge />`) sits over the title and VoiceOver hears "Gapped Pro. See more in every
    drive." (`marksPro`, `src/onboarding/intro/introTimeline.ts`). — **Next**
-4. *Built by drivers* / From drivers. For drivers. The car silhouette, lit tail lamp and all. —
+4. *Built by drivers* / From drivers. For drivers. The rendered coupé side on, tail lights lit. —
    **Set up my car**
 
 **Choose your ride** / Start with the car you drive most. Car | Motorbike. Fields "Select make",
@@ -130,7 +130,7 @@ with a verified run, so the ranked line says "on Gapped", not "on the board". Th
 drivers of the same kind (cars, or bikes), so the share line names the kind.
 
 **Add more cars?** / Optional. Your main car is set, so you can keep going and build your garage
-later. Card: silhouette, "{Make} {Model}" (or nickname), a "Main car" slanted tag. Row: "+ Add
+later. Card: the vehicle's render, "{Make} {Model}" (or nickname), a "Main car" slanted tag. Row: "+ Add
 another car". Continue. In v1 the step never caps: `PRO_LIMITS_ENFORCED` is off, so every account
 can add as many vehicles as it likes, and nothing on the step mentions Pro. When the limits turn
 on (with `SHOW_PRO` and purchases), a Free garage holds `FREE_LIMITS.garageVehicles` (1, the main
@@ -139,7 +139,7 @@ already added stay listed and removable (`src/onboarding/vehicle/garageAccess.ts
 
 **Add a car photo** / Make it yours, or keep the illustration. The photo stays on the phone (the
 app's Documents folder); it is never uploaded, and the privacy policy says so. **Add photo** (the
-white slanted plate), **Keep current image** (the dark outlined plate). After a pick the photo replaces the silhouette and Continue
+white slanted plate), **Keep current image** (the dark outlined plate). After a pick the photo replaces the render and Continue
 appears.
 
 **Choose your speed unit** / Your speed. Your units. Gauge sweeps on appear. Cards: km/h · Metric ·
@@ -220,7 +220,7 @@ you agree to the Terms of Use and Privacy Policy" (both links) and the legal lin
 reads **I agree**, since the next screen is setup, not a drive. Copy:
 `src/onboarding/place/consentCopy.ts`.
 
-**Setup.** The G mark. *Getting your car ready.* Silhouette (or photo), make over model. "Making it
+**Setup.** The G mark. *Getting your car ready.* The vehicle's render from behind and to one side, tail lights catching (or their photo), make over model. "Making it
 yours" with its percent, over the flow's progress line and its red light. Checklist, ticking as the percent crosses each: Your car · Your drive
 preferences (Your units. Your country. Your way.) · Your stats · Your rankings · Your setup
 (Keeping everything ready for your first drive.). Then *You're all set.* / Your next drive starts

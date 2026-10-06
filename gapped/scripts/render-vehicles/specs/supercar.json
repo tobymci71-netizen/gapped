@@ -1,0 +1,20 @@
+{
+  "bodyType": "supercar",
+  "source": "art-source/vehicles/supercar/model.blend",
+  "prep": "scripts/render-vehicles/prep/supercar.py",
+  "lengthM": 4.5,
+  "forward": "-y",
+  "materials": {
+    "paint": "paint",
+    "trim": "trim",
+    "plate": "trim",
+    "tail light": "tail",
+    "headlight": "head",
+    "reverse light": "emissive_off",
+    "metal": "metal",
+    "glass": "glass",
+    "tire": "tyre",
+    "rim": "rim",
+    "brake caliper": "metal"
+  }
+}

@@ -2,10 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { Image, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { FilmGrain } from '@/components/brand/FilmGrain';
-import { CarSilhouette } from '@/components/CarSilhouette';
 import { vehiclePhotoSource } from '@/onboarding/vehicle/vehiclePhoto';
 import type { VehicleKind } from '@/state/profile';
 import { color } from '@/theme/tokens';
+import { VEHICLE_RENDERS } from '@/vehicles/art/manifest';
+import { placeOnGround } from '@/vehicles/art/place';
+import { VehicleRender } from '@/vehicles/art/VehicleRender';
 import { inferBodyType } from '@/vehicles/bodyType';
 import { GarageScene, SCENE_GROUND_Y, SCENE_H, SCENE_W } from './GarageScene';
 
@@ -13,30 +15,32 @@ import { GarageScene, SCENE_GROUND_Y, SCENE_H, SCENE_W } from './GarageScene';
 const HERO_ASPECT = SCENE_H / SCENE_W;
 
 /**
- * Where a side-profile silhouette's ground line sits in its square
- * (CarSilhouette centres the body; a bike's wheels touch about here).
+ * A render's scale in the bay, in design units per metre of the vehicle's
+ * height (bikes a little larger, or they look lost in the bay), and the most
+ * room it may take: the bay's width, and the roller door's height.
  */
-const SILHOUETTE_GROUND = 0.68;
+const PX_PER_M = { car: 104, bike: 128 } as const;
+const MAX_VEHICLE = { w: 250, h: 175 } as const;
 
 type Props = {
   kind: VehicleKind | null;
   make: string | null;
   model: string | null;
-  /** The stored vehiclePhotoUri. A readable photo replaces the drawing. */
+  /** The stored vehiclePhotoUri. A readable photo replaces the render. */
   photoUri: string | null;
-  /** Read to VoiceOver for a photo ("Your BMW M3"). Drawings are decorative. */
+  /** Read to VoiceOver for a photo ("Your BMW M3"). The render is decorative. */
   photoLabel?: string;
   /** No vehicle at all: the bay stands empty. */
   empty?: boolean;
 };
 
 /**
- * The top of the Garage tab: the main vehicle in its bay. A car is drawn from
- * behind, parked with its lights on (GarageScene). A bike is its own side
- * profile on the same floor, rim-lit by the strip light rather than red: it
- * has no pair of lamps to light. A photo the driver chose in onboarding
- * replaces the drawing, graded into the night at both edges; one that can no
- * longer be read falls back to the drawing rather than a blank.
+ * The top of the Garage tab: the main vehicle in its bay. Its body type's
+ * render stands from behind on the bay's floor, tail lights breathing
+ * (VehicleRender; docs/VEHICLE_ART.md), car or bike alike. A photo the
+ * driver chose in onboarding replaces it, graded into the night at both
+ * edges; one that can no longer be read falls back to the render rather than
+ * a blank.
  *
  * Full-bleed: give it the screen's width. Its height follows the width.
  */
@@ -53,8 +57,22 @@ export function GarageHero({ kind, make, model, photoUri, photoLabel, empty }: P
   };
 
   const s = box.width / SCENE_W;
-  const bikeSize = Math.round(250 * s);
-  const bikeTop = box.height - (SCENE_H - SCENE_GROUND_Y) * s - bikeSize * SILHOUETTE_GROUND;
+
+  // The rendered vehicle, from behind, tyres on the bay's floor.
+  const bodyType = inferBodyType(bike ? 'motorbike' : 'car', make ?? '', model ?? '');
+  const renders = empty ? undefined : VEHICLE_RENDERS[bodyType];
+  const rear = renders?.views.rear;
+  const placement =
+    renders && rear && box.width > 0
+      ? placeOnGround(rear, {
+          cx: box.width / 2,
+          // The scene is anchored to the hero's bottom edge (GarageScene).
+          groundY: box.height - (SCENE_H - SCENE_GROUND_Y) * s,
+          vehicleHeight: renders.sizeM[2] * (bike ? PX_PER_M.bike : PX_PER_M.car) * s,
+          maxWidth: MAX_VEHICLE.w * s,
+          maxHeight: MAX_VEHICLE.h * s,
+        })
+      : null;
 
   return (
     <View style={[styles.hero, { aspectRatio: 1 / HERO_ASPECT }]} onLayout={onLayout}>
@@ -73,21 +91,17 @@ export function GarageHero({ kind, make, model, photoUri, photoLabel, empty }: P
         </>
       ) : (
         <>
-          <GarageScene width={box.width} height={box.height} car={!empty && !bike} />
-          {!empty && bike && box.width > 0 ? (
-            <View
-              style={[styles.bike, { top: bikeTop, left: (box.width - bikeSize) / 2 }]}
-              pointerEvents="none"
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-            >
-              <CarSilhouette
-                bodyType={inferBodyType('motorbike', make ?? '', model ?? '')}
-                size={bikeSize}
-                revealKey={`${make ?? ''} ${model ?? ''}`}
-                color={color.text2}
-              />
-            </View>
+          <GarageScene width={box.width} height={box.height} />
+          {placement ? (
+            <VehicleRender
+              bodyType={bodyType}
+              view="rear"
+              width={box.width}
+              height={box.height}
+              placement={placement}
+              lights="breathe"
+              style={StyleSheet.absoluteFill}
+            />
           ) : null}
         </>
       )}
@@ -126,5 +140,4 @@ function PhotoGrade() {
 
 const styles = StyleSheet.create({
   hero: { width: '100%', overflow: 'hidden' },
-  bike: { position: 'absolute' },
 });

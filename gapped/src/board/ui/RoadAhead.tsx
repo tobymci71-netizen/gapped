@@ -12,28 +12,34 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, {
-  Circle,
   Defs,
   Ellipse,
   G,
+  Image as SvgImage,
   LinearGradient,
   Mask,
-  Path,
   Polygon,
-  Polyline,
   RadialGradient,
   Rect,
   Stop,
   Text as SvgText,
 } from 'react-native-svg';
 import { useReducedMotion } from '@/lib/useReducedMotion';
+import { useProfile } from '@/state/profile';
 import { ambient, duration } from '@/theme/motion';
 import { alpha, color, font, type } from '@/theme/tokens';
+import { VEHICLE_RENDERS } from '@/vehicles/art/manifest';
+import { placeOnGround, pointToPoints, type Placement } from '@/vehicles/art/place';
+import type { ViewRender } from '@/vehicles/art/types';
+import { inferBodyType, type BodyType } from '@/vehicles/bodyType';
 
 /**
  * The Ranks hero's scene (Nightrun-Ranks): a night road running to the
  * horizon, with the tail lights of the drivers ahead tagged by position and
- * your own car nearest the camera.
+ * your own vehicle nearest the camera. Every vehicle is a render from behind
+ * (docs/VEHICLE_ART.md): yours is your body type; the drivers ahead stand in
+ * as a coupé and a saloon (or two bikes, if you ride), since a board row
+ * names its vehicle only in free text.
  *
  * Drawn at the mock's own size, 390 × 146, and placed by the hero (`left`) so
  * the vanishing point stays over the right half and the "You" tag never runs
@@ -76,30 +82,48 @@ const SLOTS = {
   you: { x: 205.1, y: 81.78, s: 0.405 },
 } as const;
 
-/** Each slot's lamps (two halos) and its light on the road beneath, artboard units. */
-const GLOWS = {
-  far: {
-    lamps: [
-      { cx: 274.6, cy: 36.5, rx: 7, ry: 7 },
-      { cx: 289.4, cy: 36.5, rx: 7, ry: 7 },
-    ],
-    road: { cx: 282, cy: 45, rx: 13, ry: 2.2, o: 0.5 },
-  },
-  mid: {
-    lamps: [
-      { cx: 255.7, cy: 59.7, rx: 12, ry: 7 },
-      { cx: 283.6, cy: 59.7, rx: 12, ry: 7 },
-    ],
-    road: { cx: 269.7, cy: 75.5, rx: 24, ry: 3.4, o: 0.5 },
-  },
-  you: {
-    lamps: [
-      { cx: 218.9, cy: 105.3, rx: 24, ry: 11 },
-      { cx: 272.3, cy: 105.3, rx: 24, ry: 11 },
-    ],
-    road: { cx: 245.6, cy: 135, rx: 46, ry: 6, o: 0.55 },
-  },
+/** Each slot's light on the road beneath its tail lights, artboard units. */
+const ROAD_GLOW = {
+  far: { cx: 282, cy: 45, rx: 13, ry: 2.2, o: 0.5 },
+  mid: { cx: 269.7, cy: 75.5, rx: 24, ry: 3.4, o: 0.5 },
+  you: { cx: 245.6, cy: 135, rx: 46, ry: 6, o: 0.55 },
 } as const;
+
+/**
+ * Where each slot's vehicle stands, from the mock's car (200 × 125 units at
+ * the slot's scale): centred on it, tyres on its ground line, no wider than
+ * it. A metre of height is 70 units at scale 1, so a saloon stands about as
+ * tall as the mock's car, a van taller (up to the cap, 1.86 m) and a bike
+ * shorter, at the same depth.
+ */
+function spotFor(slot: keyof typeof SLOTS) {
+  const { x, y, s } = SLOTS[slot];
+  return {
+    cx: x + 100 * s,
+    groundY: y + 124 * s,
+    perMetre: 70 * s,
+    maxWidth: 196 * s,
+    maxHeight: 130 * s,
+  };
+}
+
+/** The drivers ahead, as stand-ins of your kind: the leader, then the one directly ahead. */
+const STAND_INS: Record<'car' | 'bike', { far: BodyType; mid: BodyType }> = {
+  car: { far: 'coupe', mid: 'saloon' },
+  bike: { far: 'sportbike', mid: 'motorbike' },
+};
+
+/** A slot's render from behind, placed on the artboard. */
+type PlacedVehicle = { r: ViewRender; p: Placement; lights: { x: number; y: number }[] };
+
+function placeVehicle(bodyType: BodyType, slot: keyof typeof SLOTS): PlacedVehicle | null {
+  const renders = VEHICLE_RENDERS[bodyType];
+  const r = renders?.views.rear;
+  if (!r) return null;
+  const spot = spotFor(slot);
+  const p = placeOnGround(r, { ...spot, vehicleHeight: renders.sizeM[2] * spot.perMetre });
+  return { r, p, lights: r.tailLights.map((pt) => pointToPoints(p, pt)) };
+}
 
 /** Where each slot's tag sits: its left edge at the top, and the top. */
 const TAGS = {
@@ -118,13 +142,6 @@ const DASHES = [
   '323.75,126.96 326.73,126.96 333.83,154.16 330.25,154.16',
 ];
 
-/** The car from behind, on a 200 × 125 grid (the mock's path). */
-const BODY =
-  'M6 104 C3 92 1 78 2 66 C3 57 8 51 18 49 L42 46 L60 15 C62 11 66 9 72 9 L128 9 C134 9 138 11 140 15 L158 46 L182 49 C192 51 197 57 198 66 C199 78 197 92 194 104 Z';
-const ROOF = 'M60 15 C62 11 66 9 72 9 L128 9 C134 9 138 11 140 15';
-const LAMP_L = '8,55 58,52 62,56.5 60,62.5 34,63.5 32,59.5 9,61.5';
-const LAMP_R = '192,55 142,52 138,56.5 140,62.5 166,63.5 168,59.5 191,61.5';
-
 /** A tag's plate: 12 tall, leaning right at the logo's slant (3 over 12). */
 const TAG_H = 12;
 const TAG_LEAN = 3;
@@ -138,7 +155,7 @@ type Props = {
   ahead: string | null;
   /** The tag over the leader further up the road ("P1"), or null. */
   leader: string | null;
-  /** Draw your own car, tagged "You", nearest the camera. */
+  /** Draw your own vehicle, tagged "You", nearest the camera. */
   you: boolean;
 };
 
@@ -146,11 +163,17 @@ export function RoadAhead({ left, ahead, leader, you }: Props): React.JSX.Elemen
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const reduced = useReducedMotion();
   const focused = useIsFocused();
+  const kind = useProfile((s) => s.vehicleKind);
+  const make = useProfile((s) => s.vehicleMake);
+  const model = useProfile((s) => s.vehicleModel);
+  const bike = kind === 'motorbike';
+  const own = inferBodyType(bike ? 'motorbike' : 'car', make ?? '', model ?? '');
+  const standIns = STAND_INS[bike ? 'bike' : 'car'];
   // With one car ahead it takes the nearer slot; the far slot is the leader's.
-  const cars: { slot: keyof typeof SLOTS; tag: string }[] = [];
-  if (leader) cars.push({ slot: 'far', tag: leader });
-  if (ahead) cars.push({ slot: 'mid', tag: ahead });
-  if (you) cars.push({ slot: 'you', tag: 'You' });
+  const cars: { slot: keyof typeof SLOTS; tag: string; v: PlacedVehicle | null }[] = [];
+  if (leader) cars.push({ slot: 'far', tag: leader, v: placeVehicle(standIns.far, 'far') });
+  if (ahead) cars.push({ slot: 'mid', tag: ahead, v: placeVehicle(standIns.mid, 'mid') });
+  if (you) cars.push({ slot: 'you', tag: 'You', v: placeVehicle(own, 'you') });
 
   const glow = useSharedValue(reduced ? 1 : 0);
   // An empty road (the speed boards, the absent hero) has no lights to breathe,
@@ -223,11 +246,6 @@ export function RoadAhead({ left, ahead, leader, you }: Props): React.JSX.Elemen
             <Stop offset="0" stopColor={color.horizon} stopOpacity={0.5} />
             <Stop offset="1" stopColor={color.horizon} stopOpacity={0} />
           </RadialGradient>
-          <LinearGradient id={`body${id}`} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={color.surface3} />
-            <Stop offset="0.45" stopColor={color.surface1} />
-            <Stop offset="1" stopColor={color.canvas} />
-          </LinearGradient>
         </Defs>
         <G mask={`url(#mask${id})`}>
           <Ellipse cx={296} cy={10} rx={190} ry={34} fill={`url(#hz${id})`} />
@@ -239,9 +257,19 @@ export function RoadAhead({ left, ahead, leader, you }: Props): React.JSX.Elemen
               <Polygon key={p} points={p} />
             ))}
           </G>
-          {cars.map(({ slot }) => (
-            <Car key={slot} slot={slot} bodyFill={`url(#body${id})`} />
-          ))}
+          {cars.map(({ slot, v }) =>
+            v ? (
+              <SvgImage
+                key={slot}
+                href={v.r.bodySmall}
+                x={v.p.left}
+                y={v.p.top}
+                width={v.p.width}
+                height={v.p.height}
+                preserveAspectRatio="none"
+              />
+            ) : null,
+          )}
         </G>
       </Svg>
 
@@ -258,32 +286,42 @@ export function RoadAhead({ left, ahead, leader, you }: Props): React.JSX.Elemen
               </RadialGradient>
             </Defs>
             <G mask={`url(#mask${id})`}>
-              {cars.map(({ slot }) => {
-                const g = GLOWS[slot];
+              {cars.map(({ slot, v }) => {
+                const road = ROAD_GLOW[slot];
+                // Each lamp's halo, a little wider than tall, scaled to the vehicle.
+                const halo = v ? v.p.width * 0.13 : 0;
                 return (
                   <G key={slot}>
                     <Ellipse
-                      cx={g.road.cx}
-                      cy={g.road.cy}
-                      rx={g.road.rx}
-                      ry={g.road.ry}
+                      cx={road.cx}
+                      cy={road.cy}
+                      rx={road.rx}
+                      ry={road.ry}
                       fill={`url(#tail${id})`}
-                      opacity={g.road.o}
+                      opacity={road.o}
                     />
-                    {g.lamps.map((l) =>
-                      l.rx === l.ry ? (
-                        <Circle key={l.cx} cx={l.cx} cy={l.cy} r={l.rx} fill={`url(#tail${id})`} />
-                      ) : (
-                        <Ellipse
-                          key={l.cx}
-                          cx={l.cx}
-                          cy={l.cy}
-                          rx={l.rx}
-                          ry={l.ry}
-                          fill={`url(#tail${id})`}
-                        />
-                      ),
-                    )}
+                    {v
+                      ? v.lights.map((l) => (
+                          <Ellipse
+                            key={`${l.x},${l.y}`}
+                            cx={l.x}
+                            cy={l.y}
+                            rx={halo}
+                            ry={halo * 0.55}
+                            fill={`url(#tail${id})`}
+                          />
+                        ))
+                      : null}
+                    {v ? (
+                      <SvgImage
+                        href={v.r.lightsSmall}
+                        x={v.p.left}
+                        y={v.p.top}
+                        width={v.p.width}
+                        height={v.p.height}
+                        preserveAspectRatio="none"
+                      />
+                    ) : null}
                   </G>
                 );
               })}
@@ -301,63 +339,6 @@ export function RoadAhead({ left, ahead, leader, you }: Props): React.JSX.Elemen
         </Svg>
       ) : null}
     </View>
-  );
-}
-
-/** One car from behind, at its slot's depth. The nearer two show their glass. */
-function Car({ slot, bodyFill }: { slot: keyof typeof SLOTS; bodyFill: string }) {
-  const { x, y, s } = SLOTS[slot];
-  const near = slot === 'you';
-  return (
-    <G transform={`translate(${x} ${y}) scale(${s})`}>
-      <Rect x={11} y={86} width={35} height={39} rx={6} fill={color.canvas} />
-      <Rect x={154} y={86} width={35} height={39} rx={6} fill={color.canvas} />
-      <Path d={BODY} fill={bodyFill} />
-      {slot !== 'far' ? <Path d="M66 16 L134 16 L152 44 L48 44 Z" fill={color.surface2} /> : null}
-      <Path
-        d={ROOF}
-        fill="none"
-        stroke={alpha(color.text2, near ? 0.75 : 0.55)}
-        strokeWidth={near ? 1 : 0.85}
-        vectorEffect="non-scaling-stroke"
-      />
-      {near ? (
-        <>
-          <Path
-            d="M3 72 C3 59 9 51 19 49.5 L43 46.6 M197 72 C197 59 191 51 181 49.5 L157 46.6"
-            fill="none"
-            stroke={alpha(color.text2, 0.4)}
-            strokeWidth={0.8}
-            vectorEffect="non-scaling-stroke"
-          />
-          <Rect x={80} y={68} width={40} height={11} rx={1.5} fill={color.surface1} />
-          <Path d="M24 92 L176 92 L171 106 L29 106 Z" fill={color.canvas} />
-        </>
-      ) : null}
-      <Polygon points={LAMP_L} fill={color.accent} />
-      <Polygon points={LAMP_R} fill={color.accent} />
-      {near ? (
-        // The lamps' white-hot filaments: the one car close enough to see them.
-        <>
-          <Polyline
-            points="12,57.6 56,54.8 58.5,57.6 56.8,60.6 37,61.2"
-            fill="none"
-            stroke={color.accentCore}
-            strokeWidth={2.4}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <Polyline
-            points="188,57.6 144,54.8 141.5,57.6 143.2,60.6 163,61.2"
-            fill="none"
-            stroke={color.accentCore}
-            strokeWidth={2.4}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </>
-      ) : null}
-    </G>
   );
 }
 

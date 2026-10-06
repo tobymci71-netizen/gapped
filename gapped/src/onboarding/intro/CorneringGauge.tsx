@@ -13,7 +13,7 @@ import { StyleSheet, View } from 'react-native';
 import { type SharedValue, useDerivedValue } from 'react-native-reanimated';
 import { Text } from '@/components/Text';
 import { alpha, color, type } from '@/theme/tokens';
-import { NightVehicleRear } from './hero/NightVehicle';
+import { SkiaVehicleImage, useSkiaVehicle } from '@/vehicles/art/SkiaVehicle';
 import {
   bodyRollDeg,
   GAUGE_LABELS,
@@ -63,8 +63,12 @@ const LIT_COLORS = [
 ];
 const LIT_POSITIONS = [0, 0.5, 0.56, 0.64, 0.75, 0.86, 0.94, 1];
 
-/** The car's own frame (./hero/NightVehicle): 200 wide, ground at 125. */
-const CAR_FRAME = { width: 200, ground: 125 };
+/**
+ * The car on the gauge: the intro's car (the coupe, as the welcome hero and
+ * the "Built" page show it), about a radius wide, standing on the gauge's
+ * centre line.
+ */
+const CAR = { bodyType: 'coupe', width: 1.0, height: 0.62 } as const;
 
 type Props = {
   /** Width available; the gauge centres itself in it. */
@@ -76,7 +80,7 @@ type Props = {
 /**
  * The cornering G instrument: a half-circle scale (0 at the top, 0.5 and 1.0 g
  * each side), a marker on the live value with the arc lit red from zero to
- * it, and the welcome's night car seen from behind, tail lights on, rolling
+ * it, and the welcome's car rendered from behind, tail lights on, rolling
  * with the load.
  *
  * Everything that moves reads one shared value, so the marker, the lit arc and
@@ -108,23 +112,29 @@ export function CorneringGauge({ width, g }: Props) {
     // Drawn at 12 o'clock and rotated into place, crossing the arc.
     const marker = Skia.Path.Line(vec(cx, cy - radius - 9), vec(cx, cy - radius + 9));
 
-    // The car, as wide as the old drawing (1.05 radii), standing on the
-    // gauge's centre line.
-    const k = (radius * 1.05) / CAR_FRAME.width;
-    const car = [
-      { translateX: cx - (CAR_FRAME.width / 2) * k },
-      { translateY: cy - CAR_FRAME.ground * k },
-      { scale: k },
-    ];
-    return { arc, minor: minor.build(), major: major.build(), marker, car };
+    return { arc, minor: minor.build(), major: major.build(), marker };
   }, [cx, cy, radius]);
+
+  // Capped by width and height, never by its real size: any car fills it.
+  const car = useSkiaVehicle(CAR.bodyType, 'rear', {
+    cx,
+    groundY: cy,
+    perMetre: radius,
+    maxWidth: radius * CAR.width,
+    maxHeight: radius * CAR.height,
+  });
 
   const start = useDerivedValue(() => litStart(g.value));
   const end = useDerivedValue(() => litEnd(g.value));
   const markerTransform = useDerivedValue(() => [{ rotate: gaugeAngle(g.value) }]);
-  const rollTransform = useDerivedValue<Transforms3d>(() => [
-    { rotate: (bodyRollDeg(g.value) * Math.PI) / 180 },
-  ]);
+  // The body roll as a lean: a shear about the ground line, so the tyres and
+  // their shadow stay planted on it while the roof moves over (one image
+  // holds the whole car; turning it would lift a wheel). Row-major, the
+  // shear's x term in the first row: x' = x - tan(roll) * (y - ground).
+  const rollTransform = useDerivedValue<Transforms3d>(() => {
+    const k = -Math.tan((bodyRollDeg(g.value) * Math.PI) / 180);
+    return [{ matrix: [1, k, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }];
+  });
 
   const lit = <SweepGradient c={vec(cx, cy)} colors={LIT_COLORS} positions={LIT_POSITIONS} />;
 
@@ -165,10 +175,15 @@ export function CorneringGauge({ width, g }: Props) {
         <Path path={geo.minor} style="stroke" strokeWidth={1.5} color={color.outline} />
         <Path path={geo.major} style="stroke" strokeWidth={2} color={color.text3} />
 
-        {/* The car. Tyres are planted; everything above them rolls. */}
-        <Group transform={geo.car}>
-          <NightVehicleRear kind="car" roll={rollTransform} streak={0.6} outline />
-        </Group>
+        {/* The car, leaning with the load, tyres on the line. */}
+        {car ? (
+          <SkiaVehicleImage
+            vehicle={car}
+            roll={rollTransform}
+            rollOrigin={{ x: cx, y: cy }}
+            streak={0.6}
+          />
+        ) : null}
 
         {/* Marker last, so it is never under the car or the ticks. A needle,
             not a light: white, no glow. */}

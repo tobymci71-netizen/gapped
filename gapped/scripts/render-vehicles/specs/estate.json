@@ -1,0 +1,17 @@
+{
+  "bodyType": "estate",
+  "source": "art-source/vehicles/estate/model.blend",
+  "prep": "scripts/render-vehicles/prep/estate.py",
+  "lengthM": 4.8,
+  "materials": {
+    "paint": "paint",
+    "trim": "trim",
+    "chrome": "chrome",
+    "glass": "glass",
+    "tyre": "tyre",
+    "rim": "rim",
+    "tail light": "tail",
+    "head light": "emissive_off",
+    "metal": "metal"
+  }
+}

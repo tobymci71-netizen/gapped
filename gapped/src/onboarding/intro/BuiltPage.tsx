@@ -1,24 +1,18 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { CarSilhouette } from '@/components/CarSilhouette';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { useProfile } from '@/state/profile';
 import { duration, easing } from '@/theme/motion';
-import { color, gutter, space } from '@/theme/tokens';
+import { gutter, space } from '@/theme/tokens';
+import { VehicleRender } from '@/vehicles/art/VehicleRender';
 import { IntroPage } from './IntroPage';
 import type { IntroPageCopy } from './introTimeline';
 
 /** How far the car rises as it settles in, pt. */
 const SETTLE_TRAVEL = 16;
 
-/**
- * CarSilhouette draws inside a square and centres the vehicle in it, so a
- * long, low car leaves a third of the square empty above and below. The page
- * lays out only the middle half of the square (the rest overflows, unclipped,
- * into the margins), so the heading sits under the car rather than under a
- * band of nothing.
- */
+/** The car's band, as a fraction of its width: a side-on car is long and low. */
 const VISIBLE_BAND = 0.5;
 
 type Props = {
@@ -32,14 +26,13 @@ type Props = {
 };
 
 /**
- * Page 4, "Built by drivers": a large white silhouette, the ride the next step
- * asks about, tail light lit. A coupé, the shape most people read as "a car";
- * a motorbike if the person picked one on the ride step and came Back here.
+ * Page 4, "Built by drivers": a large rendered vehicle, the ride the next step
+ * asks about, tail lights lit. A coupé, the shape most people read as "a
+ * car"; a motorbike if the person picked one on the ride step and came Back
+ * here.
  *
- * The silhouette mounts with the carousel, under the splash, so its own
- * draw-on reveal has finished long before anyone swipes here. What this page
- * adds is a settle: a short rise and fade as it first slides into view,
- * ease-out, nothing that bounces.
+ * The page settles it in: a short rise and fade as it first slides into
+ * view, ease-out, nothing that bounces.
  */
 export function BuiltPage({ copy, width, hidden, onScreen, onVerticalDrag }: Props) {
   const reduced = useReducedMotion();
@@ -78,11 +71,14 @@ export function BuiltPage({ copy, width, hidden, onScreen, onVerticalDrag }: Pro
         importantForAccessibility="no-hide-descendants"
       >
         <Animated.View style={settleStyle}>
-          <CarSilhouette
+          {/* Nothing is chosen yet: the coupe (or the naked bike) stands for
+              every vehicle, side on, its lights on. */}
+          <VehicleRender
             bodyType={kind === 'motorbike' ? 'motorbike' : 'coupe'}
-            size={size}
-            color={color.text1}
-            lit
+            view="side"
+            width={size}
+            height={Math.round(size * VISIBLE_BAND)}
+            appear={false}
           />
         </Animated.View>
       </View>

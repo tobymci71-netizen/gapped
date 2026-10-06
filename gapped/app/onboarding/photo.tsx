@@ -31,7 +31,7 @@ const PROBLEM_COPY: Record<Problem, string> = {
  * illustration, or the illustration stays. Optional either way.
  *
  * Before a pick: Add photo (the white plate), Keep current image (the
- * outlined plate, which moves on). After: the photo takes the silhouette's place in the same frame
+ * outlined plate, which moves on). After: the photo takes the render's place in the same frame
  * and Continue appears, with "Choose another" beside it and a link back to
  * the illustration.
  *

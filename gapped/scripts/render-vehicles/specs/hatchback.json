@@ -1,0 +1,20 @@
+{
+  "bodyType": "hatchback",
+  "source": "art-source/vehicles/hatchback/model.blend",
+  "prep": "scripts/render-vehicles/prep/hatchback.py",
+  "lengthM": 4.1,
+  "include": ["Hatchback"],
+  "materials": {
+    "trim": "trim",
+    "chrome": "chrome",
+    "glass": "glass",
+    "tyre": "tyre",
+    "rim": "rim",
+    "tail light": "tail",
+    "head light": "head",
+    "lamp off": "emissive_off"
+  },
+  "recolour": [
+    { "material": "body paint", "from": "#FFFC00", "tolerance": 0.2, "restScale": 0.5 }
+  ]
+}

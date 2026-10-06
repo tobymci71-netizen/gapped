@@ -1,5 +1,5 @@
 /**
- * Body-type inference — maps a (kind, make, model) triple onto the silhouette we draw.
+ * Body-type inference — maps a (kind, make, model) triple onto the body type whose render we show.
  * Layered most-specific-first: make+model override -> model override -> make naming
  * scheme -> single-shape make default -> keyword heuristics -> fallback.
  * Pure and deterministic: every table is a module constant, nothing is read at call time.
@@ -18,6 +18,7 @@ export type BodyType =
   | 'pickup'
   | 'van'
   | 'motorbike'
+  | 'sportbike'
   | 'cruiser'
   | 'scooter';
 
@@ -32,6 +33,7 @@ const LABELS: Record<BodyType, string> = {
   pickup: 'Pickup',
   van: 'Van',
   motorbike: 'Motorbike',
+  sportbike: 'Sports bike',
   cruiser: 'Cruiser',
   scooter: 'Scooter',
 };
@@ -780,6 +782,9 @@ const BIKE_MAKE_DEFAULTS: Record<string, BodyType> = {
 };
 
 const BIKE_MAKE_RULES: Record<string, MakeRule> = {
+  // Ducati names its superbikes by number alone (916, 996, 1098...).
+  ducati: (c) =>
+    /^(748|749|851|888|899|916|959|996|998|999|1098|1198|1199|1299)/.test(c) ? 'sportbike' : undefined,
   bmw: (c) => {
     // The C-range and CE-range are maxi-scooters; the R 18 family are cruisers.
     if (/^c\d{3}/.test(c) || /^ce0\d/.test(c) || c === 'cevolution') return 'scooter';
@@ -794,6 +799,17 @@ const SCOOTER_KEYWORDS =
 const CRUISER_KEYWORDS =
   /\b(cruiser|bobber|chopper|softail|sportster|dyna|fat ?boy|fat ?bob|road king|street glide|road glide|electra glide|super glide|wide glide|low rider|breakout|nightster|night rod|night train|v-?rod|iron 8|forty-eight|seventy-two|shadow|rebel|fury|stateline|sabre|magna|valkyrie|vtx|vt\d{3,4}|boulevard|intruder|marauder|savage|volusia|vulcan|eliminator|v star|vstar|virago|road star|roadstar|royal star|stratoliner|roadliner|stryker|raider|bolt|v-?max|x?diavel|meteor|shotgun|thunderbird|speedmaster|rocket 3|rocket iii|america|chief|springfield|roadmaster|california|eldorado|audace|nevada|v7|v9)\b/;
 
+/**
+ * Fully faired sports bikes: the race-replica shape, as opposed to the naked
+ * and adventure bikes that stay 'motorbike'. Tuono and Speed Triple are naked
+ * despite their RR trims, so they are not here.
+ */
+const SPORT_KEYWORDS =
+  /\b(yzf[- ]?r\d+[ms]?|r[1-9]m?|yzf\d{3}r|cbr ?\d+(rr|r|f\d?i?|xx?)?|rc ?(30|45|51|213v|8c?)|rc ?(125|200|390)|gsx-?r ?\d*r?|gsx-?\d+r|tl1000r|hayabusa|ninja|zx-?\d+r{0,2}|zzr ?\d+|panigale|superleggera|supersport|[sm] ?1000 ?rr|hp4|rsv4|rs ?(125|250|457|660)|daytona|superbike|sports? ?bike)\b/;
+
+/** Upright bikes that share a sports bike's code name (KTM's 'RC8' Super Duke and Adventure). */
+const NOT_SPORT = /\b(adventure|duke)\b/;
+
 function inferBike(cMake: string, nModel: string, cModel: string): BodyType {
   const scoped = lookup(BIKE_MAKE_MODEL, `${cMake}|${cModel}`);
   if (scoped) return scoped;
@@ -807,6 +823,7 @@ function inferBike(cMake: string, nModel: string, cModel: string): BodyType {
 
   if (SCOOTER_KEYWORDS.test(nModel)) return 'scooter';
   if (CRUISER_KEYWORDS.test(nModel)) return 'cruiser';
+  if (SPORT_KEYWORDS.test(nModel) && !NOT_SPORT.test(nModel)) return 'sportbike';
 
   return 'motorbike';
 }

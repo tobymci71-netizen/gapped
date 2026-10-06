@@ -5,7 +5,10 @@ A car advert shot at night. Every screen sits on the same blue-black night, and
 the primary button, the active tab's light. Everything else is night neutrals
 and white. If you are about to make something red or make it glow, ask whether
 it would be a light in that photograph. A lock, a label, a card or a number is
-not.
+not. The one exception is paint: a vehicle's livery may wear the primary
+button's deep red (`accentFill`, #D02226; "Racing red" in the liveries), as a
+real car can, but never the light red (`accent`) and never a glow
+(docs/VEHICLE_ART.md).
 
 Tokens live in `src/theme/tokens.ts` (colours, type, slant, glow) and
 `src/theme/motion.ts` (durations, springs, ambient loops). Use them; no raw
@@ -112,6 +115,8 @@ its outer ends are cut square (`SegmentedControl` does). The logo's streak tip
 | `brand/NumberPlate` | `label, value, unit?, led?` | The one hero figure on a screen, on a slanted plate. |
 | `brand/NightBackdrop` | `variant?, horizonY?` | Static SVG gradients behind a screen. |
 | `brand/FilmGrain` | `opacity?, animated?` | Skia noise over hero scenes. Steps on the UI thread, still under Reduce Motion or when the screen loses focus. |
+| `vehicles/art/VehicleRender` | `bodyType, view: 'side' \| 'rear' \| 'rear34', width, height, placement?, tone?: 'set' \| 'idle', lights?: 'on' \| 'breathe' \| 'off', appear?` | A body type's rendered 3D vehicle (docs/VEHICLE_ART.md), with its tail lights on their own layer: they catch as it appears and breathe while parked. `idle` is the render dimmed, lights off. `placement` from `placeOnGround` stands it on a scene's floor; the default fits it in the frame. Every vehicle in the app is a render: there are no drawn vehicles. The Ranks hero's road (`board/ui/RoadAhead`) lays the same rear renders into its SVG. |
+| `vehicles/art/SkiaVehicle` | `useSkiaVehicle(bodyType, view, spot)`, then `<SkiaVehicleImage vehicle lit? streak? roll? rollOrigin?>` | The same renders inside a Skia canvas, stood on a ground point: the welcome hero (with the camera's red streak through the lights) and the cornering gauge (leaning with the load). The Drive hero places its rear render itself, so the drizzle can fall behind it. Both decode through `useRenderImage` (`vehicles/art/skiaImages`), which keeps decoded images so a scene that mounts again draws its vehicle at once. |
 | `Speedometer` | `value, maxValue, unit, pb?, size?, active?, speedGlow?` | Lit red ticks, white needle. The live drive HUD passes neither `pb` nor the speed glow (`speedGlow={false}`): nothing on a live drive brightens as speed rises. |
 
 ## Motion
@@ -126,14 +131,14 @@ the UI thread, and size every canvas to its view.
 without a `transform` (or `matrix`, `clip` or `layer`). The recorder always
 restores after a group with an `origin` but only saves when the group has one
 of those, so the unmatched restore pops the parent's transform, and every
-sibling drawn after it lands in raw artboard coordinates. `NightVehicle`
+sibling drawn after it lands in raw artboard coordinates. `SkiaVehicleImage`
 passes an origin only with its roll for this reason.
 
 **Skia gotcha 2.** `<Mask>` drew nothing at all on device: the drive
 summary's route, markers and ground vanished inside one. To fade a layer, draw
 it in `<Group layer>` and finish with a gradient `Rect` at `blendMode="dstIn"`
 (`RouteMap`). And a blurred glow near a canvas's edge stops in a hard square
-there: let the canvas bleed past its box (`CarSilhouette`) rather than clip.
+there: let the canvas bleed past its box rather than clip.
 
 ## Screens
 

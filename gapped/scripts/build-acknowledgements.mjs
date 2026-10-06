@@ -124,6 +124,28 @@ export function readPackage(root, pkg) {
 }
 
 /**
+ * The 3D models behind the vehicle renders (docs/VEHICLE_ART.md). CC BY asks
+ * for the title, the author, the source, the licence and a note of changes;
+ * every model was changed the same way.
+ */
+const VEHICLE_3D = [
+  ['Generic passenger car pack', 'Comrade1280', 'https://sketchfab.com/3d-models/generic-passenger-car-pack-20f9af9b8a404d5cb022ac6fe87f21f5'],
+  ['Generic civil service vehicles pack', 'Comrade1280', 'https://sketchfab.com/3d-models/generic-civil-service-vehicles-pack-8ff2a13f30914932a70c7950cfa58465'],
+  ['Generic Sedan Car', 'MMC Works', 'https://sketchfab.com/3d-models/generic-sedan-car-58c33766470d46e7b2aed542650494e5'],
+  ['Generic Sport Coup&eacute; Car', 'MMC Works', 'https://sketchfab.com/3d-models/generic-sport-coupe-car-820a13c4831c41959ce75e6c2014e882'],
+  ['Fictional supercar - V12 Goblin', 'ollitei', 'https://sketchfab.com/3d-models/fictional-supercar-v12-goblin-0a20e49ad5774d778567cb5c3f345786'],
+  ['Motorcycle', 'eriklys', 'https://sketchfab.com/3d-models/motorcycle-135b505f55bb4da0b82b8987a34443b2'],
+  ['Sports Bike', 'appsnation', 'https://sketchfab.com/3d-models/sports-bike-a80259b859c842d5824c25c61e0fc421'],
+  ['Moped, motorcycle.', 'lexpartizan', 'https://sketchfab.com/3d-models/moped-motorcycle-3dfd252d4f4e4275a5544cdeb07226dc'],
+  ['Electric Scooter', 'Rzyas', 'https://sketchfab.com/3d-models/electric-scooter-97ce811fbdd144c6a4f3b7912f4b1bc2'],
+];
+
+const VEHICLE_MODELS =
+  'Vehicle renders: made from these 3D models, each licensed under <a href="https://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0</a> and changed for Gapped (textures removed or repainted, re-materialled, painted in a livery, re-lit and rendered as images):<ul>' +
+  VEHICLE_3D.map(([title, author, url]) => `<li>&ldquo;<a href="${url}">${title}</a>&rdquo; by ${author}</li>`).join('') +
+  '</ul>The roadster is the sport coup&eacute; with its roof taken off.';
+
+/**
  * Data and artwork the app ships that did not come from npm, from the
  * provenance recorded where each is generated or used.
  */
@@ -134,6 +156,7 @@ const OTHER_SOURCES = [
   'Brand marks on the &ldquo;How did you hear about us?&rdquo; step: <strong>Simple Icons</strong>, CC0 1.0. The marks themselves are trademarks of their owners and are used only to name their services.',
   'Typefaces: <strong>Archivo</strong> and <strong>Martian Mono</strong>, under the SIL Open Font License 1.1. Archivo&#39;s regular width ships in the @expo-google-fonts/archivo package; its wide italic cuts and Martian Mono are instanced from the Google Fonts sources by scripts/build-fonts.py and bundled in assets/fonts. Their full licence texts are below.',
   'Maps: <strong>Apple Maps</strong>. Map data &copy; Apple and its data providers, credited on the map itself.',
+  VEHICLE_MODELS,
 ];
 
 /**

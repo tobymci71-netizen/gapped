@@ -50,7 +50,7 @@ function useRowMotion() {
   };
 }
 
-/** A vehicle's picture on a dark tile: photo if it has one, else its silhouette. */
+/** A vehicle's picture on a dark tile: photo if it has one, else its render. */
 function Thumb({
   kind,
   make,

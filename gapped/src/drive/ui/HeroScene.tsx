@@ -3,15 +3,15 @@ import {
   Canvas,
   Circle,
   Group,
+  Image as SkiaImage,
   LinearGradient,
   Oval,
   Path,
-  PathOp,
   RadialGradient,
   Rect,
-  RoundedRect,
   Skia,
   vec,
+  type SkImage,
   type SkPath,
 } from '@shopify/react-native-skia';
 import { useIsFocused } from 'expo-router';
@@ -33,12 +33,14 @@ import { FilmGrain } from '@/components/brand/FilmGrain';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import { ambient } from '@/theme/motion';
 import { alpha, color } from '@/theme/tokens';
+import { VEHICLE_RENDERS } from '@/vehicles/art/manifest';
+import { placeOnGround, pointToPoints, type Placement as RenderPlacement } from '@/vehicles/art/place';
+import { useRenderImage } from '@/vehicles/art/skiaImages';
+import type { BodyType } from '@/vehicles/bodyType';
 import {
   ART_WIDTH,
   BAY_BOX,
   BAYS,
-  BIKE,
-  CAR,
   CITY_GLOW,
   CONE,
   CONE_BOX,
@@ -62,15 +64,13 @@ import {
   WINDOW_SIZE,
   WINDOWS,
   type Ellipse,
-  type VehicleArt,
-  type VehicleLayer,
 } from './heroArt';
 
 /**
  * The artwork's own colours, from Nightrun-Drive.dc.html. Illustration only —
- * shades of the night between the tokens, for a sky, a skyline and a car's
- * paint — never UI: nothing tappable or readable is drawn in them. Where the
- * mock used a token's value, the token is used.
+ * shades of the night between the tokens, for a sky and a skyline — never UI:
+ * nothing tappable or readable is drawn in them. Where the mock used a
+ * token's value, the token is used.
  */
 const ART = {
   skyMid: '#0A0E1B',
@@ -85,33 +85,7 @@ const ART = {
   bay: '#E4E9F5',
   rain: '#DCE5FF',
   groundMid: '#0C1020',
-  bodyTop: '#1A2033',
-  bodyLow: '#050508',
-  glassTop: '#16203A',
-  glassLow: '#07090F',
-  sheen: '#9FB0E0',
-  roof: '#A9B8E6',
-  shoulder: '#7F90C0',
-  flank: '#8C9DCC',
-  tyre: '#030305',
-  trim: '#0B0E15',
-  bumper: '#040406',
-  plate: '#0A0D14',
-  fins: '#161A25',
-  exhaust: '#010102',
-  exhaustRim: '#4A5266',
-  /** A tail light's lens, a step deeper than the racing red it glows in. */
-  lens: '#D9252A',
-  /** A lit lens's filament: the light at its hottest. */
-  filament: '#FFB3B4',
-  shadow: '#000000',
 } as const;
-
-const EDGE: Record<'roof' | 'shoulder' | 'flank', string> = {
-  roof: alpha(ART.roof, 0.8),
-  shoulder: alpha(ART.shoulder, 0.45),
-  flank: alpha(ART.flank, 0.5),
-};
 
 /** The breathing tail lights' dimmest (the mock's breathe: .55 → 1). */
 const BREATHE_LOW = 0.55;
@@ -128,9 +102,57 @@ type Props = {
    */
   stageTop: number;
   vehicle: 'car' | 'motorbike';
+  /**
+   * The person's body type: its rendered vehicle stands in the scene
+   * (docs/VEHICLE_ART.md), from the frame its image has decoded in.
+   */
+  bodyType: BodyType;
   /** Hold the still frame: the hero has been scrolled out of sight. */
   paused?: boolean;
 };
+
+/** Where the vehicle's tyres meet the wet ground, on the artboard (the mock's car stood here). */
+const GROUND_LINE = 378;
+/**
+ * The render's scale on the artboard, in points per metre of the vehicle's
+ * height: a van stands taller than a hatchback. Bikes a little larger, as the
+ * mock drew its bike, or they read as toys in the cone.
+ */
+const PX_PER_M = { car: 104, bike: 128 } as const;
+/** Never wider than the light's pool, nor taller than the stage under the title. */
+const MAX_VEHICLE = { w: 250, h: 172 } as const;
+
+/** A rendered vehicle on the artboard: its images, where they go, its reflections. */
+type RenderedVehicle = {
+  body: SkImage;
+  lights: SkImage | null;
+  place: RenderPlacement;
+  reflections: string[];
+};
+
+function useRenderedVehicle(bodyType: BodyType, bike: boolean): RenderedVehicle | null {
+  const renders = VEHICLE_RENDERS[bodyType];
+  const r = renders?.views.rear;
+  const body = useRenderImage(r ? r.body : null);
+  const lights = useRenderImage(r ? r.lights : null);
+  return useMemo(() => {
+    if (!renders || !r || !body) return null;
+    const place = placeOnGround(r, {
+      cx: ART_WIDTH / 2,
+      groundY: GROUND_LINE,
+      vehicleHeight: renders.sizeM[2] * (bike ? PX_PER_M.bike : PX_PER_M.car),
+      maxWidth: MAX_VEHICLE.w,
+      maxHeight: MAX_VEHICLE.h,
+    });
+    // Each tail light's red runs down the wet ground below it.
+    const reflections = r.tailLights.map((pt) => {
+      const { x } = pointToPoints(place, pt);
+      const w = bike ? 9 : 14;
+      return `M${x - w} 384 L${x + w} 384 L${x + w * 0.6} 470 L${x - w * 0.6} 470 Z`;
+    });
+    return { body, lights, place, reflections };
+  }, [renders, r, body, lights, bike]);
+}
 
 /**
  * The parked hero, Nightrun-Drive: the car (or bike) from behind under a
@@ -151,11 +173,11 @@ type Props = {
  *
  * Decorative: hidden from VoiceOver; the title beside it names the vehicle.
  */
-export function HeroScene({ width, height, stageTop, vehicle, paused = false }: Props) {
+export function HeroScene({ width, height, stageTop, vehicle, bodyType, paused = false }: Props) {
   const reduced = useReducedMotion();
   const focused = useIsFocused();
   const live = focused && !reduced && !paused;
-  const art = vehicle === 'motorbike' ? BIKE : CAR;
+  const rendered = useRenderedVehicle(bodyType, vehicle === 'motorbike');
 
   const scale = width / ART_WIDTH;
   // Slides the artboard so its stage lines up with the screen's.
@@ -234,9 +256,9 @@ export function HeroScene({ width, height, stageTop, vehicle, paused = false }: 
       importantForAccessibility="no-hide-descendants"
       style={StyleSheet.absoluteFill}
     >
-      <StaticScene width={width} height={height} scale={scale} dy={dy} art={art} />
+      <StaticScene width={width} height={height} scale={scale} dy={dy} rendered={rendered} />
       <Animated.View style={[styles.layer, lights, lightsStyle]}>
-        <Lights width={lights.width} height={lights.height} scale={scale} art={art} />
+        <Lights width={lights.width} height={lights.height} scale={scale} rendered={rendered} />
       </Animated.View>
       <Rain
         left={rain.left}
@@ -244,7 +266,7 @@ export function HeroScene({ width, height, stageTop, vehicle, paused = false }: 
         width={rain.width}
         height={rain.height}
         scale={scale}
-        art={art}
+        rendered={rendered}
         offset={rainY}
       />
       <Animated.View
@@ -336,19 +358,18 @@ const StaticScene = memo(function StaticScene({
   height,
   scale,
   dy,
-  art,
+  rendered,
 }: {
   width: number;
   height: number;
   scale: number;
   dy: number;
-  art: VehicleArt;
+  rendered: RenderedVehicle | null;
 }) {
   // The artboard rows the canvas shows: the sky reaches its top, the faded
   // ground its bottom, whatever the title and the notes did to the layout.
   const topY = Math.min(0, -dy / scale);
   const bottomY = Math.max(GROUND_END, (height - dy) / scale);
-  const p = art.placement;
   return (
     <Canvas style={[styles.layer, { left: 0, top: 0, width, height }]}>
       <Group transform={[{ translateY: dy }, { scale }]}>
@@ -421,20 +442,16 @@ const StaticScene = memo(function StaticScene({
         ))}
 
         {/* The vehicle, all but its tail lights. */}
-        <Group transform={[{ translateX: p.x }, { translateY: p.y }, { scale: p.scale }]}>
-          <Oval
-            x={art.shadow.cx - art.shadow.rx}
-            y={art.shadow.cy - art.shadow.ry}
-            width={art.shadow.rx * 2}
-            height={art.shadow.ry * 2}
-            color={alpha(ART.shadow, 0.9)}
-          >
-            <BlurMask blur={4} style="normal" />
-          </Oval>
-          {art.layers.map((layer, i) => (
-            <Layer key={i} layer={layer} art={art} />
-          ))}
-        </Group>
+        {rendered ? (
+          <SkiaImage
+            image={rendered.body}
+            x={rendered.place.left}
+            y={rendered.place.top}
+            width={rendered.place.width}
+            height={rendered.place.height}
+            fit="fill"
+          />
+        ) : null}
 
         {/* The ground fades to night under the button. */}
         <Rect x={0} y={FADE.top} width={ART_WIDTH} height={bottomY - FADE.top}>
@@ -449,91 +466,6 @@ const StaticScene = memo(function StaticScene({
     </Canvas>
   );
 });
-
-function Layer({ layer, art }: { layer: VehicleLayer; art: VehicleArt }) {
-  switch (layer.kind) {
-    case 'solid':
-      return <Path path={layer.d} color={ART[layer.tone]} />;
-    case 'body':
-      return (
-        <Path path={layer.d}>
-          <LinearGradient
-            start={vec(0, art.bodyBox[0])}
-            end={vec(0, art.bodyBox[1])}
-            colors={[ART.bodyTop, color.surface1, ART.bodyLow]}
-            positions={[0, 0.42, 1]}
-          />
-        </Path>
-      );
-    case 'glass': {
-      const box = art.glassBox ?? art.bodyBox;
-      return (
-        <Path path={layer.d}>
-          <LinearGradient
-            start={vec(0, box[0])}
-            end={vec(0, box[1])}
-            colors={[ART.glassTop, ART.glassLow]}
-          />
-        </Path>
-      );
-    }
-    case 'sheen':
-      return <Path path={layer.d} color={alpha(ART.sheen, 0.08)} />;
-    case 'edge':
-      return (
-        <Path path={layer.d} style="stroke" strokeWidth={layer.width} color={EDGE[layer.tone]} />
-      );
-    case 'tint':
-      return (
-        <Oval
-          x={layer.e.cx - layer.e.rx}
-          y={layer.e.cy - layer.e.ry}
-          width={layer.e.rx * 2}
-          height={layer.e.ry * 2}
-          color={alpha(color.accent, 0.06)}
-        />
-      );
-    case 'plate':
-      return (
-        <Group>
-          <RoundedRect
-            x={layer.x}
-            y={layer.y}
-            width={layer.w}
-            height={layer.h}
-            r={layer.r}
-            color={ART.plate}
-          />
-          <RoundedRect
-            x={layer.x}
-            y={layer.y}
-            width={layer.w}
-            height={layer.h}
-            r={layer.r}
-            style="stroke"
-            strokeWidth={0.6}
-            color={color.hairline}
-          />
-        </Group>
-      );
-    case 'fins':
-      return <Path path={layer.d} style="stroke" strokeWidth={0.8} color={ART.fins} />;
-    case 'exhaust':
-      return (
-        <Group>
-          <Circle cx={layer.cx} cy={layer.cy} r={layer.r} color={ART.exhaust} />
-          <Circle
-            cx={layer.cx}
-            cy={layer.cy}
-            r={layer.r}
-            style="stroke"
-            strokeWidth={0.9}
-            color={ART.exhaustRim}
-          />
-        </Group>
-      );
-  }
-}
 
 /**
  * The reflections' fall, with the scene's ground fade already in it: the
@@ -558,18 +490,18 @@ const Lights = memo(function Lights({
   width,
   height,
   scale,
-  art,
+  rendered,
 }: {
   width: number;
   height: number;
   scale: number;
-  art: VehicleArt;
+  rendered: RenderedVehicle | null;
 }) {
-  const p = art.placement;
+  if (!rendered) return null;
   return (
     <Canvas style={{ width, height }}>
       <Group transform={[{ scale }, { translateX: -LIGHTS_BOX.x }, { translateY: -LIGHTS_BOX.y }]}>
-        {art.reflections.map((d) => (
+        {rendered.reflections.map((d) => (
           <Path key={d} path={d}>
             <LinearGradient
               start={vec(0, REFLECTION.top)}
@@ -580,82 +512,26 @@ const Lights = memo(function Lights({
             <BlurMask blur={3} style="normal" />
           </Path>
         ))}
-        <Group transform={[{ translateX: p.x }, { translateY: p.y }, { scale: p.scale }]}>
-          {art.lights.halos.map((h) => (
-            <Oval
-              key={`${h.cx}`}
-              x={h.cx - h.rx}
-              y={h.cy - h.ry}
-              width={h.rx * 2}
-              height={h.ry * 2}
-              color={alpha(color.accent, 0.3)}
-            >
-              <BlurMask blur={10} style="normal" />
-            </Oval>
-          ))}
-          {art.lights.lenses.map((d) => (
-            <Path key={`glow${d}`} path={d} color={color.accentPress} opacity={0.8}>
-              <BlurMask blur={4} style="normal" />
-            </Path>
-          ))}
-          {art.lights.lenses.map((d) => (
-            <Path key={d} path={d} color={ART.lens} />
-          ))}
-          {art.lights.filaments.map((d) => (
-            <Path
-              key={d}
-              path={d}
-              style="stroke"
-              strokeWidth={1}
-              strokeCap="round"
-              strokeJoin="round"
-              color={ART.filament}
-            />
-          ))}
-        </Group>
+        {rendered.lights ? (
+          <SkiaImage
+            image={rendered.lights}
+            x={rendered.place.left}
+            y={rendered.place.top}
+            width={rendered.place.width}
+            height={rendered.place.height}
+            fit="fill"
+          />
+        ) : null}
       </Group>
     </Canvas>
   );
 });
 
-/** The vehicle's layers that hide what is behind them (the rest are marks on these). */
-const OPAQUE: ReadonlySet<VehicleLayer['kind']> = new Set(['body', 'solid', 'glass', 'plate']);
-
-/**
- * The light's cone less the vehicle standing in it, on the artboard: where
- * drizzle can be seen. Worked out once per vehicle. If Skia cannot combine
- * the shapes, the cone alone (the drizzle then falls over the vehicle too).
- */
-function rainClip(art: VehicleArt): SkPath | null {
-  let clip = Skia.Path.MakeFromSVGString(CONE);
-  if (!clip) return null;
-  const { x, y, scale } = art.placement;
-  // The vehicle's drawing space onto the artboard (row-major 3×3).
-  const place = [scale, 0, x, 0, scale, y, 0, 0, 1];
-  // One difference per shape, not one union of them: overlapping contours
-  // wound opposite ways (the glass inside the body) would cancel to a hole.
-  for (const layer of art.layers) {
-    if (!OPAQUE.has(layer.kind)) continue;
-    const local =
-      layer.kind === 'plate'
-        ? Skia.Path.RRect(
-            Skia.RRectXY(Skia.XYWHRect(layer.x, layer.y, layer.w, layer.h), layer.r, layer.r),
-          )
-        : 'd' in layer
-          ? Skia.Path.MakeFromSVGString(layer.d)
-          : null;
-    if (!local) continue;
-    const shape = Skia.PathBuilder.MakeFromPath(local).transform(place).detach();
-    clip = Skia.Path.MakeFromOp(clip, shape, PathOp.Difference) ?? clip;
-  }
-  return clip;
-}
-
 /**
  * The drizzle: one path of short strokes sliding down a tile per cycle,
- * clipped to the light's cone with the vehicle cut out of it — the rain falls
- * behind the car, as in the mock, never across its body or its lit tail
- * lights. Its fade is a gradient pinned to the cone — the gradient is
+ * clipped to the light's cone, with the vehicle's own pixels cut out of it —
+ * the rain falls behind the car, as in the mock, never across its body or its
+ * lit tail lights. Its fade is a gradient pinned to the cone — the gradient is
  * counter-moved against the slide, so the drops fade in and out as they fall
  * through it rather than carrying their brightness with them (no offscreen
  * mask layer needed).
@@ -666,7 +542,7 @@ const Rain = memo(function Rain({
   width,
   height,
   scale,
-  art,
+  rendered,
   offset,
 }: {
   left: number;
@@ -674,22 +550,25 @@ const Rain = memo(function Rain({
   width: number;
   height: number;
   scale: number;
-  art: VehicleArt;
+  rendered: RenderedVehicle | null;
   offset: SharedValue<number>;
 }) {
   const paths = useMemo<{ cone: SkPath | null; rain: SkPath | null }>(
     () => ({
-      cone: rainClip(art),
+      cone: Skia.Path.MakeFromSVGString(CONE),
       rain: Skia.Path.MakeFromSVGString(rainPath()),
     }),
-    [art],
+    [],
   );
   const fall = useDerivedValue(() => [{ translateY: offset.get() }]);
   const pin = useDerivedValue(() => [{ translateY: -offset.get() }]);
   if (!paths.cone || !paths.rain) return null;
   return (
     <Canvas style={[styles.layer, { left, top, width, height }]}>
-      <Group transform={[{ scale }, { translateX: -RAIN_BOX.x }, { translateY: -RAIN_BOX.y }]}>
+      <Group
+        transform={[{ scale }, { translateX: -RAIN_BOX.x }, { translateY: -RAIN_BOX.y }]}
+        layer={!!rendered}
+      >
         <Group clip={paths.cone} opacity={0.2}>
           <Path
             path={paths.rain}
@@ -707,6 +586,18 @@ const Rain = memo(function Rain({
             />
           </Path>
         </Group>
+        {/* The drizzle falls behind the vehicle: its shape is cut out of it. */}
+        {rendered ? (
+          <SkiaImage
+            image={rendered.body}
+            x={rendered.place.left}
+            y={rendered.place.top}
+            width={rendered.place.width}
+            height={rendered.place.height}
+            fit="fill"
+            blendMode="dstOut"
+          />
+        ) : null}
       </Group>
     </Canvas>
   );

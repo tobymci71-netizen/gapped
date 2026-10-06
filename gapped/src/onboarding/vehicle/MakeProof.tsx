@@ -183,9 +183,9 @@ export function EarlyProof({
     <View style={styles.early}>
       {/*
         Not inside an Entrance: an opacity animation on an ancestor of the
-        Skia canvas, started as the screen is pushed, stalled part-way on
-        device and left the car at a third of its brightness. The silhouette
-        fades and draws itself in, which is the entrance it needs.
+        art, started as the screen is pushed, stalled part-way on device and
+        left the car at a third of its brightness. The render fades and
+        settles in itself, which is the entrance it needs.
       */}
       <VehicleArt kind={kind} make={make} model={model} photoUri={photoUri} size={artSize} />
       <Entrance index={1}>

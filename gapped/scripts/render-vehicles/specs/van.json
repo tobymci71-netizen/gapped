@@ -1,0 +1,18 @@
+{
+  "bodyType": "van",
+  "source": "art-source/vehicles/van/model.blend",
+  "prep": "scripts/render-vehicles/prep/van.py",
+  "lengthM": 5.0,
+  "forward": "-y",
+  "materials": {
+    "paint": "paint",
+    "black trim": "trim",
+    "tyre": "tyre",
+    "rim": "rim",
+    "mirror glass": "chrome",
+    "glass": "glass",
+    "tail light": "tail",
+    "indicator": "emissive_off",
+    "headlight": "head"
+  }
+}

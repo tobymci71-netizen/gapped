@@ -1,63 +1,51 @@
 import React, { useMemo, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from 'react-native-reanimated';
-import { CarSilhouette } from '@/components/CarSilhouette';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 import type { VehicleKind } from '@/state/profile';
 import { duration } from '@/theme/motion';
 import { color, radius } from '@/theme/tokens';
+import { VehicleRender } from '@/vehicles/art/VehicleRender';
 import { inferBodyType } from '@/vehicles/bodyType';
 import { cleanName } from './draft';
 import { vehiclePhotoSource } from './vehiclePhoto';
 
 /**
- * How much of CarSilhouette's square the drawing actually uses. The generator
- * centres every body in a square and the tallest preset (the scooter) fills
- * 0.41 of it, a saloon about 0.27; the rest is empty canvas. Cropping to this
- * window lets a silhouette sit in a layout at its visual height instead of
- * pushing everything under it down by a car's worth of nothing. The extra over
- * 0.41 is the glow's blur.
+ * The window shape's height, as a fraction of its width: a side-on vehicle's
+ * band, so the art sits in a layout at its visual height. The tallest body
+ * (the van) fills it; a saloon leaves room above and below.
  */
-const SILHOUETTE_WINDOW = 0.52;
-
-/**
- * The drawing's size inside a square frame, as a fraction of the frame. A
- * body fills 0.88 of its own canvas, which in a frame the size of the canvas
- * put the bumpers against the border; this leaves the margin a photo's crop
- * would.
- */
-const SQUARE_ART_SCALE = 0.84;
+const WINDOW_ASPECT = 0.52;
 
 type Props = {
   kind: VehicleKind;
   make?: string | null;
   model?: string | null;
-  /** The stored `vehiclePhotoUri`. When set (and readable) it replaces the drawing. */
+  /** The stored `vehiclePhotoUri`. When set (and readable) it replaces the render. */
   photoUri?: string | null;
   /** Width of the art, in points. */
   size: number;
   /**
-   * `set`: the vehicle is chosen, drawn white. `idle`: a placeholder in the
+   * `set`: the vehicle is chosen, in its paint. `idle`: a placeholder in the
    * muted grey, before anything is chosen.
    */
   tone?: 'set' | 'idle';
   /**
    * Square (the photo step's stage, garage thumbnails), which shows a photo
-   * whole — the picker crops square — or the cropped silhouette window
-   * (inline art on the proof step), where a photo fills the band.
+   * whole — the picker crops square — or the side-on window (inline art on
+   * the proof step), where a photo fills the band.
    */
   shape?: 'square' | 'window';
   /** Corner radius for a photo; defaults to the card radius. */
   photoRadius?: number;
-  /** VoiceOver label for a photo. The drawing is decorative and has none. */
+  /** VoiceOver label for a photo. The render is decorative and has none. */
   photoLabel?: string;
 };
 
 /**
  * The person's vehicle as a picture: their photo when they have added one,
- * otherwise the parametric silhouette for its body type, in white line art
- * with its tail light lit once the vehicle is chosen — the one red on it,
- * because it is the one light.
+ * otherwise its body type's rendered vehicle (VehicleRender), with its tail
+ * lights lit once the vehicle is chosen.
  */
 export function VehicleArt({
   kind,
@@ -72,7 +60,7 @@ export function VehicleArt({
 }: Props) {
   const reduced = useReducedMotion();
   // A photo whose file has gone (restored to a new phone, cleared by hand)
-  // falls back to the drawing instead of a blank square. Remembered per URI,
+  // falls back to the render instead of a blank square. Remembered per URI,
   // so picking a new photo gets its own chance to load.
   const [failed, setFailed] = useState<string | null>(null);
   const source = useMemo(() => (photoUri ? vehiclePhotoSource(photoUri) : null), [photoUri]);
@@ -86,8 +74,7 @@ export function VehicleArt({
   );
 
   const fade = reduced ? FadeIn.duration(duration.fast) : FadeIn.duration(duration.base);
-  const height = shape === 'square' ? size : Math.round(size * SILHOUETTE_WINDOW);
-  const art = shape === 'square' ? Math.round(size * SQUARE_ART_SCALE) : size;
+  const height = shape === 'square' ? size : Math.round(size * WINDOW_ASPECT);
 
   return (
     <View style={[styles.frame, { width: size, height }]}>
@@ -95,8 +82,8 @@ export function VehicleArt({
         The crossfade is for a swap — a photo picked, a photo removed — not
         for the art's first appearance. Faded in on mount, the wrapper could
         stall part-way through when it mounted during a screen push, leaving
-        the drawing at a third of its strength; CarSilhouette already fades
-        and draws itself in on mount.
+        the art at a third of its strength; VehicleRender already fades and
+        settles in on mount.
       */}
       <LayoutAnimationConfig skipEntering>
         {showPhoto ? (
@@ -105,7 +92,7 @@ export function VehicleArt({
             entering={fade}
             exiting={FadeOut.duration(duration.fast)}
             // In the window shape the square photo is cropped to the window's
-            // band by `cover`, the way the silhouette's empty canvas is.
+            // band by `cover`.
             style={[styles.photoWrap, { width: size, height, borderRadius: photoRadius }]}
           >
             <Image
@@ -120,27 +107,25 @@ export function VehicleArt({
           </Animated.View>
         ) : (
           <Animated.View
-            key="silhouette"
+            key="render"
             entering={fade}
             exiting={FadeOut.duration(duration.fast)}
-            style={[styles.silhouette, { top: (height - art) / 2 }]}
-            // Overhangs the frame above and below; never takes a touch meant
-            // for what sits there.
-            pointerEvents="none"
-            importantForAccessibility="no-hide-descendants"
-            accessibilityElementsHidden
+            style={[styles.render, { width: size, height }]}
           >
-            <CarSilhouette
+            {/*
+              The body type's rendered vehicle, side on, nose right. Before a
+              vehicle is chosen it is its render, dimmed, with its lights off;
+              chosen, it is painted and its tail lights catch. It appears
+              again when the body type changes, not on every keystroke of a
+              name typed by hand.
+            */}
+            <VehicleRender
               bodyType={bodyType}
-              size={art}
-              // Redrawn when the shape or its state changes, not on every
-              // change of name: typed into "Not listed? Add it yourself", a
-              // name-keyed drawing replayed its draw-on with each keystroke.
-              revealKey={`${bodyType}:${tone}`}
-              color={tone === 'set' ? color.text1 : color.text3}
-              // A chosen vehicle is the person's own, ready to drive: its
-              // tail light is on. The placeholder stays dark.
-              lit={tone === 'set'}
+              view="side"
+              width={size}
+              height={height}
+              tone={tone}
+              lights={tone === 'set' ? 'on' : 'off'}
             />
           </Animated.View>
         )}
@@ -150,11 +135,10 @@ export function VehicleArt({
 }
 
 const styles = StyleSheet.create({
-  // Not clipped: the silhouette's canvas is taller than the window, but it is
-  // transparent there, and a clip cut the tail light's glow off in a hard
-  // square at the frame's side. The photo clips itself (photoWrap).
+  // Not clipped: a clip cut the tail light's glow off in a hard square at
+  // the frame's side. The photo clips itself (photoWrap).
   frame: { alignItems: 'center' },
-  silhouette: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  render: { position: 'absolute', left: 0, top: 0 },
   photoWrap: { overflow: 'hidden', backgroundColor: color.surface2 },
   photo: { width: '100%', height: '100%' },
 });

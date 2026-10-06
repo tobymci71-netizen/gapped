@@ -94,7 +94,7 @@ export default function GarageStep() {
         {/*
           Rows animate in as they are added, not when the step first
           appears: the step's own push is the entrance then, and a fade on a
-          thumbnail's ancestor during the push stalled its silhouette part-way
+          thumbnail's ancestor during the push stalled its art part-way
           on device (src/onboarding/vehicle/VehicleArt.tsx).
         */}
         <LayoutAnimationConfig skipEntering>
