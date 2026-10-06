@@ -43,9 +43,9 @@ const pluginOptions = (name: string) => {
 };
 
 describe('version', () => {
-  test('1.0.0, build 8', () => {
+  test('1.0.0, build 9', () => {
     expect(expo.version).toBe('1.0.0');
-    expect(expo.ios.buildNumber).toBe('8');
+    expect(expo.ios.buildNumber).toBe('9');
   });
 });
 
